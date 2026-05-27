@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS workflow_version (
 
 CREATE TABLE IF NOT EXISTS workflow_execution (
     id VARCHAR(64) PRIMARY KEY,
-    workflow_id VARCHAR(64) NOT NULL,
-    workflow_version_id VARCHAR(64) NOT NULL,
+    workflow_id VARCHAR(64) NOT NULL REFERENCES workflow(id),
+    workflow_version_id VARCHAR(64) NOT NULL REFERENCES workflow_version(id),
     tenant_id VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL,
     input_json JSONB NOT NULL,
@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS webhook_subscription (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+ALTER TABLE workflow
+    ADD CONSTRAINT fk_workflow_current_version
+        FOREIGN KEY (current_version_id) REFERENCES workflow_version(id);
 
 CREATE INDEX IF NOT EXISTS idx_workflow_tenant_status ON workflow(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_workflow_execution_workflow ON workflow_execution(workflow_id, created_at);
