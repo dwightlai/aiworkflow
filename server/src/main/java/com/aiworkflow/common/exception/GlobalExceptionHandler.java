@@ -4,10 +4,12 @@ import com.aiworkflow.common.api.ApiResponse;
 import com.aiworkflow.common.api.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -23,6 +25,25 @@ public class GlobalExceptionHandler {
                 Map.of("fieldErrors", exception.getBindingResult().getFieldErrorCount())
         );
         return ApiResponse.failure(error);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(
+            ResponseStatusException exception,
+            HttpServletRequest request
+    ) {
+        HttpStatus status = HttpStatus.resolve(exception.getStatusCode().value());
+        String errorCode = status != null ? status.name() : "HTTP_" + exception.getStatusCode().value();
+        String message = exception.getReason() != null
+                ? exception.getReason()
+                : status != null ? status.getReasonPhrase() : errorCode;
+        ErrorResponse error = new ErrorResponse(
+                errorCode,
+                message,
+                request.getRequestId(),
+                null
+        );
+        return ResponseEntity.status(exception.getStatusCode()).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(Exception.class)
