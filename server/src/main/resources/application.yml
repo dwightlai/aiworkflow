@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: aiworkflow-server
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aiworkflow
+    username: aiworkflow
+    password: aiworkflow
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
