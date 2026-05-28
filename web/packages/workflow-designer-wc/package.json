@@ -1,0 +1,17 @@
+{
+  "name": "@aiworkflow/workflow-designer-wc",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck src/index.ts"
+  },
+  "dependencies": {
+    "@aiworkflow/workflow-designer-core": "workspace:*",
+    "@aiworkflow/workflow-schema": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
