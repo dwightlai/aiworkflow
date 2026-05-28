@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { DashboardPage } from './pages/DashboardPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
-import { WorkflowListPage } from './pages/WorkflowListPage';
+import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 
 export interface ResolvedRoute {
   title: string;
@@ -22,7 +22,7 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     return {
       title: '工作流',
       breadcrumb: ['首页', 'AI 功能', '工作流'],
-      element: <WorkflowListPage />
+      element: <WorkflowCardsPage />
     };
   }
 
