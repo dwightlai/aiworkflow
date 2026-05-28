@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { DashboardPage } from './pages/DashboardPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
+import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
 
 export interface ResolvedRoute {
   title: string;
@@ -27,10 +28,11 @@ export function resolveRoute(pathname: string): ResolvedRoute {
   }
 
   if (pathname.startsWith('/workflows/') && pathname.endsWith('/designer')) {
+    const workflowId = pathname.split('/')[2] ?? 'new';
     return {
       title: '工作流设计器',
       breadcrumb: ['首页', 'AI 功能', '工作流', '设计器'],
-      element: <PlaceholderPage title="工作流设计器" />
+      element: <WorkflowDesignerPage workflowId={workflowId} />
     };
   }
 

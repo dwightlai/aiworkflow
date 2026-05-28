@@ -83,6 +83,20 @@ export async function createWorkflow(request: CreateWorkflowRequest): Promise<Wo
   });
 }
 
+export async function getWorkflow(workflowId: string): Promise<Workflow> {
+  return requestJson<Workflow>(`/api/workflows/${workflowId}`);
+}
+
+export async function updateWorkflowDraft(
+  workflowId: string,
+  definition: WorkflowDefinition
+): Promise<Workflow> {
+  return requestJson<Workflow>(`/api/workflows/${workflowId}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify({ definition })
+  });
+}
+
 export async function publishWorkflow(workflowId: string): Promise<Workflow> {
   return requestJson<Workflow>(`/api/workflows/${workflowId}/publish`, {
     method: 'POST'
