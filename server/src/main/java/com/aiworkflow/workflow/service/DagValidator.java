@@ -17,6 +17,8 @@ public class DagValidator {
     private static final String EXACTLY_ONE_START = "Workflow definition must contain exactly one START node.";
     private static final String AT_LEAST_ONE_END = "Workflow definition must contain at least one END node.";
     private static final String MISSING_EDGE_NODE = "Workflow edge references missing node.";
+    private static final String NODE_ID_REQUIRED = "Workflow node id is required.";
+    private static final String UNIQUE_NODE_IDS = "Workflow node ids must be unique.";
     private static final String ACYCLIC = "Workflow definition must be acyclic.";
 
     public void validate(WorkflowDefinition definition) {
@@ -26,6 +28,8 @@ public class DagValidator {
 
         List<WorkflowNode> nodes = listOrEmpty(definition.nodes());
         List<WorkflowEdge> edges = listOrEmpty(definition.edges());
+
+        validateNodeIds(nodes);
 
         long startCount = nodes.stream()
                 .filter(node -> node.type() == WorkflowNodeType.START)
@@ -44,6 +48,18 @@ public class DagValidator {
         rejectCycles(adjacency);
     }
 
+    private void validateNodeIds(List<WorkflowNode> nodes) {
+        Set<String> nodeIds = new HashSet<>();
+        for (WorkflowNode node : nodes) {
+            if (node == null || isBlank(node.id())) {
+                throw new DagValidationException(NODE_ID_REQUIRED);
+            }
+            if (!nodeIds.add(node.id())) {
+                throw new DagValidationException(UNIQUE_NODE_IDS);
+            }
+        }
+    }
+
     private Map<String, List<String>> buildAdjacency(List<WorkflowNode> nodes, List<WorkflowEdge> edges) {
         Set<String> nodeIds = new HashSet<>();
         Map<String, List<String>> adjacency = new HashMap<>();
@@ -53,6 +69,9 @@ public class DagValidator {
         }
 
         for (WorkflowEdge edge : edges) {
+            if (edge == null || isBlank(edge.sourceNodeId()) || isBlank(edge.targetNodeId())) {
+                throw new DagValidationException(MISSING_EDGE_NODE);
+            }
             if (!nodeIds.contains(edge.sourceNodeId()) || !nodeIds.contains(edge.targetNodeId())) {
                 throw new DagValidationException(MISSING_EDGE_NODE);
             }
@@ -99,5 +118,9 @@ public class DagValidator {
 
     private static <T> List<T> listOrEmpty(List<T> items) {
         return items == null ? List.of() : items;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
