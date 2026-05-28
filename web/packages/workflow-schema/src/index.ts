@@ -15,6 +15,28 @@ export interface WorkflowNode {
   config: Record<string, unknown>;
 }
 
+export interface PromptNodeConfig {
+  template: string;
+  outputKey: string;
+}
+
+export interface LlmNodeConfig {
+  providerId: string;
+  model: string;
+  promptKey: string;
+  outputKey: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export interface ConditionNodeConfig {
+  contextKey: string;
+  operator: 'EQUALS' | 'NOT_EQUALS' | 'CONTAINS' | 'IS_EMPTY' | 'IS_NOT_EMPTY';
+  compareValue?: string;
+  trueTargetNodeId: string;
+  falseTargetNodeId: string;
+}
+
 export interface WorkflowEdge {
   id: string;
   sourceNodeId: string;
