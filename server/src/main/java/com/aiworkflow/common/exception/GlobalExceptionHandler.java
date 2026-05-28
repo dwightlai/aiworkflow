@@ -2,6 +2,8 @@ package com.aiworkflow.common.exception;
 
 import com.aiworkflow.common.api.ApiResponse;
 import com.aiworkflow.common.api.ErrorResponse;
+import com.aiworkflow.workflow.service.DagValidationException;
+import com.aiworkflow.workflow.service.WorkflowNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,30 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(DagValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleDagValidation(DagValidationException exception, HttpServletRequest request) {
+        ErrorResponse error = new ErrorResponse(
+                "INVALID_WORKFLOW_DAG",
+                exception.getMessage(),
+                request.getRequestId(),
+                null
+        );
+        return ApiResponse.failure(error);
+    }
+
+    @ExceptionHandler(WorkflowNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleWorkflowNotFound(WorkflowNotFoundException exception, HttpServletRequest request) {
+        ErrorResponse error = new ErrorResponse(
+                "WORKFLOW_NOT_FOUND",
+                exception.getMessage(),
+                request.getRequestId(),
+                null
+        );
+        return ApiResponse.failure(error);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleValidation(MethodArgumentNotValidException exception, HttpServletRequest request) {
