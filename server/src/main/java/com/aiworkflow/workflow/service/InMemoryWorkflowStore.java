@@ -2,7 +2,6 @@ package com.aiworkflow.workflow.service;
 
 import com.aiworkflow.workflow.domain.Workflow;
 import com.aiworkflow.workflow.domain.WorkflowVersion;
-import org.springframework.stereotype.Repository;
 
 import java.util.Comparator;
 import java.util.List;
@@ -10,7 +9,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-@Repository
 public class InMemoryWorkflowStore implements WorkflowStore {
     private final ConcurrentMap<String, Workflow> workflows = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, WorkflowVersion> versions = new ConcurrentHashMap<>();

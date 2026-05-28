@@ -1,6 +1,5 @@
 package com.aiworkflow.workflow.engine;
 
-import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -9,7 +8,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-@Repository
 public class InMemoryWorkflowExecutionStore implements WorkflowExecutionStore {
     private final ConcurrentMap<String, WorkflowExecution> workflowExecutions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, List<NodeExecution>> nodeExecutionsByWorkflowExecutionId = new ConcurrentHashMap<>();
