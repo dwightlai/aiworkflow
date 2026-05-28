@@ -4,6 +4,7 @@ import com.aiworkflow.workflow.domain.WorkflowDefinition;
 import com.aiworkflow.workflow.domain.WorkflowEdge;
 import com.aiworkflow.workflow.domain.WorkflowNode;
 import com.aiworkflow.workflow.domain.WorkflowNodeType;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@Component
 public class DagValidator {
     private static final String DEFINITION_REQUIRED = "Workflow definition is required.";
     private static final String EXACTLY_ONE_START = "Workflow definition must contain exactly one START node.";
