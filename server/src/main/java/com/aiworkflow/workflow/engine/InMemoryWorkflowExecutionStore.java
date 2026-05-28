@@ -3,6 +3,7 @@ package com.aiworkflow.workflow.engine;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +23,13 @@ public class InMemoryWorkflowExecutionStore implements WorkflowExecutionStore {
     @Override
     public Optional<WorkflowExecution> findWorkflowExecutionById(String executionId) {
         return Optional.ofNullable(workflowExecutions.get(executionId));
+    }
+
+    @Override
+    public List<WorkflowExecution> listWorkflowExecutions() {
+        return workflowExecutions.values().stream()
+                .sorted(Comparator.comparing(WorkflowExecution::startedAt).reversed())
+                .toList();
     }
 
     @Override

@@ -3,6 +3,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
+import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
+import { WorkflowRunsPage } from './pages/workflows/WorkflowRunsPage';
 
 export interface ResolvedRoute {
   title: string;
@@ -40,15 +42,16 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     return {
       title: '运行历史',
       breadcrumb: ['首页', 'AI 功能', '运行历史'],
-      element: <PlaceholderPage title="运行历史" />
+      element: <WorkflowRunsPage />
     };
   }
 
   if (pathname.startsWith('/workflow-runs/')) {
+    const executionId = pathname.split('/')[2] ?? '';
     return {
       title: '执行详情',
       breadcrumb: ['首页', 'AI 功能', '运行历史', '执行详情'],
-      element: <PlaceholderPage title="执行详情" />
+      element: <WorkflowRunDetailPage executionId={executionId} />
     };
   }
 

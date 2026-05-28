@@ -117,6 +117,10 @@ export async function getWorkflowRun(executionId: string): Promise<WorkflowExecu
   return requestJson<WorkflowExecution>(`/api/workflow-runs/${executionId}`);
 }
 
+export async function listWorkflowRuns(): Promise<PageResponse<WorkflowExecution>> {
+  return requestJson<PageResponse<WorkflowExecution>>('/api/workflow-runs');
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = init ? await fetch(url, withJsonHeaders(init)) : await fetch(url);
   const envelope = await response.json() as ApiEnvelope<T>;

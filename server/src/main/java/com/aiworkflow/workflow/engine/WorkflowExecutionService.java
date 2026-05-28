@@ -106,6 +106,15 @@ public class WorkflowExecutionService {
         return new WorkflowExecutionResult(execution, executionStore.listNodeExecutions(executionId));
     }
 
+    public List<WorkflowExecutionResult> listWorkflowExecutions() {
+        return executionStore.listWorkflowExecutions().stream()
+                .map(execution -> new WorkflowExecutionResult(
+                        execution,
+                        executionStore.listNodeExecutions(execution.id())
+                ))
+                .toList();
+    }
+
     private NodeExecutionResult executeNode(
             String executionId,
             WorkflowNode node,

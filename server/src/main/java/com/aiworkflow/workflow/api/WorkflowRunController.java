@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api")
 public class WorkflowRunController {
@@ -33,5 +35,16 @@ public class WorkflowRunController {
     @GetMapping("/workflow-runs/{executionId}")
     public ApiResponse<WorkflowExecutionResponse> get(@PathVariable String executionId) {
         return ApiResponse.success(WorkflowExecutionResponse.from(executionService.getWorkflowExecution(executionId)));
+    }
+
+    @GetMapping("/workflow-runs")
+    public ApiResponse<PageResponse<WorkflowExecutionResponse>> list() {
+        List<WorkflowExecutionResponse> executions = executionService.listWorkflowExecutions().stream()
+                .map(WorkflowExecutionResponse::from)
+                .toList();
+        return ApiResponse.success(new PageResponse<>(executions, executions.size()));
+    }
+
+    public record PageResponse<T>(List<T> items, long total) {
     }
 }
