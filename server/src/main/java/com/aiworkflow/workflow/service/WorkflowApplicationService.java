@@ -21,7 +21,7 @@ public class WorkflowApplicationService {
         this.dagValidator = dagValidator;
     }
 
-    public Workflow createWorkflow(
+    public synchronized Workflow createWorkflow(
             String tenantId,
             String name,
             String description,
@@ -58,7 +58,7 @@ public class WorkflowApplicationService {
         return workflow;
     }
 
-    public WorkflowVersion updateDraftDefinition(String workflowId, WorkflowDefinition definition) {
+    public synchronized WorkflowVersion updateDraftDefinition(String workflowId, WorkflowDefinition definition) {
         getWorkflow(workflowId);
         dagValidator.validate(definition);
 
@@ -76,7 +76,7 @@ public class WorkflowApplicationService {
         return store.saveVersion(updatedDraft);
     }
 
-    public WorkflowVersion publishDraftVersion(String workflowId, String publishedBy) {
+    public synchronized WorkflowVersion publishDraftVersion(String workflowId, String publishedBy) {
         Workflow workflow = getWorkflow(workflowId);
         WorkflowVersion draftVersion = findDraftVersion(workflowId);
         Instant publishedAt = Instant.now();

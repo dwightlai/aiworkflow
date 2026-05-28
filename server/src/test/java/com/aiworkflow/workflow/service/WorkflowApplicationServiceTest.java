@@ -10,6 +10,8 @@ import com.aiworkflow.workflow.domain.WorkflowVersion;
 import com.aiworkflow.workflow.domain.WorkflowVersionStatus;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -111,6 +113,75 @@ class WorkflowApplicationServiceTest {
         assertThat(publishedWorkflow.updatedAt()).isNotEqualTo(workflow.updatedAt());
 
         assertThat(service.listWorkflows()).containsExactly(publishedWorkflow);
+    }
+
+    @Test
+    void publishedVersionDefinitionIsNotMutatedByOriginalDefinitionCollections() {
+        Map<String, Object> transformConfig = new HashMap<>();
+        transformConfig.put("template", "original");
+        List<WorkflowNode> nodes = new ArrayList<>(List.of(
+                node("start", WorkflowNodeType.START),
+                new WorkflowNode("transform", WorkflowNodeType.TEXT_TRANSFORM, "transform", transformConfig),
+                node("end", WorkflowNodeType.END)
+        ));
+        WorkflowDefinition definition = new WorkflowDefinition(
+                nodes,
+                List.of(
+                        edge("edge-1", "start", "transform"),
+                        edge("edge-2", "transform", "end")
+                ),
+                List.of()
+        );
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                null,
+                "user-1",
+                definition
+        );
+
+        nodes.add(node("late-node", WorkflowNodeType.TEXT_TRANSFORM));
+        transformConfig.put("template", "mutated");
+
+        WorkflowVersion publishedVersion = service.publishDraftVersion(workflow.id(), "publisher-1");
+
+        assertThat(publishedVersion.definition().nodes())
+                .extracting(WorkflowNode::id)
+                .containsExactly("start", "transform", "end");
+        assertThat(publishedVersion.definition().nodes().get(1).config())
+                .containsEntry("template", "original");
+    }
+
+    @Test
+    void throwsWhenUpdatingAfterPublishBecauseWorkflowHasNoDraftVersion() {
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                null,
+                "user-1",
+                validDefinition()
+        );
+        service.publishDraftVersion(workflow.id(), "publisher-1");
+
+        assertThatThrownBy(() -> service.updateDraftDefinition(workflow.id(), definitionWithExtraTransform()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Workflow has no draft version: " + workflow.id());
+    }
+
+    @Test
+    void throwsWhenPublishingTwiceBecauseWorkflowHasNoDraftVersion() {
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                null,
+                "user-1",
+                validDefinition()
+        );
+        service.publishDraftVersion(workflow.id(), "publisher-1");
+
+        assertThatThrownBy(() -> service.publishDraftVersion(workflow.id(), "publisher-2"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Workflow has no draft version: " + workflow.id());
     }
 
     @Test

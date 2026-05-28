@@ -8,4 +8,7 @@ public record WorkflowNode(
         String name,
         Map<String, Object> config
 ) {
+    public WorkflowNode {
+        config = config == null ? Map.of() : Map.copyOf(config);
+    }
 }
