@@ -18,4 +18,6 @@ export class AiWorkflowDesignerElement extends HTMLElement {
   }
 }
 
-customElements.define('ai-workflow-designer', AiWorkflowDesignerElement);
+if (!customElements.get('ai-workflow-designer')) {
+  customElements.define('ai-workflow-designer', AiWorkflowDesignerElement);
+}
