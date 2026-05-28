@@ -36,7 +36,7 @@ export interface WorkflowDefinition {
 
 export function createEmptyWorkflowDefinition(): WorkflowDefinition {
   return {
-    nodes: [{ id: 'start_1', type: 'START', name: '开始', config: {} }],
+    nodes: [{ id: 'start_1', type: 'START', name: 'Start', config: {} }],
     edges: [],
     variables: []
   };
