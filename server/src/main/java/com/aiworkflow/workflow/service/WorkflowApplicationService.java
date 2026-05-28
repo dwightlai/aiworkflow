@@ -123,6 +123,15 @@ public class WorkflowApplicationService {
         return store.listVersions(workflowId);
     }
 
+    public WorkflowVersion getPublishedVersion(String workflowId) {
+        Workflow workflow = getWorkflow(workflowId);
+        if (workflow.currentVersionId() == null) {
+            throw WorkflowNotFoundException.publishedVersionNotFound(workflowId);
+        }
+        return store.findVersionById(workflow.currentVersionId())
+                .orElseThrow(() -> WorkflowNotFoundException.publishedVersionNotFound(workflowId));
+    }
+
     private WorkflowVersion findDraftVersion(String workflowId) {
         return store.listVersions(workflowId).stream()
                 .filter(version -> version.status() == WorkflowVersionStatus.DRAFT)
