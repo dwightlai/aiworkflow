@@ -100,6 +100,12 @@ public class WorkflowExecutionService {
         }
     }
 
+    public WorkflowExecutionResult getWorkflowExecution(String executionId) {
+        WorkflowExecution execution = executionStore.findWorkflowExecutionById(executionId)
+                .orElseThrow(() -> new WorkflowRunNotFoundException(executionId));
+        return new WorkflowExecutionResult(execution, executionStore.listNodeExecutions(executionId));
+    }
+
     private NodeExecutionResult executeNode(
             String executionId,
             WorkflowNode node,

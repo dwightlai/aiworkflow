@@ -2,6 +2,7 @@ package com.aiworkflow.common.exception;
 
 import com.aiworkflow.common.api.ApiResponse;
 import com.aiworkflow.common.api.ErrorResponse;
+import com.aiworkflow.workflow.engine.WorkflowRunNotFoundException;
 import com.aiworkflow.workflow.service.DagValidationException;
 import com.aiworkflow.workflow.service.WorkflowNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,6 +35,21 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleWorkflowNotFound(WorkflowNotFoundException exception, HttpServletRequest request) {
         ErrorResponse error = new ErrorResponse(
                 "WORKFLOW_NOT_FOUND",
+                exception.getMessage(),
+                request.getRequestId(),
+                null
+        );
+        return ApiResponse.failure(error);
+    }
+
+    @ExceptionHandler(WorkflowRunNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleWorkflowRunNotFound(
+            WorkflowRunNotFoundException exception,
+            HttpServletRequest request
+    ) {
+        ErrorResponse error = new ErrorResponse(
+                "WORKFLOW_RUN_NOT_FOUND",
                 exception.getMessage(),
                 request.getRequestId(),
                 null
