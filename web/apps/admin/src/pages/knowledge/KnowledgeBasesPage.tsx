@@ -37,6 +37,7 @@ import {
   createVectorStoreConfig,
   deleteKnowledgeBase,
   deleteKnowledgeDocument,
+  deleteVectorStoreConfig,
   listKnowledgeBases,
   listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
@@ -211,6 +212,16 @@ export function KnowledgeBasesPage() {
     },
     onSuccess: async () => {
       message.success('向量库配置已保存');
+      setEditingVectorStore(null);
+      vectorForm.setFieldsValue(initialVectorValues);
+      await queryClient.invalidateQueries({ queryKey: ['vector-store-configs'] });
+    }
+  });
+
+  const deleteVectorMutation = useMutation({
+    mutationFn: (store: VectorStoreConfig) => deleteVectorStoreConfig(store.id),
+    onSuccess: async () => {
+      message.success('向量库配置已删除');
       setEditingVectorStore(null);
       vectorForm.setFieldsValue(initialVectorValues);
       await queryClient.invalidateQueries({ queryKey: ['vector-store-configs'] });
@@ -437,7 +448,18 @@ export function KnowledgeBasesPage() {
             renderItem={(store) => (
               <List.Item
                 actions={[
-                  <Button key="edit" size="small" icon={<EditOutlined />} aria-label="编辑向量库" onClick={() => startEditVectorStore(store)}>编辑</Button>
+                  <Button key="edit" size="small" icon={<EditOutlined />} aria-label="编辑向量库" onClick={() => startEditVectorStore(store)}>编辑</Button>,
+                  <Button
+                    key="delete"
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    aria-label="删除向量库"
+                    loading={deleteVectorMutation.isPending}
+                    onClick={() => deleteVectorMutation.mutate(store)}
+                  >
+                    删除
+                  </Button>
                 ]}
               >
                 <List.Item.Meta

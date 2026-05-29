@@ -85,6 +85,7 @@ const knowledgeApiMock = vi.hoisted(() => ({
     indexName: 'kb_prod',
     enabled: false
   })),
+  deleteVectorStoreConfig: vi.fn(async () => undefined),
   listKnowledgeDocuments: vi.fn(async () => ({
     items: [
       {
@@ -301,6 +302,11 @@ describe('KnowledgeBasesPage', () => {
       expect(knowledgeApiMock.updateVectorStoreConfig).toHaveBeenCalledWith('vector_1', expect.objectContaining({
         name: 'Elastic prod'
       }));
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /删除向量库/ }));
+    await waitFor(() => {
+      expect(knowledgeApiMock.deleteVectorStoreConfig).toHaveBeenCalledWith('vector_1');
     });
   });
 

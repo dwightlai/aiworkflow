@@ -140,6 +140,12 @@ export async function updateVectorStoreConfig(
   });
 }
 
+export async function deleteVectorStoreConfig(id: string): Promise<void> {
+  await requestJson<void>(`/api/vector-store-configs/${id}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function createKnowledgeBase(request: SaveKnowledgeBaseRequest): Promise<KnowledgeBase> {
   return requestJson<KnowledgeBase>('/api/knowledge-bases', {
     method: 'POST',

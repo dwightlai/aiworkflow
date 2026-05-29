@@ -53,4 +53,8 @@ public class VectorStoreConfigService {
         }
         throw new IllegalArgumentException("Vector store config not found: " + id);
     }
+
+    public void delete(String id) {
+        configs.removeIf(config -> config.id().equals(id));
+    }
 }

@@ -248,6 +248,28 @@ class KnowledgeBaseControllerIntegrationTest {
     }
 
     @Test
+    void deletesVectorStoreConfigs() throws Exception {
+        String response = mockMvc.perform(post("/api/vector-store-configs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Elastic temporary","storeType":"ELASTICSEARCH","endpoint":"http://localhost:9200","indexName":"kb_tmp","enabled":true}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String vectorStoreId = new ObjectMapper().readTree(response).path("data").path("id").asText();
+
+        mockMvc.perform(delete("/api/vector-store-configs/{id}", vectorStoreId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/vector-store-configs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.id == '" + vectorStoreId + "')]").isEmpty());
+    }
+
+    @Test
     void updatesAndDeletesKnowledgeBases() throws Exception {
         String response = mockMvc.perform(post("/api/knowledge-bases")
                         .contentType(MediaType.APPLICATION_JSON)

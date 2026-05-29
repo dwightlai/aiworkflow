@@ -5,6 +5,7 @@ import {
   createKnowledgeBase,
   deleteKnowledgeBase,
   deleteKnowledgeDocument,
+  deleteVectorStoreConfig,
   listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
   listKnowledgeBases,
@@ -108,6 +109,7 @@ describe('knowledge api', () => {
         data: { id: 'vector_1', name: 'Elastic prod', storeType: 'ELASTICSEARCH', endpoint: 'https://es.example.com', indexName: 'kb_prod', enabled: false },
         error: null
       }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: null, error: null }))
       .mockResolvedValueOnce(jsonResponse({
         success: true,
         data: { items: [{ id: 'doc_1', knowledgeBaseId: 'kb_1', name: 'faq.txt', chunkCount: 1 }], total: 1 },
@@ -128,6 +130,7 @@ describe('knowledge api', () => {
 
     await createVectorStoreConfig({ name: 'Elastic dev', storeType: 'ELASTICSEARCH', endpoint: 'http://localhost:9200', indexName: 'kb_dev', enabled: true });
     await updateVectorStoreConfig('vector_1', { name: 'Elastic prod', storeType: 'ELASTICSEARCH', endpoint: 'https://es.example.com', indexName: 'kb_prod', enabled: false });
+    await deleteVectorStoreConfig('vector_1');
     const documents = await listKnowledgeDocuments('kb_1');
     const chunks = await listKnowledgeDocumentChunks('kb_1', 'doc_1');
     const updatedChunk = await updateKnowledgeChunk('kb_1', 'chunk_1', { content: 'Updated refund policy', enabled: false });
@@ -138,10 +141,11 @@ describe('knowledge api', () => {
     expect(updatedChunk.enabled).toBe(false);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vector-store-configs', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/vector-store-configs/vector_1', expect.objectContaining({ method: 'PUT' }));
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/knowledge-bases/kb_1/documents');
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/knowledge-bases/kb_1/documents/doc_1/chunks');
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/knowledge-bases/kb_1/chunks/chunk_1', expect.objectContaining({ method: 'PUT' }));
-    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/knowledge-bases/kb_1/documents/doc_1', expect.objectContaining({ method: 'DELETE' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/vector-store-configs/vector_1', expect.objectContaining({ method: 'DELETE' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/knowledge-bases/kb_1/documents');
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/knowledge-bases/kb_1/documents/doc_1/chunks');
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/knowledge-bases/kb_1/chunks/chunk_1', expect.objectContaining({ method: 'PUT' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/knowledge-bases/kb_1/documents/doc_1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('updates and deletes knowledge bases', async () => {
