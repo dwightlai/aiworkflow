@@ -2,6 +2,7 @@ package com.aiworkflow.knowledge.service;
 
 import com.aiworkflow.knowledge.domain.KnowledgeBase;
 import com.aiworkflow.knowledge.domain.KnowledgeChunk;
+import com.aiworkflow.knowledge.domain.KnowledgeChunkPreview;
 import com.aiworkflow.knowledge.domain.KnowledgeDocument;
 import com.aiworkflow.knowledge.domain.KnowledgeSearchResult;
 import org.springframework.stereotype.Service;
@@ -18,18 +19,43 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class KnowledgeBaseService {
-    private static final int CHUNK_SIZE = 500;
-
+    private final KnowledgeSplitter splitter;
     private final List<KnowledgeBase> knowledgeBases = new CopyOnWriteArrayList<>();
     private final List<KnowledgeDocument> documents = new CopyOnWriteArrayList<>();
     private final List<KnowledgeChunk> chunks = new CopyOnWriteArrayList<>();
 
-    public KnowledgeBase create(String name, String description) {
+    public KnowledgeBaseService() {
+        this(new KnowledgeSplitter());
+    }
+
+    public KnowledgeBaseService(KnowledgeSplitter splitter) {
+        this.splitter = splitter;
+    }
+
+    public KnowledgeBase create(
+            String name,
+            String description,
+            String embeddingModelId,
+            String vectorStoreConfigId,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap,
+            String retrievalMode,
+            int topK
+    ) {
         Instant now = Instant.now();
         KnowledgeBase knowledgeBase = new KnowledgeBase(
                 "kb_" + UUID.randomUUID(),
                 name,
                 description,
+                blankToNull(embeddingModelId),
+                blankToNull(vectorStoreConfigId),
+                defaultString(splitterType, "SIMPLE_TEXT"),
+                chunkSize <= 0 ? 500 : chunkSize,
+                Math.max(0, chunkOverlap),
+                defaultString(retrievalMode, "KEYWORD"),
+                topK <= 0 ? 3 : topK,
+                "READY",
                 0,
                 0,
                 now,
@@ -39,33 +65,57 @@ public class KnowledgeBaseService {
         return knowledgeBase;
     }
 
+    public KnowledgeBase create(String name, String description) {
+        return create(name, description, null, null, "SIMPLE_TEXT", 500, 0, "KEYWORD", 3);
+    }
+
     public List<KnowledgeBase> list() {
         return new ArrayList<>(knowledgeBases);
     }
 
-    public KnowledgeDocument addDocument(String knowledgeBaseId, String name, String content) {
-        ensureKnowledgeBaseExists(knowledgeBaseId);
-        List<String> chunkContents = splitContent(content);
+    public List<KnowledgeChunkPreview> previewChunks(String content, String splitterType, int chunkSize, int chunkOverlap) {
+        return splitter.preview(content, splitterType, chunkSize, chunkOverlap);
+    }
+
+    public KnowledgeDocument addDocument(
+            String knowledgeBaseId,
+            String name,
+            String content,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap
+    ) {
+        KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
+        String effectiveSplitterType = defaultString(splitterType, knowledgeBase.splitterType());
+        int effectiveChunkSize = chunkSize <= 0 ? knowledgeBase.chunkSize() : chunkSize;
+        int effectiveChunkOverlap = chunkOverlap < 0 ? knowledgeBase.chunkOverlap() : chunkOverlap;
+        List<KnowledgeChunkPreview> previews = splitter.preview(content, effectiveSplitterType, effectiveChunkSize, effectiveChunkOverlap);
         KnowledgeDocument document = new KnowledgeDocument(
                 "doc_" + UUID.randomUUID(),
                 knowledgeBaseId,
                 name,
-                chunkContents.size(),
+                previews.size(),
                 Instant.now()
         );
         documents.add(document);
-        for (int index = 0; index < chunkContents.size(); index += 1) {
+        for (KnowledgeChunkPreview preview : previews) {
             chunks.add(new KnowledgeChunk(
                     "chunk_" + UUID.randomUUID(),
                     knowledgeBaseId,
                     document.id(),
                     document.name(),
-                    chunkContents.get(index),
-                    index
+                    preview.content(),
+                    preview.index(),
+                    true,
+                    preview.tokenEstimate()
             ));
         }
         refreshKnowledgeBaseStats(knowledgeBaseId);
         return document;
+    }
+
+    public KnowledgeDocument addDocument(String knowledgeBaseId, String name, String content) {
+        return addDocument(knowledgeBaseId, name, content, null, 0, -1);
     }
 
     public List<KnowledgeDocument> listDocuments(String knowledgeBaseId) {
@@ -75,12 +125,22 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
-    public List<KnowledgeSearchResult> search(String knowledgeBaseId, String query, int topK) {
+    public List<KnowledgeChunk> listChunks(String knowledgeBaseId, String documentId) {
         ensureKnowledgeBaseExists(knowledgeBaseId);
-        Set<String> terms = tokenize(query);
-        int limit = topK <= 0 ? 3 : topK;
         return chunks.stream()
                 .filter(chunk -> chunk.knowledgeBaseId().equals(knowledgeBaseId))
+                .filter(chunk -> chunk.documentId().equals(documentId))
+                .sorted(Comparator.comparingInt(KnowledgeChunk::index))
+                .toList();
+    }
+
+    public List<KnowledgeSearchResult> search(String knowledgeBaseId, String query, int topK) {
+        KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
+        Set<String> terms = tokenize(query);
+        int limit = topK <= 0 ? knowledgeBase.topK() : topK;
+        return chunks.stream()
+                .filter(chunk -> chunk.knowledgeBaseId().equals(knowledgeBaseId))
+                .filter(KnowledgeChunk::enabled)
                 .map(chunk -> new KnowledgeSearchResult(
                         chunk.id(),
                         chunk.documentName(),
@@ -93,11 +153,15 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    private KnowledgeBase getKnowledgeBase(String knowledgeBaseId) {
+        return knowledgeBases.stream()
+                .filter(knowledgeBase -> knowledgeBase.id().equals(knowledgeBaseId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId));
+    }
+
     private void ensureKnowledgeBaseExists(String knowledgeBaseId) {
-        boolean exists = knowledgeBases.stream().anyMatch(knowledgeBase -> knowledgeBase.id().equals(knowledgeBaseId));
-        if (!exists) {
-            throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
-        }
+        getKnowledgeBase(knowledgeBaseId);
     }
 
     private void refreshKnowledgeBaseStats(String knowledgeBaseId) {
@@ -114,6 +178,14 @@ public class KnowledgeBaseService {
                         current.id(),
                         current.name(),
                         current.description(),
+                        current.embeddingModelId(),
+                        current.vectorStoreConfigId(),
+                        current.splitterType(),
+                        current.chunkSize(),
+                        current.chunkOverlap(),
+                        current.retrievalMode(),
+                        current.topK(),
+                        current.status(),
                         documentCount,
                         chunkCount,
                         current.createdAt(),
@@ -122,24 +194,6 @@ public class KnowledgeBaseService {
                 return;
             }
         }
-    }
-
-    private List<String> splitContent(String content) {
-        String normalized = content == null ? "" : content.trim();
-        if (normalized.isBlank()) {
-            return List.of();
-        }
-        List<String> result = new ArrayList<>();
-        for (String paragraph : normalized.split("\\R{2,}")) {
-            String trimmed = paragraph.trim();
-            if (trimmed.isBlank()) {
-                continue;
-            }
-            for (int start = 0; start < trimmed.length(); start += CHUNK_SIZE) {
-                result.add(trimmed.substring(start, Math.min(start + CHUNK_SIZE, trimmed.length())));
-            }
-        }
-        return result.isEmpty() ? List.of(normalized) : result;
     }
 
     private Set<String> tokenize(String query) {
@@ -166,5 +220,13 @@ public class KnowledgeBaseService {
             }
         }
         return score;
+    }
+
+    private String defaultString(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }

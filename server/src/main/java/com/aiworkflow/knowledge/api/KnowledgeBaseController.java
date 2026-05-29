@@ -2,6 +2,8 @@ package com.aiworkflow.knowledge.api;
 
 import com.aiworkflow.common.api.ApiResponse;
 import com.aiworkflow.knowledge.domain.KnowledgeBase;
+import com.aiworkflow.knowledge.domain.KnowledgeChunk;
+import com.aiworkflow.knowledge.domain.KnowledgeChunkPreview;
 import com.aiworkflow.knowledge.domain.KnowledgeDocument;
 import com.aiworkflow.knowledge.domain.KnowledgeSearchResult;
 import com.aiworkflow.knowledge.service.KnowledgeBaseService;
@@ -33,7 +35,27 @@ public class KnowledgeBaseController {
 
     @PostMapping
     public ApiResponse<KnowledgeBase> create(@Valid @RequestBody SaveKnowledgeBaseRequest request) {
-        return ApiResponse.success(knowledgeBaseService.create(request.name(), request.description()));
+        return ApiResponse.success(knowledgeBaseService.create(
+                request.name(),
+                request.description(),
+                request.embeddingModelId(),
+                request.vectorStoreConfigId(),
+                request.splitterType(),
+                request.chunkSize(),
+                request.chunkOverlap(),
+                request.retrievalMode(),
+                request.topK()
+        ));
+    }
+
+    @PostMapping("/chunks/preview")
+    public ApiResponse<List<KnowledgeChunkPreview>> previewChunks(@Valid @RequestBody PreviewChunksRequest request) {
+        return ApiResponse.success(knowledgeBaseService.previewChunks(
+                request.content(),
+                request.splitterType(),
+                request.chunkSize(),
+                request.chunkOverlap()
+        ));
     }
 
     @GetMapping("/{id}/documents")
@@ -47,7 +69,23 @@ public class KnowledgeBaseController {
             @PathVariable String id,
             @Valid @RequestBody AddKnowledgeDocumentRequest request
     ) {
-        return ApiResponse.success(knowledgeBaseService.addDocument(id, request.name(), request.content()));
+        return ApiResponse.success(knowledgeBaseService.addDocument(
+                id,
+                request.name(),
+                request.content(),
+                request.splitterType(),
+                request.chunkSize(),
+                request.chunkOverlap()
+        ));
+    }
+
+    @GetMapping("/{id}/documents/{documentId}/chunks")
+    public ApiResponse<PageResponse<KnowledgeChunk>> chunks(
+            @PathVariable String id,
+            @PathVariable String documentId
+    ) {
+        List<KnowledgeChunk> chunks = knowledgeBaseService.listChunks(id, documentId);
+        return ApiResponse.success(new PageResponse<>(chunks, chunks.size()));
     }
 
     @PostMapping("/{id}/search")
@@ -58,10 +96,34 @@ public class KnowledgeBaseController {
         return ApiResponse.success(knowledgeBaseService.search(id, request.query(), request.topK()));
     }
 
-    public record SaveKnowledgeBaseRequest(@NotBlank String name, String description) {
+    public record SaveKnowledgeBaseRequest(
+            @NotBlank String name,
+            String description,
+            String embeddingModelId,
+            String vectorStoreConfigId,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap,
+            String retrievalMode,
+            int topK
+    ) {
     }
 
-    public record AddKnowledgeDocumentRequest(@NotBlank String name, @NotBlank String content) {
+    public record AddKnowledgeDocumentRequest(
+            @NotBlank String name,
+            @NotBlank String content,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap
+    ) {
+    }
+
+    public record PreviewChunksRequest(
+            @NotBlank String content,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap
+    ) {
     }
 
     public record SearchKnowledgeBaseRequest(@NotBlank String query, int topK) {

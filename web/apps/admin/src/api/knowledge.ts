@@ -13,6 +13,14 @@ export interface KnowledgeBase {
   id: string;
   name: string;
   description: string | null;
+  embeddingModelId?: string | null;
+  vectorStoreConfigId?: string | null;
+  splitterType?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  retrievalMode?: string;
+  topK?: number;
+  status?: string;
   documentCount: number;
   chunkCount: number;
   createdAt?: string;
@@ -34,14 +42,52 @@ export interface KnowledgeSearchResult {
   score: number;
 }
 
+export interface KnowledgeChunk {
+  id: string;
+  knowledgeBaseId: string;
+  documentId: string;
+  documentName: string;
+  content: string;
+  index: number;
+  enabled: boolean;
+  tokenEstimate: number;
+}
+
+export interface KnowledgeChunkPreview {
+  index: number;
+  content: string;
+  tokenEstimate: number;
+}
+
+export interface VectorStoreConfig {
+  id: string;
+  name: string;
+  storeType: string;
+  endpoint: string | null;
+  indexName: string;
+  enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SaveKnowledgeBaseRequest {
   name: string;
   description: string | null;
+  embeddingModelId?: string | null;
+  vectorStoreConfigId?: string | null;
+  splitterType?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  retrievalMode?: string;
+  topK?: number;
 }
 
 export interface AddKnowledgeDocumentRequest {
   name: string;
   content: string;
+  splitterType?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }
 
 export interface SearchKnowledgeBaseRequest {
@@ -49,8 +95,19 @@ export interface SearchKnowledgeBaseRequest {
   topK: number;
 }
 
+export interface PreviewKnowledgeChunksRequest {
+  content: string;
+  splitterType: string;
+  chunkSize: number;
+  chunkOverlap: number;
+}
+
 export async function listKnowledgeBases(): Promise<PageResponse<KnowledgeBase>> {
   return requestJson<PageResponse<KnowledgeBase>>('/api/knowledge-bases');
+}
+
+export async function listVectorStoreConfigs(): Promise<PageResponse<VectorStoreConfig>> {
+  return requestJson<PageResponse<VectorStoreConfig>>('/api/vector-store-configs');
 }
 
 export async function createKnowledgeBase(request: SaveKnowledgeBaseRequest): Promise<KnowledgeBase> {
@@ -68,6 +125,20 @@ export async function addKnowledgeDocument(
     method: 'POST',
     body: JSON.stringify(request)
   });
+}
+
+export async function previewKnowledgeChunks(request: PreviewKnowledgeChunksRequest): Promise<KnowledgeChunkPreview[]> {
+  return requestJson<KnowledgeChunkPreview[]>('/api/knowledge-bases/chunks/preview', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function listKnowledgeDocumentChunks(
+  knowledgeBaseId: string,
+  documentId: string
+): Promise<PageResponse<KnowledgeChunk>> {
+  return requestJson<PageResponse<KnowledgeChunk>>(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks`);
 }
 
 export async function searchKnowledgeBase(

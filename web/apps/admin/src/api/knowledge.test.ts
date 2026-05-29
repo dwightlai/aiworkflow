@@ -3,6 +3,8 @@ import {
   addKnowledgeDocument,
   createKnowledgeBase,
   listKnowledgeBases,
+  listVectorStoreConfigs,
+  previewKnowledgeChunks,
   searchKnowledgeBase
 } from './knowledge';
 
@@ -56,6 +58,34 @@ describe('knowledge api', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/knowledge-bases', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/kb_1/documents', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/knowledge-bases/kb_1/search', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('manages vector stores and previews document chunks', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { items: [{ id: 'vector_1', name: 'Memory', storeType: 'MEMORY', endpoint: '', indexName: 'aiworkflow_kb', enabled: true }], total: 1 },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: [{ index: 0, content: '# Refund\nRefund policy', tokenEstimate: 6 }],
+        error: null
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const configs = await listVectorStoreConfigs();
+    const chunks = await previewKnowledgeChunks({
+      content: '# Refund\nRefund policy',
+      splitterType: 'MARKDOWN_HEADING',
+      chunkSize: 120,
+      chunkOverlap: 10
+    });
+
+    expect(configs.items[0].storeType).toBe('MEMORY');
+    expect(chunks[0].content).toContain('Refund policy');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vector-store-configs');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/chunks/preview', expect.objectContaining({ method: 'POST' }));
   });
 });
 

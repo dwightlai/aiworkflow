@@ -6,6 +6,8 @@ public record KnowledgeChunk(
         String documentId,
         String documentName,
         String content,
-        int index
+        int index,
+        boolean enabled,
+        int tokenEstimate
 ) {
 }

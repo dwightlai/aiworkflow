@@ -13,6 +13,14 @@ const knowledgeApiMock = vi.hoisted(() => ({
         id: 'kb_1',
         name: '产品知识库',
         description: '客服资料',
+        embeddingModelId: 'model_embed',
+        vectorStoreConfigId: 'vector_1',
+        splitterType: 'MARKDOWN_HEADING',
+        chunkSize: 500,
+        chunkOverlap: 50,
+        retrievalMode: 'HYBRID',
+        topK: 5,
+        status: 'READY',
         documentCount: 1,
         chunkCount: 2
       }
@@ -32,6 +40,26 @@ const knowledgeApiMock = vi.hoisted(() => ({
     name: 'faq.txt',
     chunkCount: 1
   })),
+  listVectorStoreConfigs: vi.fn(async () => ({
+    items: [
+      {
+        id: 'vector_1',
+        name: '本地内存向量库',
+        storeType: 'MEMORY',
+        endpoint: '',
+        indexName: 'aiworkflow_kb',
+        enabled: true
+      }
+    ],
+    total: 1
+  })),
+  previewKnowledgeChunks: vi.fn(async () => [
+    {
+      index: 0,
+      content: '# Refund\nRefund requests are handled within seven days.',
+      tokenEstimate: 14
+    }
+  ]),
   searchKnowledgeBase: vi.fn(async () => [
     {
       id: 'chunk_1',
@@ -64,17 +92,16 @@ afterEach(() => {
 });
 
 describe('KnowledgeBasesPage', () => {
-  it('lists knowledge bases and ingestion metrics', async () => {
+  it('lists knowledge bases with retrieval and vector store settings', async () => {
     renderPage();
 
     expect(await screen.findByText('产品知识库')).toBeInTheDocument();
-    expect(screen.getByText('知识库总数')).toBeInTheDocument();
-    expect(screen.getAllByText('文档数').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('切片数').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('工作流可引用').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('向量库配置').length).toBeGreaterThan(0);
+    expect(screen.getByText('分段策略')).toBeInTheDocument();
+    expect(screen.getByText('HYBRID')).toBeInTheDocument();
   });
 
-  it('creates a knowledge base from the drawer form', async () => {
+  it('creates a knowledge base with retrieval settings', async () => {
     renderPage();
 
     await userEvent.click(screen.getByRole('button', { name: /新增知识库/ }));
@@ -82,26 +109,34 @@ describe('KnowledgeBasesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /保存/ }));
 
     await waitFor(() => {
-      expect(knowledgeApiMock.createKnowledgeBase).toHaveBeenCalledWith({
+      expect(knowledgeApiMock.createKnowledgeBase).toHaveBeenCalledWith(expect.objectContaining({
         name: '售后知识库',
-        description: null
-      });
+        splitterType: 'SIMPLE_TEXT',
+        retrievalMode: 'KEYWORD'
+      }));
     });
   });
 
-  it('uploads documents and searches the selected knowledge base', async () => {
+  it('previews chunks before document ingestion and can search the selected base', async () => {
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: /管理文档/ }));
     fireEvent.change(await screen.findByLabelText('文档名称'), { target: { value: 'faq.txt' } });
-    fireEvent.change(screen.getByLabelText('文档内容'), { target: { value: '发票可以在订单完成后七日内申请。' } });
-    await userEvent.click(screen.getByRole('button', { name: /入库/ }));
+    fireEvent.change(screen.getByLabelText('文档内容'), { target: { value: '# Refund\nRefund requests are handled within seven days.' } });
+    await userEvent.click(screen.getByRole('button', { name: /预览切片/ }));
 
     await waitFor(() => {
-      expect(knowledgeApiMock.addKnowledgeDocument).toHaveBeenCalledWith('kb_1', {
-        name: 'faq.txt',
-        content: '发票可以在订单完成后七日内申请。'
-      });
+      expect(knowledgeApiMock.previewKnowledgeChunks).toHaveBeenCalledWith(expect.objectContaining({
+        content: '# Refund\nRefund requests are handled within seven days.'
+      }));
+    });
+    expect((await screen.findAllByText(/Refund requests/)).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: /入库/ }));
+    await waitFor(() => {
+      expect(knowledgeApiMock.addKnowledgeDocument).toHaveBeenCalledWith('kb_1', expect.objectContaining({
+        name: 'faq.txt'
+      }));
     });
 
     fireEvent.change(screen.getByLabelText('检索测试'), { target: { value: '发票申请' } });
