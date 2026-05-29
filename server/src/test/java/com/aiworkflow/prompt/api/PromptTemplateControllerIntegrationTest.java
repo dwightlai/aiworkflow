@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,5 +69,32 @@ class PromptTemplateControllerIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.name").value("Classifier v2"))
                 .andExpect(jsonPath("$.data.template").value("Classify carefully: {{text}}"));
+    }
+
+    @Test
+    void deletesPromptTemplates() throws Exception {
+        String response = mockMvc.perform(post("/api/prompts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Temporary","template":"Draft {{input}}","description":null}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String promptId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(response)
+                .path("data")
+                .path("id")
+                .asText();
+
+        mockMvc.perform(delete("/api/prompts/{id}", promptId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/prompts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.id == '" + promptId + "')]").isEmpty());
     }
 }

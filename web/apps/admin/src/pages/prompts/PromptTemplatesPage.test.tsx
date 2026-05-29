@@ -24,6 +24,7 @@ const promptApiMock = vi.hoisted(() => ({
     template: 'Classify {{text}}',
     description: null
   })),
+  deletePromptTemplate: vi.fn(async () => undefined),
   updatePromptTemplate: vi.fn(async () => ({
     id: 'prompt_1',
     name: 'Greeting v2',
@@ -98,6 +99,16 @@ describe('PromptTemplatesPage', () => {
         'prompt_1',
         expect.objectContaining({ description: 'Updated' })
       );
+    });
+  }, 10000);
+
+  it('deletes an existing prompt template', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /删除 Prompt/ }));
+
+    await waitFor(() => {
+      expect(promptApiMock.deletePromptTemplate).toHaveBeenCalledWith('prompt_1');
     });
   }, 10000);
 });

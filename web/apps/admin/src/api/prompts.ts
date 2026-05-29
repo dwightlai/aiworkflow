@@ -42,6 +42,12 @@ export async function updatePromptTemplate(id: string, request: SavePromptTempla
   });
 }
 
+export async function deletePromptTemplate(id: string): Promise<void> {
+  await requestJson<void>(`/api/prompts/${id}`, {
+    method: 'DELETE'
+  });
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = init ? await fetch(url, withJsonHeaders(init)) : await fetch(url);
   const envelope = await response.json() as ApiEnvelope<T>;

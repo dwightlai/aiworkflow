@@ -49,4 +49,8 @@ public class PromptTemplateService {
     public List<PromptTemplate> list() {
         return new ArrayList<>(templates);
     }
+
+    public void delete(String id) {
+        templates.removeIf(template -> template.id().equals(id));
+    }
 }

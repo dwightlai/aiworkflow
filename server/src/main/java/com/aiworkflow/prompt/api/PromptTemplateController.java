@@ -5,6 +5,7 @@ import com.aiworkflow.prompt.domain.PromptTemplate;
 import com.aiworkflow.prompt.service.PromptTemplateService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,6 +51,12 @@ public class PromptTemplateController {
                 request.template(),
                 request.description()
         ));
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable String id) {
+        promptTemplateService.delete(id);
+        return ApiResponse.success(null);
     }
 
     public record SavePromptTemplateRequest(

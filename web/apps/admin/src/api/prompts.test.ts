@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createPromptTemplate, listPromptTemplates, updatePromptTemplate } from './prompts';
+import { createPromptTemplate, deletePromptTemplate, listPromptTemplates, updatePromptTemplate } from './prompts';
 
 describe('prompt template api', () => {
   afterEach(() => {
@@ -43,6 +43,19 @@ describe('prompt template api', () => {
     expect(updated.name).toBe('Greeting v2');
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/prompts', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/prompts/prompt_1', expect.objectContaining({ method: 'PUT' }));
+  });
+
+  it('deletes prompt templates', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: null,
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deletePromptTemplate('prompt_1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/prompts/prompt_1', expect.objectContaining({ method: 'DELETE' }));
   });
 });
 

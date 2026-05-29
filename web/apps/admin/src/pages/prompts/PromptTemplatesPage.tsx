@@ -1,6 +1,7 @@
 import {
   CheckCircleOutlined,
   CodeOutlined,
+  DeleteOutlined,
   EditOutlined,
   FileTextOutlined,
   PlusOutlined
@@ -25,6 +26,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import {
   createPromptTemplate,
+  deletePromptTemplate,
   listPromptTemplates,
   updatePromptTemplate,
   type PromptTemplate,
@@ -65,6 +67,14 @@ export function PromptTemplatesPage() {
       setDrawerOpen(false);
       setEditingPrompt(null);
       form.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['prompt-templates'] });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (prompt: PromptTemplate) => deletePromptTemplate(prompt.id),
+    onSuccess: async () => {
+      message.success('Prompt 模板已删除');
       await queryClient.invalidateQueries({ queryKey: ['prompt-templates'] });
     }
   });
@@ -119,11 +129,23 @@ export function PromptTemplatesPage() {
     },
     {
       title: '操作',
-      width: 96,
+      width: 168,
       render: (_, prompt) => (
-        <Button size="small" icon={<EditOutlined />} onClick={() => openEditDrawer(prompt)}>
-          编辑
-        </Button>
+        <Space>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEditDrawer(prompt)}>
+            编辑
+          </Button>
+          <Button
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            aria-label="删除 Prompt"
+            loading={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate(prompt)}
+          >
+            删除
+          </Button>
+        </Space>
       )
     }
   ];
