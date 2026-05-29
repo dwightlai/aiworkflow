@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { DashboardPage } from './pages/DashboardPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
 import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
@@ -52,6 +53,14 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: '执行详情',
       breadcrumb: ['首页', 'AI 功能', '运行历史', '执行详情'],
       element: <WorkflowRunDetailPage executionId={executionId} />
+    };
+  }
+
+  if (pathname === '/models') {
+    return {
+      title: '模型配置',
+      breadcrumb: ['首页', 'AI 功能', '模型配置'],
+      element: <ModelProvidersPage />
     };
   }
 

@@ -1,13 +1,15 @@
 import type { WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Empty, Form, Input, InputNumber, Select, Space, Typography } from 'antd';
 import type React from 'react';
+import type { ModelProvider } from '../../../api/models';
 
 export interface NodeConfigPanelProps {
   node: WorkflowNode | null;
   onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void;
+  modelProviders?: ModelProvider[];
 }
 
-export function NodeConfigPanel({ node, onChange }: NodeConfigPanelProps) {
+export function NodeConfigPanel({ node, onChange, modelProviders = [] }: NodeConfigPanelProps) {
   if (!node) {
     return (
       <aside style={panelStyle}>
@@ -27,13 +29,13 @@ export function NodeConfigPanel({ node, onChange }: NodeConfigPanelProps) {
         <Form.Item label="节点类型">
           <Input value={node.type} readOnly />
         </Form.Item>
-        <ConfigFields node={node} onChange={onChange} />
+        <ConfigFields node={node} onChange={onChange} modelProviders={modelProviders} />
       </Form>
     </aside>
   );
 }
 
-function ConfigFields({ node, onChange }: NodeConfigPanelProps & { node: WorkflowNode }) {
+function ConfigFields({ node, onChange, modelProviders = [] }: NodeConfigPanelProps & { node: WorkflowNode }) {
   const config = node.config;
   const setConfig = (patch: Record<string, unknown>) => onChange(node.id, { config: { ...config, ...patch } });
 
@@ -55,14 +57,49 @@ function ConfigFields({ node, onChange }: NodeConfigPanelProps & { node: Workflo
   }
 
   if (node.type === 'LLM') {
+    const enabledProviders = modelProviders.filter((provider) => provider.enabled);
+    const selectedProvider = enabledProviders.find((provider) => provider.id === config.providerId);
     return (
       <>
-        <Form.Item label="模型供应商">
-          <Input value={String(config.providerId ?? '')} onChange={(event) => setConfig({ providerId: event.target.value })} />
-        </Form.Item>
-        <Form.Item label="模型">
-          <Input value={String(config.model ?? '')} onChange={(event) => setConfig({ model: event.target.value })} />
-        </Form.Item>
+        {enabledProviders.length > 0 ? (
+          <>
+            <Form.Item label="已保存模型">
+              <Select
+                aria-label="选择已保存模型"
+                placeholder="选择模型配置"
+                value={typeof config.providerId === 'string' && config.providerId ? String(config.providerId) : undefined}
+                options={enabledProviders.map((provider) => ({
+                  value: provider.id,
+                  label: `${provider.name} / ${provider.model}`
+                }))}
+                onChange={(providerId) => {
+                  const provider = enabledProviders.find((item) => item.id === providerId);
+                  setConfig({ providerId, model: provider?.model ?? '' });
+                }}
+              />
+            </Form.Item>
+            <Form.Item label="模型标识">
+              <Input value={String(selectedProvider?.model ?? config.model ?? '')} onChange={(event) => setConfig({ model: event.target.value })} />
+            </Form.Item>
+            {selectedProvider ? (
+              <Typography.Text type="secondary" style={hintStyle}>
+                Base URL：{selectedProvider.baseUrl}，密钥引用：{selectedProvider.apiKeyRef}
+              </Typography.Text>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Form.Item label="模型供应商">
+              <Input value={String(config.providerId ?? '')} onChange={(event) => setConfig({ providerId: event.target.value })} />
+            </Form.Item>
+            <Form.Item label="模型">
+              <Input value={String(config.model ?? '')} onChange={(event) => setConfig({ model: event.target.value })} />
+            </Form.Item>
+            <Typography.Text type="secondary" style={hintStyle}>
+              请先在“大模型配置”中保存模型，或临时手填供应商与模型标识。
+            </Typography.Text>
+          </>
+        )}
         <Form.Item label="Prompt 变量">
           <Input value={String(config.promptKey ?? '')} onChange={(event) => setConfig({ promptKey: event.target.value })} />
         </Form.Item>
@@ -147,4 +184,10 @@ const panelStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   marginBottom: 14
+};
+
+const hintStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 12,
+  marginBottom: 12
 };

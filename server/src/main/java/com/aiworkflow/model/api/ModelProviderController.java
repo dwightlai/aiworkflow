@@ -33,6 +33,7 @@ public class ModelProviderController {
         return ApiResponse.success(modelProviderService.create(
                 request.name(),
                 request.baseUrl(),
+                request.model(),
                 request.apiKeyRef(),
                 request.enabled()
         ));
@@ -41,6 +42,7 @@ public class ModelProviderController {
     public record CreateModelProviderRequest(
             @NotBlank String name,
             @NotBlank String baseUrl,
+            @NotBlank String model,
             @NotBlank String apiKeyRef,
             boolean enabled
     ) {

@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Drawer, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { listModelProviders } from '../../api/models';
 import {
   createWorkflow,
   getWorkflow,
@@ -55,6 +56,10 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
     queryKey: ['workflow', workflowId],
     queryFn: () => getWorkflow(workflowId),
     enabled: !isNewWorkflow
+  });
+  const modelProvidersQuery = useQuery({
+    queryKey: ['model-providers'],
+    queryFn: listModelProviders
   });
 
   useEffect(() => {
@@ -308,7 +313,11 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
         width={380}
         styles={{ body: { padding: 0 } }}
       >
-        <NodeConfigPanel node={selectedNode} onChange={handleUpdateNode} />
+        <NodeConfigPanel
+          node={selectedNode}
+          onChange={handleUpdateNode}
+          modelProviders={modelProvidersQuery.data?.items ?? []}
+        />
       </Drawer>
 
       <Drawer

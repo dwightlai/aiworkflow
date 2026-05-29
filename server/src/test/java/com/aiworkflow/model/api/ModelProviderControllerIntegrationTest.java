@@ -28,15 +28,17 @@ class ModelProviderControllerIntegrationTest {
         mockMvc.perform(post("/api/model-providers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"OpenAI Compatible","baseUrl":"https://api.example.com/v1","apiKeyRef":"dev-key","enabled":true}
+                                {"name":"OpenAI Compatible","baseUrl":"https://api.example.com/v1","model":"gpt-4.1-mini","apiKeyRef":"dev-key","enabled":true}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.name").value("OpenAI Compatible"));
+                .andExpect(jsonPath("$.data.name").value("OpenAI Compatible"))
+                .andExpect(jsonPath("$.data.model").value("gpt-4.1-mini"));
 
         mockMvc.perform(get("/api/model-providers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.items[0].baseUrl").value("https://api.example.com/v1"));
+                .andExpect(jsonPath("$.data.items[0].baseUrl").value("https://api.example.com/v1"))
+                .andExpect(jsonPath("$.data.items[0].model").value("gpt-4.1-mini"));
     }
 }

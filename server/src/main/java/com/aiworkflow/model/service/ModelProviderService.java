@@ -13,12 +13,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class ModelProviderService {
     private final List<ModelProvider> providers = new CopyOnWriteArrayList<>();
 
-    public ModelProvider create(String name, String baseUrl, String apiKeyRef, boolean enabled) {
+    public ModelProvider create(String name, String baseUrl, String model, String apiKeyRef, boolean enabled) {
         Instant now = Instant.now();
         ModelProvider provider = new ModelProvider(
                 "model_provider_" + UUID.randomUUID(),
                 name,
                 baseUrl,
+                model,
                 apiKeyRef,
                 enabled,
                 now,

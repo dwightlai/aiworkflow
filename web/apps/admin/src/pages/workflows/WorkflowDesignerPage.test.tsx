@@ -70,6 +70,22 @@ const workflowApiMock = vi.hoisted(() => ({
   }))
 }));
 
+const modelApiMock = vi.hoisted(() => ({
+  listModelProviders: vi.fn(async () => ({
+    items: [
+      {
+        id: 'model_provider_1',
+        name: 'OpenAI Compatible',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'gpt-4.1-mini',
+        apiKeyRef: 'dev-key',
+        enabled: true
+      }
+    ],
+    total: 1
+  }))
+}));
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -85,6 +101,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 vi.mock('../../api/workflows', () => workflowApiMock);
+vi.mock('../../api/models', () => modelApiMock);
 
 afterEach(() => {
   cleanup();
@@ -266,6 +283,20 @@ describe('WorkflowDesignerPage', () => {
       description: null
     }));
     expect(window.location.pathname).toBe('/workflows/workflow-created/designer');
+  });
+
+  it('loads saved model providers for LLM node configuration', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByRole('button', { name: /大模型调用/ }));
+
+    expect(await screen.findByText('已保存模型')).toBeInTheDocument();
+    expect(modelApiMock.listModelProviders).toHaveBeenCalled();
   });
 
   it('starts new workflows without an end node and allows saving incomplete drafts', async () => {
