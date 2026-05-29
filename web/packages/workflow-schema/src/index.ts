@@ -74,17 +74,9 @@ export interface WorkflowValidationIssue {
 export function createEmptyWorkflowDefinition(): WorkflowDefinition {
   return {
     nodes: [
-      { id: 'start_1', type: 'START', name: 'Start', config: {} },
-      { id: 'end_1', type: 'END', name: 'End', config: {} }
+      { id: 'start_1', type: 'START', name: 'Start', config: {} }
     ],
-    edges: [
-      {
-        id: 'edge_start_end',
-        sourceNodeId: 'start_1',
-        targetNodeId: 'end_1',
-        condition: null
-      }
-    ],
+    edges: [],
     variables: []
   };
 }

@@ -28,8 +28,6 @@ public class WorkflowApplicationService {
             String createdBy,
             WorkflowDefinition definition
     ) {
-        dagValidator.validate(definition);
-
         Instant now = Instant.now();
         Workflow workflow = new Workflow(
                 UUID.randomUUID().toString(),
@@ -60,7 +58,6 @@ public class WorkflowApplicationService {
 
     public synchronized WorkflowVersion updateDraftDefinition(String workflowId, WorkflowDefinition definition) {
         getWorkflow(workflowId);
-        dagValidator.validate(definition);
 
         WorkflowVersion draftVersion = findDraftVersion(workflowId)
                 .orElseGet(() -> createNextDraftVersion(workflowId, definition));
@@ -85,6 +82,7 @@ public class WorkflowApplicationService {
         if (draftVersion.status() == WorkflowVersionStatus.PUBLISHED) {
             return draftVersion;
         }
+        dagValidator.validate(draftVersion.definition());
         Instant publishedAt = Instant.now();
         WorkflowVersion publishedVersion = new WorkflowVersion(
                 draftVersion.id(),

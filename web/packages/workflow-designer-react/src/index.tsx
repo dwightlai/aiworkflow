@@ -152,6 +152,15 @@ function WorkflowDesignerReact(props, ref) {
     }
   }
 
+  function handleStartConnectMode() {
+    const nodeId = effectiveSelectedNodeId;
+    if (!nodeId || props.readonly) {
+      return;
+    }
+    setConnectingFromNodeId((current) => current === nodeId ? null : nodeId);
+    setSelectedEdgeId(null);
+  }
+
   function handleRemoveSelectedNode() {
     const nodeId = effectiveSelectedNodeId;
     if (!nodeId) {
@@ -220,6 +229,21 @@ function WorkflowDesignerReact(props, ref) {
           >
             删除连线
           </button>
+          <button
+            type="button"
+            aria-label="连接节点"
+            style={{
+              ...toolbarButtonStyle,
+              background: connectingFromNodeId ? '#e9f2ff' : '#fff',
+              borderColor: connectingFromNodeId ? '#1677ff' : '#d8e0ec',
+              color: connectingFromNodeId ? '#175cd3' : '#344054',
+              opacity: effectiveSelectedNodeId ? 1 : 0.46
+            }}
+            onClick={handleStartConnectMode}
+            disabled={!effectiveSelectedNodeId}
+          >
+            连接节点
+          </button>
           {selectedEdge ? (
             <label style={edgeConditionStyle}>
               <span style={edgeConditionLabelStyle}>连线条件</span>
@@ -232,6 +256,7 @@ function WorkflowDesignerReact(props, ref) {
               />
             </label>
           ) : null}
+          {connectingFromNodeId ? <span style={connectHintStyle}>选择目标节点</span> : null}
         </div>
       ) : null}
       <div
@@ -321,6 +346,15 @@ function WorkflowDesignerReact(props, ref) {
                   });
                 }}
                 onClick={() => {
+                  if (connectingFromNodeId && connectingFromNodeId !== node.id && !props.readonly) {
+                    designerRef.current?.connectNodes(createEdgeId(connectingFromNodeId, node.id), connectingFromNodeId, node.id);
+                    setConnectingFromNodeId(null);
+                    setSelectedNodeId(node.id);
+                    setSelectedEdgeId(null);
+                    designerRef.current?.selectNode(node.id);
+                    props.onNodeSelect?.(node.id);
+                    return;
+                  }
                   designerRef.current?.selectNode(node.id);
                   props.onNodeSelect?.(node.id);
                   setSelectedNodeId(node.id);
@@ -437,6 +471,17 @@ const edgeConditionInputStyle: React.CSSProperties = {
   height: 30,
   padding: '0 8px',
   width: 180
+};
+
+const connectHintStyle: React.CSSProperties = {
+  background: '#ecfdf3',
+  border: '1px solid #abefc6',
+  borderRadius: 999,
+  color: '#027a48',
+  fontSize: 12,
+  fontWeight: 800,
+  lineHeight: '24px',
+  padding: '0 10px'
 };
 
 const nodeStyle: React.CSSProperties = {

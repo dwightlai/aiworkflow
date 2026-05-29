@@ -162,7 +162,7 @@ describe('WorkflowDesignerPage', () => {
     );
   });
 
-  it('blocks saving invalid graph definitions before sending them to the backend', async () => {
+  it('saves incomplete draft definitions while surfacing validation issues', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkflowDesignerPage workflowId="workflow-1" />
@@ -175,7 +175,10 @@ describe('WorkflowDesignerPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
 
     expect((await screen.findAllByText('流程结构校验未通过')).length).toBeGreaterThan(0);
-    expect(workflowApiMock.updateWorkflowDraft).not.toHaveBeenCalled();
+    expect(workflowApiMock.updateWorkflowDraft).toHaveBeenCalledWith(
+      'workflow-1',
+      expect.objectContaining({ edges: [] })
+    );
   });
 
   it('links right panel selection with the canvas and overlays run status on nodes', async () => {
@@ -210,5 +213,27 @@ describe('WorkflowDesignerPage', () => {
       description: null
     }));
     expect(window.location.pathname).toBe('/workflows/workflow-created/designer');
+  });
+
+  it('starts new workflows without an end node and allows saving incomplete drafts', async () => {
+    window.history.replaceState(null, '', '/workflows/new/designer');
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="new" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByRole('button', { name: '节点 Start' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '节点 End' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '创建工作流' }));
+
+    expect(workflowApiMock.createWorkflow).toHaveBeenCalledWith(expect.objectContaining({
+      definition: expect.objectContaining({
+        nodes: [expect.objectContaining({ type: 'START' })],
+        edges: []
+      })
+    }));
   });
 });

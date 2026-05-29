@@ -137,7 +137,8 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   }
 
   function handleSave() {
-    const { nextIssues } = validateCurrentDefinition();
+    const nextIssues: WorkflowValidationIssue[] = [];
+    validateCurrentDefinition();
     if (nextIssues.length > 0) {
       message.warning('流程结构校验未通过');
       return;

@@ -2,24 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyWorkflowDefinition, validateWorkflowDefinition } from './index';
 
 describe('createEmptyWorkflowDefinition', () => {
-  it('creates a backend-valid runnable skeleton with START and END', () => {
+  it('creates a starter canvas with only a START node', () => {
     const definition = createEmptyWorkflowDefinition();
 
-    expect(definition.nodes.map((node) => node.type)).toEqual(['START', 'END']);
-    expect(definition.edges).toEqual([
-      {
-        id: 'edge_start_end',
-        sourceNodeId: 'start_1',
-        targetNodeId: 'end_1',
-        condition: null
-      }
-    ]);
+    expect(definition.nodes.map((node) => node.type)).toEqual(['START']);
+    expect(definition.edges).toEqual([]);
   });
 });
 
 describe('validateWorkflowDefinition', () => {
-  it('accepts the default runnable skeleton', () => {
-    expect(validateWorkflowDefinition(createEmptyWorkflowDefinition())).toEqual([]);
+  it('reports that the default starter canvas is not publishable yet', () => {
+    expect(validateWorkflowDefinition(createEmptyWorkflowDefinition()).map((issue) => issue.code)).toEqual([
+      'AT_LEAST_ONE_END'
+    ]);
   });
 
   it('reports broken graph structure before saving or publishing', () => {

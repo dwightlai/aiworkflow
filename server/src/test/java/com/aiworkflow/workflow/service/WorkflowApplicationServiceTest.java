@@ -55,22 +55,37 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
-    void createsWorkflowOnlyAfterValidation() {
-        assertThatThrownBy(() -> service.createWorkflow(
+    void createsWorkflowDraftWithoutPublishValidation() {
+        Workflow workflow = service.createWorkflow(
                 "tenant-1",
                 "Support triage",
                 null,
                 "user-1",
                 definitionWithCycle()
-        ))
-                .isInstanceOf(DagValidationException.class)
-                .hasMessage("Workflow definition must be acyclic.");
+        );
 
-        assertThat(service.listWorkflows()).isEmpty();
+        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(definitionWithCycle());
     }
 
     @Test
-    void updatesDraftDefinitionAfterValidation() {
+    void rejectsInvalidDraftWhenPublishing() {
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                null,
+                "user-1",
+                definitionWithCycle()
+        );
+
+        assertThatThrownBy(() -> service.publishDraftVersion(workflow.id(), "publisher-1"))
+                .isInstanceOf(DagValidationException.class)
+                .hasMessage("Workflow definition must be acyclic.");
+
+        assertThat(service.getWorkflow(workflow.id()).status()).isEqualTo(WorkflowStatus.DRAFT);
+    }
+
+    @Test
+    void updatesDraftDefinitionBeforePublishValidation() {
         Workflow workflow = service.createWorkflow(
                 "tenant-1",
                 "Support triage",
@@ -85,10 +100,9 @@ class WorkflowApplicationServiceTest {
         assertThat(updatedDraft.definition()).isEqualTo(updatedDefinition);
         assertThat(updatedDraft.status()).isEqualTo(WorkflowVersionStatus.DRAFT);
 
-        assertThatThrownBy(() -> service.updateDraftDefinition(workflow.id(), definitionWithCycle()))
-                .isInstanceOf(DagValidationException.class)
-                .hasMessage("Workflow definition must be acyclic.");
-        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(updatedDefinition);
+        WorkflowVersion invalidDraft = service.updateDraftDefinition(workflow.id(), definitionWithCycle());
+        assertThat(invalidDraft.definition()).isEqualTo(definitionWithCycle());
+        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(definitionWithCycle());
     }
 
     @Test

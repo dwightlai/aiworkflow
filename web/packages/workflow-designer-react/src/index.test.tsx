@@ -36,6 +36,23 @@ describe('WorkflowDesignerReact', () => {
     }));
   });
 
+  it('connects selected nodes through an explicit connect mode', () => {
+    const onChange = vi.fn();
+    render(<WorkflowDesignerReact value={createDefinition()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '节点 开始' }));
+    fireEvent.click(screen.getByRole('button', { name: '连接节点' }));
+    expect(screen.getByText('选择目标节点')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '节点 结束' }));
+
+    expect((onChange.mock.calls.at(-1)?.[0] as WorkflowDefinition).edges).toContainEqual(expect.objectContaining({
+      id: 'edge_start_end',
+      sourceNodeId: 'start',
+      targetNodeId: 'end'
+    }));
+  });
+
   it('lets users select and remove edges and nodes from the canvas toolbar', () => {
     const onChange = vi.fn();
     render(<WorkflowDesignerReact value={createDefinition({
