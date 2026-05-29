@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createModelProvider, listModelProviders, updateModelProvider } from './models';
+import { createModelProvider, deleteModelProvider, listModelProviders, updateModelProvider } from './models';
 
 describe('model provider api', () => {
   afterEach(() => {
@@ -69,6 +69,19 @@ describe('model provider api', () => {
 
     expect(provider.modelType).toBe('DeepSeek');
     expect(fetchMock).toHaveBeenCalledWith('/api/model-providers/model_provider_1', expect.objectContaining({ method: 'PUT' }));
+  });
+
+  it('deletes a saved model provider', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: null,
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deleteModelProvider('model_provider_1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/model-providers/model_provider_1', expect.objectContaining({ method: 'DELETE' }));
   });
 });
 

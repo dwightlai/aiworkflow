@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,5 +43,27 @@ class ModelProviderControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.items[0].baseUrl").value("https://api.example.com/v1"))
                 .andExpect(jsonPath("$.data.items[0].visionSupport").value(true))
                 .andExpect(jsonPath("$.data.items[0].model").value("gpt-4.1-mini"));
+    }
+
+    @Test
+    void deletesModelProviders() throws Exception {
+        String response = mockMvc.perform(post("/api/model-providers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Delete Me","modelType":"OpenAI","description":null,"visionSupport":false,"pricePerMillionTokens":1,"baseUrl":"https://api.example.com/v1","model":"text-embedding-3-small","apiKeyRef":"dev-key","enabled":true}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response).path("data").path("id").asText();
+
+        mockMvc.perform(delete("/api/model-providers/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/model-providers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.id == '" + id + "')]").isEmpty());
     }
 }

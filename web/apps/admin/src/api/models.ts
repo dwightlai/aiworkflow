@@ -54,6 +54,12 @@ export async function updateModelProvider(id: string, request: CreateModelProvid
   });
 }
 
+export async function deleteModelProvider(id: string): Promise<void> {
+  await requestJson<void>(`/api/model-providers/${id}`, {
+    method: 'DELETE'
+  });
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = init ? await fetch(url, withJsonHeaders(init)) : await fetch(url);
   const envelope = await response.json() as ApiEnvelope<T>;

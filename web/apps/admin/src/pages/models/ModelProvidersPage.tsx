@@ -3,6 +3,7 @@ import {
   CheckCircleOutlined,
   CloseOutlined,
   CloudServerOutlined,
+  DeleteOutlined,
   EditOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
@@ -36,6 +37,7 @@ import type React from 'react';
 import { useState } from 'react';
 import {
   createModelProvider,
+  deleteModelProvider,
   listModelProviders,
   updateModelProvider,
   type CreateModelProviderRequest,
@@ -97,6 +99,14 @@ export function ModelProvidersPage() {
       setDrawerOpen(false);
       setEditingProvider(null);
       form.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['model-providers'] });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (provider: ModelProvider) => deleteModelProvider(provider.id),
+    onSuccess: async () => {
+      message.success('模型配置已删除');
       await queryClient.invalidateQueries({ queryKey: ['model-providers'] });
     }
   });
@@ -173,11 +183,23 @@ export function ModelProvidersPage() {
     },
     {
       title: '操作',
-      width: 96,
+      width: 168,
       render: (_, provider) => (
-        <Button size="small" icon={<EditOutlined />} onClick={() => openEditDrawer(provider)}>
-          编辑
-        </Button>
+        <Space>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEditDrawer(provider)}>
+            编辑
+          </Button>
+          <Button
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            aria-label="删除模型"
+            loading={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate(provider)}
+          >
+            删除
+          </Button>
+        </Space>
       )
     }
   ];

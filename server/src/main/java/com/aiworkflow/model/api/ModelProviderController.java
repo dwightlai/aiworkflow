@@ -5,6 +5,7 @@ import com.aiworkflow.model.domain.ModelProvider;
 import com.aiworkflow.model.service.ModelProviderService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -63,6 +64,12 @@ public class ModelProviderController {
                 request.apiKeyRef(),
                 request.enabled()
         ));
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable String id) {
+        modelProviderService.delete(id);
+        return ApiResponse.success(null);
     }
 
     public record SaveModelProviderRequest(

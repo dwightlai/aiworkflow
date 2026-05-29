@@ -83,4 +83,8 @@ public class ModelProviderService {
     public List<ModelProvider> list() {
         return new ArrayList<>(providers);
     }
+
+    public void delete(String id) {
+        providers.removeIf(provider -> provider.id().equals(id));
+    }
 }

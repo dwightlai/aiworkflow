@@ -47,7 +47,8 @@ const modelApiMock = vi.hoisted(() => ({
     model: 'gpt-4.1-mini',
     apiKeyRef: 'dev-key',
     enabled: true
-  }))
+  })),
+  deleteModelProvider: vi.fn(async () => undefined)
 }));
 
 Object.defineProperty(window, 'matchMedia', {
@@ -129,6 +130,16 @@ describe('ModelProvidersPage', () => {
       );
     });
   }, 10000);
+
+  it('deletes an existing model provider from the list', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /删除模型/ }));
+
+    await waitFor(() => {
+      expect(modelApiMock.deleteModelProvider).toHaveBeenCalledWith('model_provider_1');
+    });
+  });
 });
 
 function renderPage() {
