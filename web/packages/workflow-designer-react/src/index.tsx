@@ -44,6 +44,13 @@ function WorkflowDesignerReact(props, ref) {
     x: number;
     y: number;
   } | null>(null);
+  const [draggingEdge, setDraggingEdge] = useState<{
+    sourceNodeId: string;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
   const layout = useMemo(() => createWorkflowDesignerLayout(props.value), [props.value]);
   const effectiveSelectedNodeId = props.selectedNodeId === undefined ? selectedNodeId : props.selectedNodeId;
   const selectedEdge = layout.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
@@ -126,12 +133,37 @@ function WorkflowDesignerReact(props, ref) {
     };
   }, [draggingNode]);
 
+  useEffect(() => {
+    if (!draggingEdge) {
+      return;
+    }
+
+    function handleMouseMove(event: MouseEvent) {
+      const point = resolveCanvasPoint(event.clientX, event.clientY, zoom);
+      setDraggingEdge((current) => current ? {
+        ...current,
+        currentX: point.x,
+        currentY: point.y
+      } : null);
+    }
+
+    function handleMouseUp() {
+      setDraggingEdge(null);
+    }
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingEdge, zoom]);
+
   function handleInputHandleClick(targetNodeId: string) {
     if (!connectingFromNodeId || connectingFromNodeId === targetNodeId || props.readonly) {
       return;
     }
-    designerRef.current?.connectNodes(createEdgeId(connectingFromNodeId, targetNodeId), connectingFromNodeId, targetNodeId);
-    setConnectingFromNodeId(null);
+    connectNodes(connectingFromNodeId, targetNodeId);
   }
 
   function handleAutoLayout() {
@@ -152,13 +184,57 @@ function WorkflowDesignerReact(props, ref) {
     }
   }
 
-  function handleStartConnectMode() {
-    const nodeId = effectiveSelectedNodeId;
-    if (!nodeId || props.readonly) {
+  function handleOutputHandleMouseDown(event: React.MouseEvent, node: ReturnType<typeof createWorkflowDesignerLayout>['nodes'][number]) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (props.readonly) {
       return;
     }
-    setConnectingFromNodeId((current) => current === nodeId ? null : nodeId);
+    setConnectingFromNodeId(node.id);
     setSelectedEdgeId(null);
+    setDraggingEdge({
+      sourceNodeId: node.id,
+      startX: node.x + node.width,
+      startY: node.y + node.height / 2,
+      currentX: node.x + node.width,
+      currentY: node.y + node.height / 2
+    });
+  }
+
+  function handleInputHandleMouseUp(event: React.MouseEvent, targetNodeId: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!draggingEdge || draggingEdge.sourceNodeId === targetNodeId || props.readonly) {
+      return;
+    }
+    connectNodes(draggingEdge.sourceNodeId, targetNodeId);
+  }
+
+  function handleNodeMouseUp(event: React.MouseEvent, targetNodeId: string) {
+    if (!draggingEdge || draggingEdge.sourceNodeId === targetNodeId || props.readonly) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    connectNodes(draggingEdge.sourceNodeId, targetNodeId);
+  }
+
+  function connectNodes(sourceNodeId: string, targetNodeId: string) {
+    designerRef.current?.connectNodes(createEdgeId(sourceNodeId, targetNodeId), sourceNodeId, targetNodeId);
+    setDraggingEdge(null);
+    setConnectingFromNodeId(null);
+    setSelectedEdgeId(null);
+  }
+
+  function resolveCanvasPoint(clientX: number, clientY: number, currentZoom: number) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect || !containerRef.current) {
+      return { x: clientX / currentZoom, y: clientY / currentZoom };
+    }
+    return {
+      x: (clientX - rect.left + containerRef.current.scrollLeft) / currentZoom,
+      y: (clientY - rect.top + containerRef.current.scrollTop) / currentZoom
+    };
   }
 
   function handleRemoveSelectedNode() {
@@ -229,21 +305,6 @@ function WorkflowDesignerReact(props, ref) {
           >
             删除连线
           </button>
-          <button
-            type="button"
-            aria-label="连接节点"
-            style={{
-              ...toolbarButtonStyle,
-              background: connectingFromNodeId ? '#e9f2ff' : '#fff',
-              borderColor: connectingFromNodeId ? '#1677ff' : '#d8e0ec',
-              color: connectingFromNodeId ? '#175cd3' : '#344054',
-              opacity: effectiveSelectedNodeId ? 1 : 0.46
-            }}
-            onClick={handleStartConnectMode}
-            disabled={!effectiveSelectedNodeId}
-          >
-            连接节点
-          </button>
           {selectedEdge ? (
             <label style={edgeConditionStyle}>
               <span style={edgeConditionLabelStyle}>连线条件</span>
@@ -256,7 +317,7 @@ function WorkflowDesignerReact(props, ref) {
               />
             </label>
           ) : null}
-          {connectingFromNodeId ? <span style={connectHintStyle}>选择目标节点</span> : null}
+          {draggingEdge ? <span style={connectHintStyle}>拖到目标节点松开</span> : null}
         </div>
       ) : null}
       <div
@@ -303,6 +364,18 @@ function WorkflowDesignerReact(props, ref) {
                 }}
               />
             ))}
+            {draggingEdge ? (
+              <path
+                aria-label="正在拖拽连线"
+                d={createPreviewPath(draggingEdge.startX, draggingEdge.startY, draggingEdge.currentX, draggingEdge.currentY)}
+                fill="none"
+                markerEnd="url(#aiworkflow-arrow)"
+                stroke="#1677ff"
+                strokeDasharray="6 5"
+                strokeWidth={2.5}
+                style={{ pointerEvents: 'none' }}
+              />
+            ) : null}
           </svg>
 
           {layout.nodes.map((node) => {
@@ -328,6 +401,9 @@ function WorkflowDesignerReact(props, ref) {
                   zIndex: selected ? 3 : 2
                 }}
                 onMouseDown={(event) => {
+                  if (draggingEdge) {
+                    return;
+                  }
                   if (props.readonly) {
                     return;
                   }
@@ -345,12 +421,11 @@ function WorkflowDesignerReact(props, ref) {
                     y: node.y
                   });
                 }}
+                onMouseUp={(event) => handleNodeMouseUp(event, node.id)}
                 onClick={() => {
                   if (connectingFromNodeId && connectingFromNodeId !== node.id && !props.readonly) {
-                    designerRef.current?.connectNodes(createEdgeId(connectingFromNodeId, node.id), connectingFromNodeId, node.id);
-                    setConnectingFromNodeId(null);
+                    connectNodes(connectingFromNodeId, node.id);
                     setSelectedNodeId(node.id);
-                    setSelectedEdgeId(null);
                     designerRef.current?.selectNode(node.id);
                     props.onNodeSelect?.(node.id);
                     return;
@@ -367,6 +442,7 @@ function WorkflowDesignerReact(props, ref) {
                   title="连接到此节点"
                   style={{ ...handleStyle, ...inputHandleStyle(connectingFromNodeId !== null) }}
                   onMouseDown={(event) => event.stopPropagation()}
+                  onMouseUp={(event) => handleInputHandleMouseUp(event, node.id)}
                   onClick={(event) => {
                     event.stopPropagation();
                     handleInputHandleClick(node.id);
@@ -380,7 +456,7 @@ function WorkflowDesignerReact(props, ref) {
                   aria-label={`从 ${node.name} 连线`}
                   title="从此节点连线"
                   style={{ ...handleStyle, ...outputHandleStyle(connectingFromNodeId === node.id) }}
-                  onMouseDown={(event) => event.stopPropagation()}
+                  onMouseDown={(event) => handleOutputHandleMouseDown(event, node)}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (!props.readonly) {
@@ -572,6 +648,11 @@ function nodeToneStyle(type: WorkflowNode['type']): React.CSSProperties {
 
 function createEdgeId(sourceNodeId: string, targetNodeId: string) {
   return `edge_${sourceNodeId}_${targetNodeId}`;
+}
+
+function createPreviewPath(startX: number, startY: number, endX: number, endY: number) {
+  const controlOffset = Math.max(Math.abs(endX - startX) / 2, 60);
+  return `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
 }
 
 function clampZoom(value: number) {

@@ -36,15 +36,15 @@ describe('WorkflowDesignerReact', () => {
     }));
   });
 
-  it('connects selected nodes through an explicit connect mode', () => {
+  it('connects nodes by dragging from a source port to a target port', () => {
     const onChange = vi.fn();
     render(<WorkflowDesignerReact value={createDefinition()} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '节点 开始' }));
-    fireEvent.click(screen.getByRole('button', { name: '连接节点' }));
-    expect(screen.getByText('选择目标节点')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: '节点 结束' }));
+    expect(screen.queryByRole('button', { name: '连接节点' })).toBeNull();
+    fireEvent.mouseDown(screen.getByLabelText('从 开始 连线'), { clientX: 212, clientY: 70 });
+    expect(screen.getByText('拖到目标节点松开')).toBeTruthy();
+    fireEvent.mouseMove(window, { clientX: 262, clientY: 70 });
+    fireEvent.mouseUp(screen.getByLabelText('连接到 结束'), { clientX: 262, clientY: 70 });
 
     expect((onChange.mock.calls.at(-1)?.[0] as WorkflowDefinition).edges).toContainEqual(expect.objectContaining({
       id: 'edge_start_end',
