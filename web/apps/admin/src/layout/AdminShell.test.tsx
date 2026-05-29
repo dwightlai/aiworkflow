@@ -14,6 +14,7 @@ describe('AdminShell', () => {
 
     expect(screen.getByText('AI 功能')).toBeInTheDocument();
     expect(screen.getByText('工作流')).toBeInTheDocument();
+    expect(screen.getByText('运行监控')).toBeInTheDocument();
     expect(screen.getByText('系统管理')).toBeInTheDocument();
     expect(screen.getByText('用户管理')).toBeInTheDocument();
     expect(screen.getByText('首页 / AI 功能 / 工作台')).toBeInTheDocument();
