@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowDesignerPage } from './WorkflowDesignerPage';
@@ -169,6 +169,52 @@ describe('WorkflowDesignerPage', () => {
     );
   });
 
+  it('adds palette nodes by dragging them onto the canvas at the drop point', async () => {
+    const dataTransfer = createDataTransfer();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    fireEvent.dragStart(screen.getByRole('button', { name: /Prompt 模板/ }), { dataTransfer });
+    const dropTarget = screen.getByLabelText('工作流画布投放区');
+    fireEvent.dragOver(dropTarget, {
+      clientX: 420,
+      clientY: 250,
+      dataTransfer
+    });
+    const dropEvent = createEvent.drop(dropTarget, { dataTransfer });
+    Object.defineProperties(dropEvent, {
+      clientX: { value: 420 },
+      clientY: { value: 250 },
+      pageX: { value: 420 },
+      pageY: { value: 250 }
+    });
+    fireEvent(dropTarget, dropEvent);
+
+    expect(await screen.findByDisplayValue('Prompt 模板')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+
+    expect(workflowApiMock.updateWorkflowDraft).toHaveBeenCalledWith(
+      'workflow-1',
+      expect.objectContaining({
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'PROMPT',
+            config: expect.objectContaining({
+              ui: expect.objectContaining({
+                position: { x: 420, y: 250 }
+              })
+            })
+          })
+        ])
+      })
+    );
+  });
+
   it('saves incomplete draft definitions while surfacing validation issues', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
@@ -244,3 +290,28 @@ describe('WorkflowDesignerPage', () => {
     }));
   });
 });
+
+function createDataTransfer(): DataTransfer {
+  const values = new Map<string, string>();
+  const dataTransfer = {
+    dropEffect: 'copy',
+    effectAllowed: 'copy',
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    types: [] as unknown as string[],
+    clearData: vi.fn((type?: string) => {
+      if (type) {
+        values.delete(type);
+        return;
+      }
+      values.clear();
+    }),
+    getData: vi.fn((type: string) => values.get(type) ?? ''),
+    setData: vi.fn((type: string, value: string) => {
+      values.set(type, value);
+      (dataTransfer.types as unknown as string[]) = Array.from(values.keys());
+    }),
+    setDragImage: vi.fn()
+  } as DataTransfer;
+  return dataTransfer;
+}

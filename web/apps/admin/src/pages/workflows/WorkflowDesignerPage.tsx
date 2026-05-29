@@ -32,7 +32,7 @@ import {
 } from '../../api/workflows';
 import { DebugPanel } from './designer/DebugPanel';
 import { NodeConfigPanel } from './designer/NodeConfigPanel';
-import { NodePalette } from './designer/NodePalette';
+import { NodePalette, WORKFLOW_NODE_TEMPLATE_MIME, createNode, parseNodeTemplate } from './designer/NodePalette';
 
 export interface WorkflowDesignerPageProps {
   workflowId: string;
@@ -42,6 +42,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const isNewWorkflow = workflowId === 'new';
   const queryClient = useQueryClient();
   const designerRef = useRef<WorkflowDesignerHandle | null>(null);
+  const canvasDropRef = useRef<HTMLDivElement | null>(null);
   const [definition, setDefinition] = useState<WorkflowDefinition>(() => createEmptyWorkflowDefinition());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [debugInput, setDebugInput] = useState('{\n  "name": "Ada"\n}');
@@ -123,6 +124,22 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
     setSelectedNodeId(node.id);
     setConfigOpen(true);
     setValidationIssues([]);
+  }
+
+  function handleCanvasDrop(event: React.DragEvent<HTMLDivElement>) {
+    const template = parseNodeTemplate(event.dataTransfer.getData(WORKFLOW_NODE_TEMPLATE_MIME));
+    if (!template) {
+      return;
+    }
+    event.preventDefault();
+    const rect = canvasDropRef.current?.getBoundingClientRect();
+    const clientX = readDragCoordinate(event, 'clientX', 'pageX', 32);
+    const clientY = readDragCoordinate(event, 'clientY', 'pageY', 32);
+    const position = rect ? {
+      x: Math.max(Math.round(clientX - rect.left), 0),
+      y: Math.max(Math.round(clientY - rect.top), 0)
+    } : { x: 32, y: 32 };
+    handleAddNode(createNode(template, position));
   }
 
   function handleUpdateNode(nodeId: string, patch: Partial<WorkflowNode>) {
@@ -257,7 +274,18 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
               画布区域已最大化，点击节点打开属性，调试从右上角进入
             </Typography.Text>
           </div>
-          <div style={canvasBodyStyle}>
+          <div
+            ref={canvasDropRef}
+            aria-label="工作流画布投放区"
+            style={canvasBodyStyle}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes(WORKFLOW_NODE_TEMPLATE_MIME)) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+              }
+            }}
+            onDrop={handleCanvasDrop}
+          >
             <WorkflowDesignerReact
               ref={designerRef}
               value={definition}
@@ -333,6 +361,22 @@ function parseJson(value: string) {
 function navigateTo(path: string) {
   window.history.pushState(null, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function readDragCoordinate(
+  event: React.DragEvent<HTMLDivElement>,
+  primaryKey: 'clientX' | 'clientY',
+  fallbackKey: 'pageX' | 'pageY',
+  defaultValue: number
+) {
+  const nativeEvent = event.nativeEvent as DragEvent & Record<string, unknown>;
+  const values = [
+    event[primaryKey],
+    nativeEvent[primaryKey],
+    nativeEvent[fallbackKey]
+  ];
+  const value = values.find((item) => typeof item === 'number' && Number.isFinite(item));
+  return typeof value === 'number' ? value : defaultValue;
 }
 
 const pageStyle: React.CSSProperties = {

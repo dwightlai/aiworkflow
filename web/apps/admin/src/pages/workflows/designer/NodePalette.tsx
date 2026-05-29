@@ -14,13 +14,17 @@ export interface NodePaletteProps {
   onAddNode: (node: WorkflowNode) => void;
 }
 
-const nodeTemplates: Array<{
+export const WORKFLOW_NODE_TEMPLATE_MIME = 'application/x-aiworkflow-node-template';
+
+export interface NodeTemplate {
   type: WorkflowNodeType;
   name: string;
   description: string;
   icon: React.ReactNode;
   config: Record<string, unknown>;
-}> = [
+}
+
+const nodeTemplates: NodeTemplate[] = [
   { type: 'START', name: '开始', description: '接收输入并初始化上下文', icon: <PlayCircleOutlined />, config: {} },
   { type: 'PROMPT', name: 'Prompt 模板', description: '把变量渲染成模型提示词', icon: <CommentOutlined />, config: { template: 'Hello {{name}}', outputKey: 'prompt' } },
   { type: 'LLM', name: '大模型调用', description: '调用模型并写入输出变量', icon: <RobotOutlined />, config: { providerId: 'default', model: 'mock', promptKey: 'prompt', outputKey: 'answer' } },
@@ -38,8 +42,13 @@ export function NodePalette({ onAddNode }: NodePaletteProps) {
         {nodeTemplates.map((template) => (
           <button
             key={template.type}
+            draggable
             type="button"
             style={nodeButtonStyle}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'copy';
+              event.dataTransfer.setData(WORKFLOW_NODE_TEMPLATE_MIME, serializeTemplate(template));
+            }}
             onClick={() => onAddNode(createNode(template))}
           >
             <span style={iconStyle}>{template.icon}</span>
@@ -58,14 +67,34 @@ export function NodePalette({ onAddNode }: NodePaletteProps) {
   );
 }
 
-function createNode(template: typeof nodeTemplates[number]): WorkflowNode {
+export function createNode(template: NodeTemplate, position?: { x: number; y: number }): WorkflowNode {
   const suffix = Date.now().toString(36);
   return {
     id: `${template.type.toLowerCase()}_${suffix}`,
     type: template.type,
     name: template.name,
-    config: { ...template.config }
+    config: {
+      ...template.config,
+      ...(position ? { ui: { position } } : {})
+    }
   };
+}
+
+export function parseNodeTemplate(value: string): NodeTemplate | null {
+  try {
+    const template = JSON.parse(value) as Omit<NodeTemplate, 'icon'>;
+    if (!template.type || !template.name || !template.config) {
+      return null;
+    }
+    return { ...template, icon: null };
+  } catch {
+    return null;
+  }
+}
+
+function serializeTemplate(template: NodeTemplate) {
+  const { icon: _icon, ...serializable } = template;
+  return JSON.stringify(serializable);
 }
 
 const panelStyle: React.CSSProperties = {
