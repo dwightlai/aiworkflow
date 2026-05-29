@@ -2,7 +2,6 @@ import {
   ApiOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  CodeOutlined,
   DeploymentUnitOutlined,
   PlayCircleOutlined,
   SaveOutlined,
@@ -186,13 +185,18 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
                 </Typography.Text>
               </div>
               <Space size={8}>
-                <Tag color="geekblue">执行链路</Tag>
+                <Tag color="geekblue">拖拽节点</Tag>
+                <Tag color="blue">端口连线</Tag>
                 <Tag>{definition.variables.length} 个变量</Tag>
               </Space>
             </div>
             <div style={canvasBodyStyle}>
-              <WorkflowDesignerReact ref={designerRef} value={definition} onChange={setDefinition} />
-              <ExecutionMap nodes={definition.nodes} selectedNodeId={selectedNode?.id ?? null} onSelect={setSelectedNodeId} />
+              <WorkflowDesignerReact
+                ref={designerRef}
+                value={definition}
+                onChange={setDefinition}
+                onNodeSelect={setSelectedNodeId}
+              />
             </div>
           </Card>
         </main>
@@ -238,45 +242,6 @@ function OverviewItem({
   );
 }
 
-function ExecutionMap({
-  nodes,
-  selectedNodeId,
-  onSelect
-}: {
-  nodes: WorkflowNode[];
-  selectedNodeId: string | null;
-  onSelect: (nodeId: string) => void;
-}) {
-  return (
-    <div style={executionMapStyle}>
-      <div style={mapGridStyle} />
-      <div style={mapHeaderStyle}>
-        <Space size={8}>
-          <CodeOutlined />
-          <Typography.Text strong>执行链路</Typography.Text>
-        </Space>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>从 Start 到 End 的轻量 DAG 预览</Typography.Text>
-      </div>
-      <div style={nodeRailStyle}>
-        {nodes.map((node, index) => (
-          <div key={node.id} style={railItemStyle}>
-            {index > 0 ? <div style={connectorStyle} /> : null}
-            <button
-              type="button"
-              style={flowNodeStyle(node.id === selectedNodeId, node.type)}
-              onClick={() => onSelect(node.id)}
-            >
-              <span style={nodeTypeStyle}>{node.type}</span>
-              <span style={nodeNameStyle}>{node.name}</span>
-              <span style={nodeConfigStyle}>{summarizeNode(node)}</span>
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function calculateConfigCompleteness(definition: WorkflowDefinition) {
   if (definition.nodes.length === 0) {
     return 0;
@@ -294,22 +259,6 @@ function calculateConfigCompleteness(definition: WorkflowDefinition) {
     return true;
   }).length;
   return Math.round((completeNodes / definition.nodes.length) * 100);
-}
-
-function summarizeNode(node: WorkflowNode) {
-  if (node.type === 'PROMPT') {
-    return `输出 ${String(node.config.outputKey ?? '-')}`;
-  }
-  if (node.type === 'LLM') {
-    return `${String(node.config.providerId ?? 'default')} / ${String(node.config.model ?? '-')}`;
-  }
-  if (node.type === 'CONDITION') {
-    return `${String(node.config.contextKey ?? '-')} ${String(node.config.operator ?? '')}`;
-  }
-  if (node.type === 'END') {
-    return '汇总输出';
-  }
-  return '系统节点';
 }
 
 function parseJson(value: string) {
@@ -418,106 +367,3 @@ const canvasBodyStyle: React.CSSProperties = {
   height: 'calc(100% - 58px)',
   position: 'relative'
 };
-
-const executionMapStyle: React.CSSProperties = {
-  background: '#f8fafc',
-  inset: 0,
-  overflow: 'auto',
-  position: 'absolute'
-};
-
-const mapGridStyle: React.CSSProperties = {
-  backgroundImage: 'linear-gradient(#e8eef6 1px, transparent 1px), linear-gradient(90deg, #e8eef6 1px, transparent 1px)',
-  backgroundSize: '28px 28px',
-  inset: 0,
-  opacity: 0.8,
-  position: 'absolute'
-};
-
-const mapHeaderStyle: React.CSSProperties = {
-  alignItems: 'center',
-  display: 'flex',
-  justifyContent: 'space-between',
-  left: 18,
-  position: 'absolute',
-  right: 18,
-  top: 16
-};
-
-const nodeRailStyle: React.CSSProperties = {
-  alignItems: 'center',
-  display: 'flex',
-  gap: 26,
-  minHeight: '100%',
-  minWidth: 760,
-  padding: '84px 54px 42px',
-  position: 'relative'
-};
-
-const railItemStyle: React.CSSProperties = {
-  alignItems: 'center',
-  display: 'flex',
-  position: 'relative'
-};
-
-const connectorStyle: React.CSSProperties = {
-  background: '#b8c7d9',
-  height: 2,
-  left: -26,
-  position: 'absolute',
-  width: 26
-};
-
-function flowNodeStyle(active: boolean, type: WorkflowNode['type']): React.CSSProperties {
-  return {
-    background: active ? '#ffffff' : '#fcfdff',
-    border: `1px solid ${active ? '#1677ff' : '#d8e2ef'}`,
-    borderLeft: `4px solid ${nodeColor(type)}`,
-    borderRadius: 8,
-    boxShadow: active ? '0 14px 32px rgba(22, 119, 255, 0.18)' : '0 10px 24px rgba(15, 23, 42, 0.07)',
-    color: '#1f2937',
-    cursor: 'pointer',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    minHeight: 118,
-    padding: '14px 16px',
-    textAlign: 'left',
-    width: 190
-  };
-}
-
-const nodeTypeStyle: React.CSSProperties = {
-  color: '#64748b',
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: 0
-};
-
-const nodeNameStyle: React.CSSProperties = {
-  color: '#0f172a',
-  fontSize: 16,
-  fontWeight: 700
-};
-
-const nodeConfigStyle: React.CSSProperties = {
-  color: '#64748b',
-  fontSize: 12,
-  lineHeight: '18px'
-};
-
-function nodeColor(type: WorkflowNode['type']) {
-  if (type === 'LLM') {
-    return '#7c3aed';
-  }
-  if (type === 'PROMPT') {
-    return '#1677ff';
-  }
-  if (type === 'CONDITION') {
-    return '#f59e0b';
-  }
-  if (type === 'END') {
-    return '#10b981';
-  }
-  return '#64748b';
-}

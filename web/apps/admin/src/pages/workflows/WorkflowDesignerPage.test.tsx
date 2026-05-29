@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowDesignerPage } from './WorkflowDesignerPage';
@@ -20,7 +20,10 @@ const workflowApiMock = vi.hoisted(() => ({
     status: 'DRAFT',
     latestVersion: {
       definition: {
-        nodes: [{ id: 'start', type: 'START', name: '开始', config: {} }],
+        nodes: [
+          { id: 'start', type: 'START', name: '开始', config: {} },
+          { id: 'end', type: 'END', name: '结束', config: {} }
+        ],
         edges: [],
         variables: []
       }
@@ -68,7 +71,7 @@ describe('WorkflowDesignerPage', () => {
     expect(screen.getByText('运行调试')).toBeInTheDocument();
   });
 
-  it('renders a product-grade designer workspace with overview and execution map', async () => {
+  it('renders a product-grade designer workspace with draggable nodes and connection ports', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkflowDesignerPage workflowId="workflow-1" />
@@ -77,9 +80,50 @@ describe('WorkflowDesignerPage', () => {
 
     expect(await screen.findByText('工作流概览')).toBeInTheDocument();
     expect(screen.getByText('节点编排')).toBeInTheDocument();
-    expect(screen.getAllByText('执行链路').length).toBeGreaterThan(0);
+    expect(screen.getByText('拖拽节点')).toBeInTheDocument();
+    expect(screen.getByText('端口连线')).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/从 .* 连线/).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText(/连接到 .*/).length).toBeGreaterThan(0);
     expect(screen.getByText('配置完整度')).toBeInTheDocument();
     expect(screen.getByText('调试控制台')).toBeInTheDocument();
+  });
+
+  it('persists node drag positions and newly connected edges into the workflow definition', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    const startNode = await screen.findByRole('button', { name: '节点 开始' });
+    fireEvent.mouseDown(startNode, { clientX: 32, clientY: 32 });
+    fireEvent.mouseMove(window, { clientX: 82, clientY: 92 });
+    fireEvent.mouseUp(window, { clientX: 82, clientY: 92 });
+
+    await userEvent.click(screen.getByLabelText('从 开始 连线'));
+    await userEvent.click(screen.getByLabelText('连接到 结束'));
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+
+    expect(workflowApiMock.updateWorkflowDraft).toHaveBeenCalledWith(
+      'workflow-1',
+      expect.objectContaining({
+        edges: [expect.objectContaining({
+          id: 'edge_start_end',
+          sourceNodeId: 'start',
+          targetNodeId: 'end'
+        })],
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'start',
+            config: expect.objectContaining({
+              ui: expect.objectContaining({
+                position: { x: 82, y: 92 }
+              })
+            })
+          })
+        ])
+      })
+    );
   });
 
   it('creates a workflow from the new designer and navigates to its designer route', async () => {

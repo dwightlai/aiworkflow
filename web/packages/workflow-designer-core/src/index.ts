@@ -20,6 +20,7 @@ export interface WorkflowDesignerCore {
   setValue(value: WorkflowDefinition): void;
   addNode(node: WorkflowNode): void;
   updateNode(nodeId: string, patch: Partial<WorkflowNode>): void;
+  moveNode(nodeId: string, x: number, y: number): void;
   removeNode(nodeId: string): void;
   connectNodes(edgeId: string, sourceNodeId: string, targetNodeId: string): void;
   selectNode(nodeId: string | null): void;
@@ -60,13 +61,16 @@ export function createWorkflowDesignerLayout(definition: WorkflowDefinition): Wo
 
   const layoutNodes = Object.entries(groupedNodes).flatMap(([levelValue, nodes]) => {
     const level = Number(levelValue);
-    return nodes.map((node, index) => ({
-      ...node,
-      x: PADDING + level * COLUMN_GAP,
-      y: PADDING + index * ROW_GAP,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT
-    }));
+    return nodes.map((node, index) => {
+      const position = readNodePosition(node);
+      return {
+        ...node,
+        x: position?.x ?? PADDING + level * COLUMN_GAP,
+        y: position?.y ?? PADDING + index * ROW_GAP,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT
+      };
+    });
   });
 
   const nodeById = new Map(layoutNodes.map((node) => [node.id, node]));
@@ -149,6 +153,24 @@ export function createWorkflowDesignerCore(options: WorkflowDesignerCoreOptions)
         nodes: value.nodes.map((node) => node.id === nodeId ? { ...node, ...patch, id: node.id } : node)
       }));
     },
+    moveNode(nodeId: string, x: number, y: number) {
+      updateValue((value) => ({
+        ...value,
+        nodes: value.nodes.map((node) => node.id === nodeId ? {
+          ...node,
+          config: {
+            ...node.config,
+            ui: {
+              ...(isRecord(node.config.ui) ? node.config.ui : {}),
+              position: {
+                x: Math.max(Math.round(x), 0),
+                y: Math.max(Math.round(y), 0)
+              }
+            }
+          }
+        } : node)
+      }));
+    },
     removeNode(nodeId: string) {
       updateValue((value) => ({
         ...value,
@@ -217,4 +239,17 @@ function resolveNodeLevels(definition: WorkflowDefinition) {
   });
 
   return levels;
+}
+
+function readNodePosition(node: WorkflowNode) {
+  const ui = node.config.ui;
+  if (!isRecord(ui) || !isRecord(ui.position)) {
+    return null;
+  }
+  const { x, y } = ui.position;
+  return typeof x === 'number' && typeof y === 'number' ? { x, y } : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
