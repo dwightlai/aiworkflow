@@ -27,6 +27,25 @@ public class PromptTemplateService {
         return promptTemplate;
     }
 
+    public PromptTemplate update(String id, String name, String template, String description) {
+        for (int index = 0; index < templates.size(); index += 1) {
+            PromptTemplate current = templates.get(index);
+            if (current.id().equals(id)) {
+                PromptTemplate updated = new PromptTemplate(
+                        current.id(),
+                        name,
+                        template,
+                        description,
+                        current.createdAt(),
+                        Instant.now()
+                );
+                templates.set(index, updated);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Prompt template not found: " + id);
+    }
+
     public List<PromptTemplate> list() {
         return new ArrayList<>(templates);
     }

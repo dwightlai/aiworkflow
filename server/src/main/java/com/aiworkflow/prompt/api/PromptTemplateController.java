@@ -6,7 +6,9 @@ import com.aiworkflow.prompt.service.PromptTemplateService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,7 +31,7 @@ public class PromptTemplateController {
     }
 
     @PostMapping
-    public ApiResponse<PromptTemplate> create(@Valid @RequestBody CreatePromptTemplateRequest request) {
+    public ApiResponse<PromptTemplate> create(@Valid @RequestBody SavePromptTemplateRequest request) {
         return ApiResponse.success(promptTemplateService.create(
                 request.name(),
                 request.template(),
@@ -37,7 +39,20 @@ public class PromptTemplateController {
         ));
     }
 
-    public record CreatePromptTemplateRequest(
+    @PutMapping("/{id}")
+    public ApiResponse<PromptTemplate> update(
+            @PathVariable String id,
+            @Valid @RequestBody SavePromptTemplateRequest request
+    ) {
+        return ApiResponse.success(promptTemplateService.update(
+                id,
+                request.name(),
+                request.template(),
+                request.description()
+        ));
+    }
+
+    public record SavePromptTemplateRequest(
             @NotBlank String name,
             @NotBlank String template,
             String description

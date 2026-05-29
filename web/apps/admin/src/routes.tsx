@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { DashboardPage } from './pages/DashboardPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
+import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
 import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
@@ -61,6 +62,14 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: '模型配置',
       breadcrumb: ['首页', 'AI 功能', '模型配置'],
       element: <ModelProvidersPage />
+    };
+  }
+
+  if (pathname === '/prompts') {
+    return {
+      title: 'Prompt',
+      breadcrumb: ['首页', 'AI 功能', 'Prompt'],
+      element: <PromptTemplatesPage />
     };
   }
 

@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,5 +39,34 @@ class PromptTemplateControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.items[0].template").value("Hello {{name}}"));
+    }
+
+    @Test
+    void updatesPromptTemplates() throws Exception {
+        String response = mockMvc.perform(post("/api/prompts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Classifier","template":"Classify {{text}}","description":"Classifier prompt"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String promptId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(response)
+                .path("data")
+                .path("id")
+                .asText();
+
+        mockMvc.perform(put("/api/prompts/{id}", promptId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Classifier v2","template":"Classify carefully: {{text}}","description":"Updated prompt"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.name").value("Classifier v2"))
+                .andExpect(jsonPath("$.data.template").value("Classify carefully: {{text}}"));
     }
 }

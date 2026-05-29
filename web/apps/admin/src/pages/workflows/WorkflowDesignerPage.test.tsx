@@ -90,6 +90,20 @@ const modelApiMock = vi.hoisted(() => ({
   }))
 }));
 
+const promptApiMock = vi.hoisted(() => ({
+  listPromptTemplates: vi.fn(async () => ({
+    items: [
+      {
+        id: 'prompt_1',
+        name: 'Greeting',
+        template: 'Hello {{name}}',
+        description: 'Greeting prompt'
+      }
+    ],
+    total: 1
+  }))
+}));
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -106,6 +120,7 @@ Object.defineProperty(window, 'matchMedia', {
 
 vi.mock('../../api/workflows', () => workflowApiMock);
 vi.mock('../../api/models', () => modelApiMock);
+vi.mock('../../api/prompts', () => promptApiMock);
 
 afterEach(() => {
   cleanup();
@@ -301,6 +316,20 @@ describe('WorkflowDesignerPage', () => {
 
     expect(await screen.findByText('已保存模型')).toBeInTheDocument();
     expect(modelApiMock.listModelProviders).toHaveBeenCalled();
+  });
+
+  it('loads saved prompt templates for PROMPT node configuration', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByRole('button', { name: /Prompt 模板/ }));
+
+    expect(await screen.findByText('已保存 Prompt')).toBeInTheDocument();
+    expect(promptApiMock.listPromptTemplates).toHaveBeenCalled();
   });
 
   it('starts new workflows without an end node and allows saving incomplete drafts', async () => {

@@ -22,6 +22,7 @@ import { Alert, Button, Drawer, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listModelProviders } from '../../api/models';
+import { listPromptTemplates } from '../../api/prompts';
 import {
   createWorkflow,
   getWorkflow,
@@ -60,6 +61,10 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const modelProvidersQuery = useQuery({
     queryKey: ['model-providers'],
     queryFn: listModelProviders
+  });
+  const promptTemplatesQuery = useQuery({
+    queryKey: ['prompt-templates'],
+    queryFn: listPromptTemplates
   });
 
   useEffect(() => {
@@ -317,6 +322,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           node={selectedNode}
           onChange={handleUpdateNode}
           modelProviders={modelProvidersQuery.data?.items ?? []}
+          promptTemplates={promptTemplatesQuery.data?.items ?? []}
         />
       </Drawer>
 

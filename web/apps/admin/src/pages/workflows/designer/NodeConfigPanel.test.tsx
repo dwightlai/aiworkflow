@@ -26,6 +26,34 @@ afterEach(() => {
 });
 
 describe('NodeConfigPanel', () => {
+  it('applies a saved prompt template to PROMPT node config', async () => {
+    const onChange = vi.fn();
+    render(
+      <NodeConfigPanel
+        node={promptNode}
+        onChange={onChange}
+        promptTemplates={[
+          {
+            id: 'prompt_1',
+            name: 'Greeting',
+            template: 'Hello {{name}}',
+            description: 'Greeting prompt'
+          }
+        ]}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '选择已保存 Prompt' }));
+    await userEvent.click(await screen.findByText('Greeting'));
+
+    expect(onChange).toHaveBeenCalledWith('prompt_1', {
+      config: expect.objectContaining({
+        promptTemplateId: 'prompt_1',
+        template: 'Hello {{name}}'
+      })
+    });
+  });
+
   it('applies a saved model provider to LLM node config', async () => {
     const onChange = vi.fn();
     render(
@@ -70,5 +98,15 @@ const llmNode: WorkflowNode = {
     model: '',
     promptKey: 'prompt',
     outputKey: 'answer'
+  }
+};
+
+const promptNode: WorkflowNode = {
+  id: 'prompt_1',
+  type: 'PROMPT',
+  name: 'Prompt 模板',
+  config: {
+    template: '',
+    outputKey: 'prompt'
   }
 };

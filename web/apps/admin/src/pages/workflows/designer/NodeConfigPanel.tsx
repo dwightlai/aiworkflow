@@ -2,14 +2,16 @@ import type { WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Empty, Form, Input, InputNumber, Select, Space, Typography } from 'antd';
 import type React from 'react';
 import type { ModelProvider } from '../../../api/models';
+import type { PromptTemplate } from '../../../api/prompts';
 
 export interface NodeConfigPanelProps {
   node: WorkflowNode | null;
   onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void;
   modelProviders?: ModelProvider[];
+  promptTemplates?: PromptTemplate[];
 }
 
-export function NodeConfigPanel({ node, onChange, modelProviders = [] }: NodeConfigPanelProps) {
+export function NodeConfigPanel({ node, onChange, modelProviders = [], promptTemplates = [] }: NodeConfigPanelProps) {
   if (!node) {
     return (
       <aside style={panelStyle}>
@@ -29,19 +31,44 @@ export function NodeConfigPanel({ node, onChange, modelProviders = [] }: NodeCon
         <Form.Item label="节点类型">
           <Input value={node.type} readOnly />
         </Form.Item>
-        <ConfigFields node={node} onChange={onChange} modelProviders={modelProviders} />
+        <ConfigFields node={node} onChange={onChange} modelProviders={modelProviders} promptTemplates={promptTemplates} />
       </Form>
     </aside>
   );
 }
 
-function ConfigFields({ node, onChange, modelProviders = [] }: NodeConfigPanelProps & { node: WorkflowNode }) {
+function ConfigFields({ node, onChange, modelProviders = [], promptTemplates = [] }: NodeConfigPanelProps & { node: WorkflowNode }) {
   const config = node.config;
   const setConfig = (patch: Record<string, unknown>) => onChange(node.id, { config: { ...config, ...patch } });
 
   if (node.type === 'PROMPT') {
+    const selectedPromptId = typeof config.promptTemplateId === 'string' ? config.promptTemplateId : undefined;
     return (
       <>
+        {promptTemplates.length > 0 ? (
+          <Form.Item label="已保存 Prompt">
+            <Select
+              aria-label="选择已保存 Prompt"
+              placeholder="选择 Prompt 模板"
+              value={selectedPromptId}
+              options={promptTemplates.map((prompt) => ({
+                value: prompt.id,
+                label: prompt.name
+              }))}
+              onChange={(promptId) => {
+                const prompt = promptTemplates.find((item) => item.id === promptId);
+                setConfig({
+                  promptTemplateId: promptId,
+                  template: prompt?.template ?? String(config.template ?? '')
+                });
+              }}
+            />
+          </Form.Item>
+        ) : (
+          <Typography.Text type="secondary" style={hintStyle}>
+            请先在 Prompt 模块保存模板，或在下方临时手填。
+          </Typography.Text>
+        )}
         <Form.Item label="Prompt 模板">
           <Input.TextArea
             autoSize={{ minRows: 5, maxRows: 9 }}
