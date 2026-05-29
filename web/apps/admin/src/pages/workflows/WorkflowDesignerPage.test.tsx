@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowDesignerPage } from './WorkflowDesignerPage';
 
 const workflowApiMock = vi.hoisted(() => ({
@@ -47,6 +47,12 @@ Object.defineProperty(window, 'matchMedia', {
 
 vi.mock('../../api/workflows', () => workflowApiMock);
 
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  window.history.replaceState(null, '', '/');
+});
+
 describe('WorkflowDesignerPage', () => {
   it('renders palette canvas config panel and debug panel', async () => {
     render(
@@ -60,6 +66,20 @@ describe('WorkflowDesignerPage', () => {
     expect(screen.getByText('PROMPT')).toBeInTheDocument();
     expect(screen.getByText('节点配置')).toBeInTheDocument();
     expect(screen.getByText('运行调试')).toBeInTheDocument();
+  });
+
+  it('renders a product-grade designer workspace with overview and execution map', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('工作流概览')).toBeInTheDocument();
+    expect(screen.getByText('节点编排')).toBeInTheDocument();
+    expect(screen.getAllByText('执行链路').length).toBeGreaterThan(0);
+    expect(screen.getByText('配置完整度')).toBeInTheDocument();
+    expect(screen.getByText('调试控制台')).toBeInTheDocument();
   });
 
   it('creates a workflow from the new designer and navigates to its designer route', async () => {

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowCardsPage } from './WorkflowCardsPage';
 
 vi.mock('../../api/workflows', () => ({
@@ -21,6 +21,11 @@ vi.mock('../../api/workflows', () => ({
   }))
 }));
 
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
 describe('WorkflowCardsPage', () => {
   it('renders workflow cards with search and expected actions', async () => {
     render(
@@ -37,5 +42,19 @@ describe('WorkflowCardsPage', () => {
     expect(screen.getByText('识别用户咨询意图并输出下一步动作')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /运行/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /编辑/ })).toBeInTheDocument();
+  });
+
+  it('renders a workflow operations console with summary and templates', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowCardsPage />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('工作流运营台')).toBeInTheDocument();
+    expect(screen.getByText('总工作流')).toBeInTheDocument();
+    expect(screen.getAllByText('已发布').length).toBeGreaterThan(0);
+    expect(screen.getByText('模板中心')).toBeInTheDocument();
+    expect(screen.getByText('客服问答助手')).toBeInTheDocument();
   });
 });
