@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createWorkflowDesignerCore } from './index';
+import { createWorkflowDesignerCore, createWorkflowDesignerLayout } from './index';
 
 describe('createWorkflowDesignerCore', () => {
   it('adds a node and emits updated workflow definition', () => {
@@ -43,5 +43,27 @@ describe('createWorkflowDesignerCore', () => {
 
     expect(designer.getValue().edges[0].targetNodeId).toBe('end');
     expect(designer.getSelectedNode()?.id).toBe('end');
+  });
+
+  it('creates deterministic node and edge layout for framework adapters', () => {
+    const layout = createWorkflowDesignerLayout({
+      nodes: [
+        { id: 'start', type: 'START', name: 'Start', config: {} },
+        { id: 'prompt', type: 'PROMPT', name: 'Prompt', config: {} },
+        { id: 'llm', type: 'LLM', name: 'LLM', config: {} },
+        { id: 'end', type: 'END', name: 'End', config: {} }
+      ],
+      edges: [
+        { id: 'edge-1', sourceNodeId: 'start', targetNodeId: 'prompt' },
+        { id: 'edge-2', sourceNodeId: 'prompt', targetNodeId: 'llm' },
+        { id: 'edge-3', sourceNodeId: 'llm', targetNodeId: 'end' }
+      ],
+      variables: []
+    });
+
+    expect(layout.nodes.map((node) => node.id)).toEqual(['start', 'prompt', 'llm', 'end']);
+    expect(layout.nodes[0].x).toBeLessThan(layout.nodes[1].x);
+    expect(layout.edges[0].path).toContain('C');
+    expect(layout.bounds.width).toBeGreaterThan(500);
   });
 });

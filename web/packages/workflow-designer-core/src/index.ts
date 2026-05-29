@@ -1,5 +1,11 @@
 import type { WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@aiworkflow/workflow-schema';
 
+const NODE_WIDTH = 180;
+const NODE_HEIGHT = 76;
+const COLUMN_GAP = 230;
+const ROW_GAP = 118;
+const PADDING = 32;
+
 export interface WorkflowDesignerCoreOptions {
   container: HTMLElement;
   value: WorkflowDefinition;
@@ -18,6 +24,84 @@ export interface WorkflowDesignerCore {
   connectNodes(edgeId: string, sourceNodeId: string, targetNodeId: string): void;
   selectNode(nodeId: string | null): void;
   getSelectedNode(): WorkflowNode | null;
+}
+
+export interface WorkflowDesignerLayoutNode extends WorkflowNode {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WorkflowDesignerLayoutEdge extends WorkflowEdge {
+  path: string;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+}
+
+export interface WorkflowDesignerLayout {
+  nodes: WorkflowDesignerLayoutNode[];
+  edges: WorkflowDesignerLayoutEdge[];
+  bounds: {
+    width: number;
+    height: number;
+  };
+}
+
+export function createWorkflowDesignerLayout(definition: WorkflowDefinition): WorkflowDesignerLayout {
+  const levels = resolveNodeLevels(definition);
+  const groupedNodes = definition.nodes.reduce<Record<number, WorkflowNode[]>>((groups, node) => {
+    const level = levels.get(node.id) ?? 0;
+    groups[level] = [...(groups[level] ?? []), node];
+    return groups;
+  }, {});
+
+  const layoutNodes = Object.entries(groupedNodes).flatMap(([levelValue, nodes]) => {
+    const level = Number(levelValue);
+    return nodes.map((node, index) => ({
+      ...node,
+      x: PADDING + level * COLUMN_GAP,
+      y: PADDING + index * ROW_GAP,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT
+    }));
+  });
+
+  const nodeById = new Map(layoutNodes.map((node) => [node.id, node]));
+  const layoutEdges = definition.edges.flatMap((edge) => {
+    const source = nodeById.get(edge.sourceNodeId);
+    const target = nodeById.get(edge.targetNodeId);
+    if (!source || !target) {
+      return [];
+    }
+    const sourceX = source.x + source.width;
+    const sourceY = source.y + source.height / 2;
+    const targetX = target.x;
+    const targetY = target.y + target.height / 2;
+    const curveOffset = Math.max((targetX - sourceX) / 2, 60);
+    return [{
+      ...edge,
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      path: `M ${sourceX} ${sourceY} C ${sourceX + curveOffset} ${sourceY}, ${targetX - curveOffset} ${targetY}, ${targetX} ${targetY}`
+    }];
+  });
+
+  const maxX = layoutNodes.reduce((value, node) => Math.max(value, node.x + node.width), PADDING);
+  const maxY = layoutNodes.reduce((value, node) => Math.max(value, node.y + node.height), PADDING);
+
+  return {
+    nodes: layoutNodes,
+    edges: layoutEdges,
+    bounds: {
+      width: maxX + PADDING,
+      height: maxY + PADDING
+    }
+  };
 }
 
 export function createWorkflowDesignerCore(options: WorkflowDesignerCoreOptions): WorkflowDesignerCore {
@@ -94,4 +178,43 @@ export function createWorkflowDesignerCore(options: WorkflowDesignerCoreOptions)
       return currentValue.nodes.find((node) => node.id === selectedNodeId) ?? null;
     }
   };
+}
+
+function resolveNodeLevels(definition: WorkflowDefinition) {
+  const incomingCount = new Map(definition.nodes.map((node) => [node.id, 0]));
+  const outgoingEdges = new Map<string, WorkflowEdge[]>();
+  for (const edge of definition.edges) {
+    incomingCount.set(edge.targetNodeId, (incomingCount.get(edge.targetNodeId) ?? 0) + 1);
+    outgoingEdges.set(edge.sourceNodeId, [...(outgoingEdges.get(edge.sourceNodeId) ?? []), edge]);
+  }
+
+  const queue = definition.nodes
+    .filter((node) => node.type === 'START' || (incomingCount.get(node.id) ?? 0) === 0)
+    .map((node) => node.id);
+  const levels = new Map<string, number>();
+
+  for (const nodeId of queue) {
+    levels.set(nodeId, 0);
+  }
+
+  while (queue.length) {
+    const nodeId = queue.shift() as string;
+    const currentLevel = levels.get(nodeId) ?? 0;
+    for (const edge of outgoingEdges.get(nodeId) ?? []) {
+      const nextLevel = Math.max(levels.get(edge.targetNodeId) ?? 0, currentLevel + 1);
+      levels.set(edge.targetNodeId, nextLevel);
+      incomingCount.set(edge.targetNodeId, (incomingCount.get(edge.targetNodeId) ?? 1) - 1);
+      if ((incomingCount.get(edge.targetNodeId) ?? 0) <= 0) {
+        queue.push(edge.targetNodeId);
+      }
+    }
+  }
+
+  definition.nodes.forEach((node, index) => {
+    if (!levels.has(node.id)) {
+      levels.set(node.id, index);
+    }
+  });
+
+  return levels;
 }
