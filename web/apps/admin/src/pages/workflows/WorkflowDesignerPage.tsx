@@ -1,11 +1,13 @@
 import {
-  ApiOutlined,
+  ArrowLeftOutlined,
+  BugOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   DeploymentUnitOutlined,
   PlayCircleOutlined,
   SaveOutlined,
-  SendOutlined
+  SendOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { WorkflowDesignerReact, type WorkflowDesignerHandle } from '@aiworkflow/workflow-designer-react';
 import {
@@ -16,7 +18,7 @@ import {
   type WorkflowValidationIssue
 } from '@aiworkflow/workflow-schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Progress, Space, Tag, Typography, message } from 'antd';
+import { Alert, Button, Drawer, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -45,6 +47,8 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const [debugInput, setDebugInput] = useState('{\n  "name": "Ada"\n}');
   const [execution, setExecution] = useState<WorkflowExecution | null>(null);
   const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[]>([]);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   const workflowQuery = useQuery({
     queryKey: ['workflow', workflowId],
@@ -101,7 +105,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   });
 
   const selectedNode = useMemo(
-    () => definition.nodes.find((node) => node.id === selectedNodeId) ?? definition.nodes[0] ?? null,
+    () => definition.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [definition.nodes, selectedNodeId]
   );
   const workflowName = workflowQuery.data?.name ?? (isNewWorkflow ? '新建工作流' : '工作流设计器');
@@ -117,6 +121,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       nodes: [...current.nodes.filter((item) => item.id !== node.id), node]
     }));
     setSelectedNodeId(node.id);
+    setConfigOpen(true);
     setValidationIssues([]);
   }
 
@@ -137,12 +142,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   }
 
   function handleSave() {
-    const nextIssues: WorkflowValidationIssue[] = [];
     validateCurrentDefinition();
-    if (nextIssues.length > 0) {
-      message.warning('流程结构校验未通过');
-      return;
-    }
     saveMutation.mutate();
   }
 
@@ -157,20 +157,42 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
 
   return (
     <section style={pageStyle}>
+      <div style={moduleTabsStyle}>
+        {['首页', '大模型配置', '知识库中心', '向量库配置', 'MCP工具箱', '提示词配置', '术语集配置', '数据库配置', '智能体函数', '机器人助手', '机器人应用'].map((item) => (
+          <Button key={item} size="small" style={moduleTabStyle}>{item}</Button>
+        ))}
+        <Button size="small" type="primary" ghost style={activeModuleTabStyle}>工作流-测试</Button>
+        <Button size="small" type="primary" style={{ marginLeft: 'auto' }}>更多</Button>
+      </div>
+
       <div style={toolbarStyle}>
-        <Space size={12} align="center">
+        <Space size={10} align="center">
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigateTo('/workflows')}>返回</Button>
           <div style={titleIconStyle}><DeploymentUnitOutlined /></div>
-          <div>
-            <Typography.Title level={4} style={{ margin: 0 }}>{workflowName}</Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              轻量 DAG 编排 · Prompt / LLM / 条件 / 工具节点
-            </Typography.Text>
-          </div>
+          <Typography.Text strong>{workflowName}</Typography.Text>
           <Tag color={workflowQuery.data?.status === 'PUBLISHED' ? 'green' : 'blue'}>
             {workflowQuery.data?.status === 'PUBLISHED' ? '已发布' : '草稿'}
           </Tag>
+          <div style={modeTabsStyle}>
+            <Button type="primary" ghost icon={<SettingOutlined />}>编排</Button>
+            <Button type="text">API</Button>
+            <Button type="text">密钥</Button>
+            <Button type="text">日志</Button>
+            <Button type="text">会话</Button>
+            <Button type="text">探索</Button>
+          </div>
         </Space>
-        <Space>
+        <Space size={8}>
+          <Tag icon={<DeploymentUnitOutlined />}>{definition.nodes.length} 节点</Tag>
+          <Tag>{definition.edges.length} 连线</Tag>
+          <Tag icon={<CheckCircleOutlined />}>{configCompleteness}% 配置</Tag>
+          <Tag icon={<ClockCircleOutlined />}>{execution?.status ?? '待调试'}</Tag>
+          <Button icon={<SettingOutlined />} disabled={!selectedNode} onClick={() => setConfigOpen(true)}>
+            属性
+          </Button>
+          <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>
+            调试
+          </Button>
           <Button
             aria-label={isNewWorkflow ? '创建工作流' : '保存草稿'}
             icon={<SaveOutlined />}
@@ -221,81 +243,63 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
         />
       ) : null}
 
-      <section style={overviewStyle}>
-        <OverviewItem title="工作流概览" value={`${definition.nodes.length} 个节点`} detail={`${definition.edges.length} 条连线`} icon={<DeploymentUnitOutlined />} />
-        <OverviewItem title="配置完整度" value={`${configCompleteness}%`} detail="节点关键参数" icon={<CheckCircleOutlined />} progress={configCompleteness} />
-        <OverviewItem title="运行状态" value={execution?.status ?? '待调试'} detail={execution ? formatDate(execution.startedAt) : '保存后可运行'} icon={<ClockCircleOutlined />} />
-        <OverviewItem title="集成方式" value="React / Vue / WebComponent" detail="可嵌入第三方系统" icon={<ApiOutlined />} />
-      </section>
-
       <div style={designerShellStyle}>
         <NodePalette onAddNode={handleAddNode} />
         <main style={canvasColumnStyle}>
-          <Card styles={{ body: { padding: 0, height: '100%' } }} style={canvasCardStyle}>
-            <div style={canvasHeaderStyle}>
-              <div>
-                <Typography.Text strong>节点编排</Typography.Text>
-                <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                  拖入或点击节点，按业务意图组织 AI 执行链路
-                </Typography.Text>
-              </div>
-              <Space size={8}>
-                <Tag color="geekblue">拖拽节点</Tag>
-                <Tag color="blue">端口连线</Tag>
-                <Tag>{definition.variables.length} 个变量</Tag>
-              </Space>
-            </div>
-            <div style={canvasBodyStyle}>
-              <WorkflowDesignerReact
-                ref={designerRef}
-                value={definition}
-                selectedNodeId={selectedNodeId}
-                nodeRunStates={nodeRunStates}
-                onChange={setDefinition}
-                onNodeSelect={setSelectedNodeId}
-              />
-            </div>
-          </Card>
+          <div style={canvasHeaderStyle}>
+            <Space size={8}>
+              <Typography.Text strong>节点编排</Typography.Text>
+              <Tag color="geekblue">拖拽节点</Tag>
+              <Tag color="blue">端口连线</Tag>
+              <Tag>{definition.variables.length} 变量</Tag>
+            </Space>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              画布区域已最大化，点击节点打开属性，调试从右上角进入
+            </Typography.Text>
+          </div>
+          <div style={canvasBodyStyle}>
+            <WorkflowDesignerReact
+              ref={designerRef}
+              value={definition}
+              selectedNodeId={selectedNodeId}
+              nodeRunStates={nodeRunStates}
+              onChange={setDefinition}
+              onNodeSelect={(nodeId) => {
+                setSelectedNodeId(nodeId);
+                setConfigOpen(true);
+              }}
+            />
+          </div>
         </main>
-        <NodeConfigPanel node={selectedNode} onChange={handleUpdateNode} />
       </div>
 
-      <DebugPanel
-        input={debugInput}
-        loading={runMutation.isPending}
-        execution={execution}
-        onInputChange={setDebugInput}
-        onRun={() => runMutation.mutate()}
-      />
-    </section>
-  );
-}
+      <Drawer
+        title={selectedNode ? `节点属性：${selectedNode.name}` : '节点属性'}
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        width={380}
+        styles={{ body: { padding: 0 } }}
+      >
+        <NodeConfigPanel node={selectedNode} onChange={handleUpdateNode} />
+      </Drawer>
 
-function OverviewItem({
-  title,
-  value,
-  detail,
-  icon,
-  progress
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  icon: React.ReactNode;
-  progress?: number;
-}) {
-  return (
-    <Card styles={{ body: { padding: 16 } }} style={overviewCardStyle}>
-      <Space align="start" size={12} style={{ width: '100%' }}>
-        <div style={overviewIconStyle}>{icon}</div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{title}</Typography.Text>
-          <Typography.Title level={5} style={{ margin: '2px 0 3px' }}>{value}</Typography.Title>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{detail}</Typography.Text>
-          {typeof progress === 'number' ? <Progress percent={progress} showInfo={false} size="small" style={{ marginTop: 8 }} /> : null}
-        </div>
-      </Space>
-    </Card>
+      <Drawer
+        title="调试控制台"
+        open={debugOpen}
+        onClose={() => setDebugOpen(false)}
+        placement="bottom"
+        height={430}
+        styles={{ body: { padding: 0 } }}
+      >
+        <DebugPanel
+          input={debugInput}
+          loading={runMutation.isPending}
+          execution={execution}
+          onInputChange={setDebugInput}
+          onRun={() => runMutation.mutate()}
+        />
+      </Drawer>
+    </section>
   );
 }
 
@@ -326,25 +330,40 @@ function parseJson(value: string) {
   }
 }
 
-function formatDate(value?: string | null) {
-  if (!value) {
-    return '-';
-  }
-  return new Date(value).toLocaleString();
-}
-
 function navigateTo(path: string) {
   window.history.pushState(null, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 const pageStyle: React.CSSProperties = {
-  background: '#f4f6fa',
+  background: '#f4f7fb',
   display: 'flex',
   flexDirection: 'column',
-  height: 'calc(100vh - 126px)',
+  height: 'calc(100vh - 40px)',
   margin: '-16px -24px',
-  minHeight: 760
+  minHeight: 720,
+  overflow: 'hidden'
+};
+
+const moduleTabsStyle: React.CSSProperties = {
+  alignItems: 'center',
+  background: '#fff',
+  borderBottom: '1px solid #e7ecf3',
+  display: 'flex',
+  flex: '0 0 50px',
+  gap: 6,
+  overflowX: 'auto',
+  padding: '8px 12px'
+};
+
+const moduleTabStyle: React.CSSProperties = {
+  borderRadius: 4,
+  minWidth: 110
+};
+
+const activeModuleTabStyle: React.CSSProperties = {
+  borderRadius: 4,
+  minWidth: 128
 };
 
 const toolbarStyle: React.CSSProperties = {
@@ -352,13 +371,22 @@ const toolbarStyle: React.CSSProperties = {
   background: '#fff',
   borderBottom: '1px solid #e7ecf3',
   display: 'flex',
+  flex: '0 0 56px',
   justifyContent: 'space-between',
-  padding: '14px 20px'
+  padding: '8px 16px'
+};
+
+const modeTabsStyle: React.CSSProperties = {
+  alignItems: 'center',
+  display: 'flex',
+  gap: 8,
+  marginLeft: 18
 };
 
 const validationAlertStyle: React.CSSProperties = {
   borderRadius: 0,
-  margin: '0 16px'
+  flex: '0 0 auto',
+  margin: 0
 };
 
 const validationListStyle: React.CSSProperties = {
@@ -372,65 +400,40 @@ const titleIconStyle: React.CSSProperties = {
   borderRadius: 8,
   color: '#1677ff',
   display: 'flex',
-  fontSize: 22,
-  height: 42,
-  justifyContent: 'center',
-  width: 42
-};
-
-const overviewStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 12,
-  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-  padding: '14px 16px 0'
-};
-
-const overviewCardStyle: React.CSSProperties = {
-  border: '1px solid #e7ecf3',
-  borderRadius: 8
-};
-
-const overviewIconStyle: React.CSSProperties = {
-  alignItems: 'center',
-  background: '#f1f5f9',
-  borderRadius: 8,
-  color: '#31516f',
-  display: 'flex',
   fontSize: 18,
-  height: 36,
+  height: 34,
   justifyContent: 'center',
-  width: 36
+  width: 34
 };
 
 const designerShellStyle: React.CSSProperties = {
   display: 'flex',
   flex: 1,
-  gap: 14,
-  minHeight: 0,
-  padding: 16
+  gap: 0,
+  minHeight: 0
 };
 
 const canvasColumnStyle: React.CSSProperties = {
+  background: '#f8fbff',
+  borderLeft: '1px solid #e7ecf3',
+  display: 'flex',
   flex: 1,
+  flexDirection: 'column',
   minWidth: 0
-};
-
-const canvasCardStyle: React.CSSProperties = {
-  border: '1px solid #e7ecf3',
-  borderRadius: 8,
-  height: '100%',
-  overflow: 'hidden'
 };
 
 const canvasHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
+  background: '#fff',
   borderBottom: '1px solid #eef2f7',
   display: 'flex',
+  flex: '0 0 42px',
   justifyContent: 'space-between',
-  padding: '13px 16px'
+  padding: '8px 14px'
 };
 
 const canvasBodyStyle: React.CSSProperties = {
-  height: 'calc(100% - 58px)',
+  flex: 1,
+  minHeight: 0,
   position: 'relative'
 };

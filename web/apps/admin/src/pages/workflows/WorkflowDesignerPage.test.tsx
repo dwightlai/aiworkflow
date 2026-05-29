@@ -93,7 +93,7 @@ afterEach(() => {
 });
 
 describe('WorkflowDesignerPage', () => {
-  it('renders palette canvas config panel and debug panel', async () => {
+  it('renders a full-canvas designer and opens config/debug panels on demand', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkflowDesignerPage workflowId="workflow-1" />
@@ -103,8 +103,15 @@ describe('WorkflowDesignerPage', () => {
     expect(await screen.findByText('客服意图识别')).toBeInTheDocument();
     expect(screen.getByText('节点库')).toBeInTheDocument();
     expect(screen.getByText('PROMPT')).toBeInTheDocument();
-    expect(screen.getByText('节点配置')).toBeInTheDocument();
-    expect(screen.getByText('运行调试')).toBeInTheDocument();
+    expect(screen.getByText('工作流-测试')).toBeInTheDocument();
+    expect(screen.getByText('编排')).toBeInTheDocument();
+    expect(screen.queryByText('节点配置')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '节点 结束' }));
+    expect(await screen.findByText('节点配置')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /调试/ }));
+    expect(await screen.findByText('运行调试')).toBeInTheDocument();
   });
 
   it('renders a product-grade designer workspace with draggable nodes and connection ports', async () => {
@@ -114,14 +121,14 @@ describe('WorkflowDesignerPage', () => {
       </QueryClientProvider>
     );
 
-    expect(await screen.findByText('工作流概览')).toBeInTheDocument();
+    expect(await screen.findByText('工作流-测试')).toBeInTheDocument();
     expect(screen.getByText('节点编排')).toBeInTheDocument();
     expect(screen.getByText('拖拽节点')).toBeInTheDocument();
     expect(screen.getByText('端口连线')).toBeInTheDocument();
     expect(screen.getAllByLabelText(/从 .* 连线/).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText(/连接到 .*/).length).toBeGreaterThan(0);
-    expect(screen.getByText('配置完整度')).toBeInTheDocument();
-    expect(screen.getByText('调试控制台')).toBeInTheDocument();
+    expect(screen.getByText('100% 配置')).toBeInTheDocument();
+    expect(screen.getByText('待调试')).toBeInTheDocument();
   });
 
   it('persists node drag positions and newly connected edges into the workflow definition', async () => {

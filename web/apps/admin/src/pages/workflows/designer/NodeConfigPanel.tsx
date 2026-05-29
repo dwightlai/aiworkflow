@@ -140,9 +140,9 @@ function ConfigFields({ node, onChange }: NodeConfigPanelProps & { node: Workflo
 
 const panelStyle: React.CSSProperties = {
   background: '#fff',
-  borderLeft: '1px solid #e8edf5',
+  borderLeft: '0',
   padding: 16,
-  width: 300
+  width: '100%'
 };
 
 const titleStyle: React.CSSProperties = {
