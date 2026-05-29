@@ -56,6 +56,7 @@ import {
   type SaveVectorStoreConfigRequest,
   type VectorStoreConfig
 } from '../../api/knowledge';
+import { listModelProviders } from '../../api/models';
 
 const initialBaseValues: SaveKnowledgeBaseRequest = {
   name: '',
@@ -111,6 +112,10 @@ export function KnowledgeBasesPage() {
     queryKey: ['vector-store-configs'],
     queryFn: listVectorStoreConfigs
   });
+  const modelProvidersQuery = useQuery({
+    queryKey: ['model-providers'],
+    queryFn: listModelProviders
+  });
   const documentsQuery = useQuery({
     queryKey: ['knowledge-documents', selectedBase?.id],
     queryFn: () => listKnowledgeDocuments(selectedBase!.id),
@@ -124,6 +129,7 @@ export function KnowledgeBasesPage() {
 
   const bases = basesQuery.data?.items ?? [];
   const vectorStores = vectorStoresQuery.data?.items ?? [];
+  const modelProviders = modelProvidersQuery.data?.items ?? [];
   const documents = documentsQuery.data?.items ?? [];
   const chunks = chunksQuery.data?.items ?? [];
   const documentCount = useMemo(() => bases.reduce((sum, base) => sum + base.documentCount, 0), [bases]);
@@ -301,6 +307,12 @@ export function KnowledgeBasesPage() {
     value: store.id,
     label: `${store.name} · ${store.storeType}`
   }));
+  const embeddingModelOptions = modelProviders
+    .filter((provider) => provider.enabled)
+    .map((provider) => ({
+      value: provider.id,
+      label: `${provider.name} / ${provider.model}`
+    }));
 
   const columns: ColumnsType<KnowledgeBase> = [
     {
@@ -493,8 +505,14 @@ export function KnowledgeBasesPage() {
           <Form.Item name="description" label="知识库描述">
             <Input placeholder="用于客服问答、产品手册或内部制度检索" />
           </Form.Item>
-          <Form.Item name="embeddingModelId" label="嵌入模型ID">
-            <Input placeholder="可填写已保存的 embedding 模型 ID" />
+          <Form.Item name="embeddingModelId" label="嵌入模型">
+            <Select
+              allowClear
+              aria-label="选择嵌入模型"
+              loading={modelProvidersQuery.isLoading}
+              options={embeddingModelOptions}
+              placeholder="选择已保存的 embedding 模型"
+            />
           </Form.Item>
           <Form.Item name="vectorStoreConfigId" label="向量库配置">
             <Select allowClear placeholder="默认使用内存向量库" options={vectorStoreOptions} />

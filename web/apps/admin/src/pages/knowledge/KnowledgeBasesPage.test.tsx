@@ -155,6 +155,28 @@ Object.defineProperty(window, 'matchMedia', {
 
 vi.mock('../../api/knowledge', () => knowledgeApiMock);
 
+const modelApiMock = vi.hoisted(() => ({
+  listModelProviders: vi.fn(async () => ({
+    items: [
+      {
+        id: 'model_embed',
+        name: 'Embedding Provider',
+        modelType: 'OpenAI',
+        description: 'Embedding model',
+        visionSupport: false,
+        pricePerMillionTokens: 1,
+        baseUrl: 'https://api.example.com/v1',
+        model: 'text-embedding-3-small',
+        apiKeyRef: 'embedding-key',
+        enabled: true
+      }
+    ],
+    total: 1
+  }))
+}));
+
+vi.mock('../../api/models', () => modelApiMock);
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -182,6 +204,23 @@ describe('KnowledgeBasesPage', () => {
         name: '售后知识库',
         splitterType: 'SIMPLE_TEXT',
         retrievalMode: 'KEYWORD'
+      }));
+    });
+  });
+
+  it('selects a saved embedding model provider for a knowledge base', async () => {
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /新增知识库/ }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '选择嵌入模型' }));
+    await userEvent.click(await screen.findByText('Embedding Provider / text-embedding-3-small'));
+    fireEvent.change(await screen.findByLabelText('知识库名称'), { target: { value: '检索知识库' } });
+    await userEvent.click(screen.getByRole('button', { name: /保存/ }));
+
+    await waitFor(() => {
+      expect(knowledgeApiMock.createKnowledgeBase).toHaveBeenCalledWith(expect.objectContaining({
+        name: '检索知识库',
+        embeddingModelId: 'model_embed'
       }));
     });
   });
