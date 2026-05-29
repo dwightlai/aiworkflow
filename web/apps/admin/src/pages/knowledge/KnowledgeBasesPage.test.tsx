@@ -285,6 +285,26 @@ describe('KnowledgeBasesPage', () => {
       expect(knowledgeApiMock.deleteKnowledgeDocument).toHaveBeenCalledWith('kb_1', 'doc_1');
     });
   });
+
+  it('edits chunk content from document management', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /管理文档/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /查看切片/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /编辑切片/ }));
+    const chunkContentFields = await screen.findAllByLabelText('切片内容');
+    fireEvent.change(chunkContentFields[chunkContentFields.length - 1], {
+      target: { value: 'Updated refund requests are handled within three days.' }
+    });
+    await userEvent.click(screen.getByRole('button', { name: /保存切片/ }));
+
+    await waitFor(() => {
+      expect(knowledgeApiMock.updateKnowledgeChunk).toHaveBeenCalledWith('kb_1', 'chunk_1', expect.objectContaining({
+        content: 'Updated refund requests are handled within three days.',
+        enabled: true
+      }));
+    });
+  });
 });
 
 function renderPage() {

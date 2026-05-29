@@ -97,6 +97,8 @@ export function KnowledgeBasesPage() {
   const [editingBase, setEditingBase] = useState<KnowledgeBase | null>(null);
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null);
+  const [editingChunk, setEditingChunk] = useState<KnowledgeChunk | null>(null);
+  const [editingChunkContent, setEditingChunkContent] = useState('');
   const [editingVectorStore, setEditingVectorStore] = useState<VectorStoreConfig | null>(null);
   const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
   const [chunkPreviews, setChunkPreviews] = useState<KnowledgeChunkPreview[]>([]);
@@ -182,12 +184,14 @@ export function KnowledgeBasesPage() {
   });
 
   const updateChunkMutation = useMutation({
-    mutationFn: (chunk: KnowledgeChunk) => updateKnowledgeChunk(chunk.knowledgeBaseId, chunk.id, {
-      content: chunk.content,
-      enabled: !chunk.enabled
+    mutationFn: (payload: { chunk: KnowledgeChunk; content: string; enabled: boolean }) => updateKnowledgeChunk(payload.chunk.knowledgeBaseId, payload.chunk.id, {
+      content: payload.content,
+      enabled: payload.enabled
     }),
     onSuccess: async () => {
-      message.success('切片状态已更新');
+      message.success('切片已更新');
+      setEditingChunk(null);
+      setEditingChunkContent('');
       await queryClient.invalidateQueries({ queryKey: ['knowledge-chunks', selectedBase?.id, selectedDocument?.id] });
     }
   });
@@ -252,6 +256,8 @@ export function KnowledgeBasesPage() {
   function openDocumentDrawer(base: KnowledgeBase) {
     setSelectedBase(base);
     setSelectedDocument(null);
+    setEditingChunk(null);
+    setEditingChunkContent('');
     setSearchResults([]);
     setChunkPreviews([]);
     documentForm.setFieldsValue({
@@ -262,6 +268,11 @@ export function KnowledgeBasesPage() {
     });
     searchForm.setFieldsValue({ query: '', topK: base.topK || 3 });
     setDocumentOpen(true);
+  }
+
+  function openChunkEditor(chunk: KnowledgeChunk) {
+    setEditingChunk(chunk);
+    setEditingChunkContent(chunk.content);
   }
 
   function openVectorDrawer() {
@@ -604,7 +615,10 @@ export function KnowledgeBasesPage() {
               renderItem={(chunk) => (
                 <List.Item
                   actions={[
-                    <Button key="toggle" size="small" aria-label={chunk.enabled ? '禁用' : '启用'} onClick={() => updateChunkMutation.mutate(chunk)}>
+                    <Button key="edit" size="small" icon={<EditOutlined />} aria-label="编辑切片" onClick={() => openChunkEditor(chunk)}>
+                      编辑
+                    </Button>,
+                    <Button key="toggle" size="small" aria-label={chunk.enabled ? '禁用' : '启用'} onClick={() => updateChunkMutation.mutate({ chunk, content: chunk.content, enabled: !chunk.enabled })}>
                       {chunk.enabled ? '禁用' : '启用'}
                     </Button>
                   ]}
@@ -665,6 +679,55 @@ export function KnowledgeBasesPage() {
             )}
           />
         </Card>
+      </Drawer>
+
+      <Drawer
+        title={editingChunk ? `编辑切片 #${editingChunk.index + 1}` : '编辑切片'}
+        open={Boolean(editingChunk)}
+        width={640}
+        onClose={() => {
+          setEditingChunk(null);
+          setEditingChunkContent('');
+        }}
+      >
+        <Form layout="vertical">
+          <Form.Item
+            name="content"
+            label="切片内容"
+            rules={[{ required: true, message: '请输入切片内容' }]}
+          >
+            <Input.TextArea
+              aria-label="切片内容"
+              autoSize={{ minRows: 10, maxRows: 18 }}
+              value={editingChunkContent}
+              onChange={(event) => setEditingChunkContent(event.target.value)}
+            />
+          </Form.Item>
+          <Space>
+            <Button
+              type="primary"
+              loading={updateChunkMutation.isPending}
+              onClick={() => {
+                const content = editingChunkContent.trim();
+                if (editingChunk && content) {
+                  updateChunkMutation.mutate({
+                    chunk: editingChunk,
+                    content,
+                    enabled: editingChunk.enabled
+                  });
+                }
+              }}
+            >
+              保存切片
+            </Button>
+            <Button onClick={() => {
+              setEditingChunk(null);
+              setEditingChunkContent('');
+            }}>
+              取消
+            </Button>
+          </Space>
+        </Form>
       </Drawer>
     </section>
   );
