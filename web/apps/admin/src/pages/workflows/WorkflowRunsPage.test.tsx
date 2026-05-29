@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowRunsPage } from './WorkflowRunsPage';
 
 Object.defineProperty(window, 'matchMedia', {
@@ -46,6 +46,11 @@ vi.mock('../../api/workflows', () => ({
   }))
 }));
 
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
 describe('WorkflowRunsPage', () => {
   it('renders workflow run history with status and detail action', async () => {
     render(
@@ -58,5 +63,19 @@ describe('WorkflowRunsPage', () => {
     await waitFor(() => expect(screen.getByText('SUCCEEDED')).toBeInTheDocument());
     expect(screen.getByText('run-1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '详情' })).toBeInTheDocument();
+  });
+
+  it('renders a run monitoring console with operational metrics', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText('运行监控台')).toBeInTheDocument();
+    expect(screen.getByText('成功率')).toBeInTheDocument();
+    expect(screen.getByText('平均耗时')).toBeInTheDocument();
+    expect(screen.getByText('失败运行')).toBeInTheDocument();
+    expect(screen.getAllByText('执行记录').length).toBeGreaterThan(0);
   });
 });
