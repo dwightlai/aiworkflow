@@ -32,4 +32,25 @@ public class VectorStoreConfigService {
     public List<VectorStoreConfig> list() {
         return new ArrayList<>(configs);
     }
+
+    public VectorStoreConfig update(String id, String name, String storeType, String endpoint, String indexName, boolean enabled) {
+        for (int index = 0; index < configs.size(); index += 1) {
+            VectorStoreConfig current = configs.get(index);
+            if (current.id().equals(id)) {
+                VectorStoreConfig updated = new VectorStoreConfig(
+                        current.id(),
+                        name,
+                        storeType == null || storeType.isBlank() ? current.storeType() : storeType,
+                        endpoint,
+                        indexName,
+                        enabled,
+                        current.createdAt(),
+                        Instant.now()
+                );
+                configs.set(index, updated);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Vector store config not found: " + id);
+    }
 }

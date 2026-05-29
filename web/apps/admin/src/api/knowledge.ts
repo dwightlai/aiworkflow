@@ -70,6 +70,14 @@ export interface VectorStoreConfig {
   updatedAt?: string;
 }
 
+export interface SaveVectorStoreConfigRequest {
+  name: string;
+  storeType: string;
+  endpoint: string | null;
+  indexName: string;
+  enabled: boolean;
+}
+
 export interface SaveKnowledgeBaseRequest {
   name: string;
   description: string | null;
@@ -102,12 +110,34 @@ export interface PreviewKnowledgeChunksRequest {
   chunkOverlap: number;
 }
 
+export interface UpdateKnowledgeChunkRequest {
+  content: string;
+  enabled: boolean;
+}
+
 export async function listKnowledgeBases(): Promise<PageResponse<KnowledgeBase>> {
   return requestJson<PageResponse<KnowledgeBase>>('/api/knowledge-bases');
 }
 
 export async function listVectorStoreConfigs(): Promise<PageResponse<VectorStoreConfig>> {
   return requestJson<PageResponse<VectorStoreConfig>>('/api/vector-store-configs');
+}
+
+export async function createVectorStoreConfig(request: SaveVectorStoreConfigRequest): Promise<VectorStoreConfig> {
+  return requestJson<VectorStoreConfig>('/api/vector-store-configs', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function updateVectorStoreConfig(
+  id: string,
+  request: SaveVectorStoreConfigRequest
+): Promise<VectorStoreConfig> {
+  return requestJson<VectorStoreConfig>(`/api/vector-store-configs/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  });
 }
 
 export async function createKnowledgeBase(request: SaveKnowledgeBaseRequest): Promise<KnowledgeBase> {
@@ -127,6 +157,16 @@ export async function addKnowledgeDocument(
   });
 }
 
+export async function listKnowledgeDocuments(knowledgeBaseId: string): Promise<PageResponse<KnowledgeDocument>> {
+  return requestJson<PageResponse<KnowledgeDocument>>(`/api/knowledge-bases/${knowledgeBaseId}/documents`);
+}
+
+export async function deleteKnowledgeDocument(knowledgeBaseId: string, documentId: string): Promise<void> {
+  await requestJson<void>(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function previewKnowledgeChunks(request: PreviewKnowledgeChunksRequest): Promise<KnowledgeChunkPreview[]> {
   return requestJson<KnowledgeChunkPreview[]>('/api/knowledge-bases/chunks/preview', {
     method: 'POST',
@@ -139,6 +179,17 @@ export async function listKnowledgeDocumentChunks(
   documentId: string
 ): Promise<PageResponse<KnowledgeChunk>> {
   return requestJson<PageResponse<KnowledgeChunk>>(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks`);
+}
+
+export async function updateKnowledgeChunk(
+  knowledgeBaseId: string,
+  chunkId: string,
+  request: UpdateKnowledgeChunkRequest
+): Promise<KnowledgeChunk> {
+  return requestJson<KnowledgeChunk>(`/api/knowledge-bases/${knowledgeBaseId}/chunks/${chunkId}`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  });
 }
 
 export async function searchKnowledgeBase(

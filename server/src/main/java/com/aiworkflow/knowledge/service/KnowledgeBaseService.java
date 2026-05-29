@@ -134,6 +134,35 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    public KnowledgeChunk updateChunk(String knowledgeBaseId, String chunkId, String content, boolean enabled) {
+        ensureKnowledgeBaseExists(knowledgeBaseId);
+        for (int index = 0; index < chunks.size(); index += 1) {
+            KnowledgeChunk current = chunks.get(index);
+            if (current.knowledgeBaseId().equals(knowledgeBaseId) && current.id().equals(chunkId)) {
+                KnowledgeChunk updated = new KnowledgeChunk(
+                        current.id(),
+                        current.knowledgeBaseId(),
+                        current.documentId(),
+                        current.documentName(),
+                        content == null || content.isBlank() ? current.content() : content,
+                        current.index(),
+                        enabled,
+                        splitter.estimateTokens(content == null || content.isBlank() ? current.content() : content)
+                );
+                chunks.set(index, updated);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Knowledge chunk not found: " + chunkId);
+    }
+
+    public void deleteDocument(String knowledgeBaseId, String documentId) {
+        ensureKnowledgeBaseExists(knowledgeBaseId);
+        documents.removeIf(document -> document.knowledgeBaseId().equals(knowledgeBaseId) && document.id().equals(documentId));
+        chunks.removeIf(chunk -> chunk.knowledgeBaseId().equals(knowledgeBaseId) && chunk.documentId().equals(documentId));
+        refreshKnowledgeBaseStats(knowledgeBaseId);
+    }
+
     public List<KnowledgeSearchResult> search(String knowledgeBaseId, String query, int topK) {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
         Set<String> terms = tokenize(query);

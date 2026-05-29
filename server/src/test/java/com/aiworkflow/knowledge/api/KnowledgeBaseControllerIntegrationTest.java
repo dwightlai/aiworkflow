@@ -10,7 +10,9 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -157,5 +159,91 @@ class KnowledgeBaseControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.items[0].documentId").value(documentId))
                 .andExpect(jsonPath("$.data.items[0].enabled").value(true))
                 .andExpect(jsonPath("$.data.items[0].tokenEstimate").isNumber());
+    }
+
+    @Test
+    void updatesChunksAndDeletesDocuments() throws Exception {
+        String response = mockMvc.perform(post("/api/knowledge-bases")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"editable-kb","description":null}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String knowledgeBaseId = new ObjectMapper().readTree(response).path("data").path("id").asText();
+
+        String documentResponse = mockMvc.perform(post("/api/knowledge-bases/{id}/documents", knowledgeBaseId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"faq.txt","content":"Refund requests are handled within seven days."}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String documentId = new ObjectMapper().readTree(documentResponse).path("data").path("id").asText();
+
+        String chunksResponse = mockMvc.perform(get("/api/knowledge-bases/{id}/documents/{documentId}/chunks", knowledgeBaseId, documentId))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String chunkId = new ObjectMapper().readTree(chunksResponse).path("data").path("items").path(0).path("id").asText();
+
+        mockMvc.perform(put("/api/knowledge-bases/{id}/chunks/{chunkId}", knowledgeBaseId, chunkId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Refund requests are handled within five days.","enabled":false}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").value("Refund requests are handled within five days."))
+                .andExpect(jsonPath("$.data.enabled").value(false));
+
+        mockMvc.perform(post("/api/knowledge-bases/{id}/search", knowledgeBaseId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"query":"Refund","topK":3}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+
+        mockMvc.perform(delete("/api/knowledge-bases/{id}/documents/{documentId}", knowledgeBaseId, documentId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/knowledge-bases/{id}/documents", knowledgeBaseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+
+        mockMvc.perform(get("/api/knowledge-bases"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].documentCount").value(0))
+                .andExpect(jsonPath("$.data.items[0].chunkCount").value(0));
+    }
+
+    @Test
+    void updatesVectorStoreConfigs() throws Exception {
+        String response = mockMvc.perform(post("/api/vector-store-configs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Elastic dev","storeType":"ELASTICSEARCH","endpoint":"http://localhost:9200","indexName":"kb_dev","enabled":true}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String vectorStoreId = new ObjectMapper().readTree(response).path("data").path("id").asText();
+
+        mockMvc.perform(put("/api/vector-store-configs/{id}", vectorStoreId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Elastic prod","storeType":"ELASTICSEARCH","endpoint":"https://es.example.com","indexName":"kb_prod","enabled":false}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Elastic prod"))
+                .andExpect(jsonPath("$.data.endpoint").value("https://es.example.com"))
+                .andExpect(jsonPath("$.data.enabled").value(false));
     }
 }

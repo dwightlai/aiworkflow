@@ -2,6 +2,8 @@ import {
   BookOutlined,
   CheckCircleOutlined,
   DatabaseOutlined,
+  DeleteOutlined,
+  EditOutlined,
   FileAddOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -32,15 +34,25 @@ import { useMemo, useState } from 'react';
 import {
   addKnowledgeDocument,
   createKnowledgeBase,
+  createVectorStoreConfig,
+  deleteKnowledgeDocument,
   listKnowledgeBases,
+  listKnowledgeDocumentChunks,
+  listKnowledgeDocuments,
   listVectorStoreConfigs,
   previewKnowledgeChunks,
   searchKnowledgeBase,
+  updateKnowledgeChunk,
+  updateVectorStoreConfig,
   type AddKnowledgeDocumentRequest,
   type KnowledgeBase,
+  type KnowledgeChunk,
   type KnowledgeChunkPreview,
+  type KnowledgeDocument,
   type KnowledgeSearchResult,
-  type SaveKnowledgeBaseRequest
+  type SaveKnowledgeBaseRequest,
+  type SaveVectorStoreConfigRequest,
+  type VectorStoreConfig
 } from '../../api/knowledge';
 
 const initialBaseValues: SaveKnowledgeBaseRequest = {
@@ -63,14 +75,26 @@ const initialDocumentValues: AddKnowledgeDocumentRequest = {
   chunkOverlap: 50
 };
 
+const initialVectorValues: SaveVectorStoreConfigRequest = {
+  name: '',
+  storeType: 'MEMORY',
+  endpoint: '',
+  indexName: 'aiworkflow_kb',
+  enabled: true
+};
+
 export function KnowledgeBasesPage() {
   const [baseForm] = Form.useForm<SaveKnowledgeBaseRequest>();
   const [documentForm] = Form.useForm<AddKnowledgeDocumentRequest>();
   const [searchForm] = Form.useForm<{ query: string; topK: number }>();
+  const [vectorForm] = Form.useForm<SaveVectorStoreConfigRequest>();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [documentOpen, setDocumentOpen] = useState(false);
+  const [vectorOpen, setVectorOpen] = useState(false);
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null);
+  const [editingVectorStore, setEditingVectorStore] = useState<VectorStoreConfig | null>(null);
   const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
   const [chunkPreviews, setChunkPreviews] = useState<KnowledgeChunkPreview[]>([]);
 
@@ -82,9 +106,21 @@ export function KnowledgeBasesPage() {
     queryKey: ['vector-store-configs'],
     queryFn: listVectorStoreConfigs
   });
+  const documentsQuery = useQuery({
+    queryKey: ['knowledge-documents', selectedBase?.id],
+    queryFn: () => listKnowledgeDocuments(selectedBase!.id),
+    enabled: Boolean(selectedBase)
+  });
+  const chunksQuery = useQuery({
+    queryKey: ['knowledge-chunks', selectedBase?.id, selectedDocument?.id],
+    queryFn: () => listKnowledgeDocumentChunks(selectedBase!.id, selectedDocument!.id),
+    enabled: Boolean(selectedBase && selectedDocument)
+  });
 
   const bases = basesQuery.data?.items ?? [];
   const vectorStores = vectorStoresQuery.data?.items ?? [];
+  const documents = documentsQuery.data?.items ?? [];
+  const chunks = chunksQuery.data?.items ?? [];
   const documentCount = useMemo(() => bases.reduce((sum, base) => sum + base.documentCount, 0), [bases]);
   const chunkCount = useMemo(() => bases.reduce((sum, base) => sum + base.chunkCount, 0), [bases]);
 
@@ -109,16 +145,50 @@ export function KnowledgeBasesPage() {
       if (!selectedBase) {
         throw new Error('请选择知识库');
       }
-      return addKnowledgeDocument(selectedBase.id, {
-        ...initialDocumentValues,
-        ...values
-      });
+      return addKnowledgeDocument(selectedBase.id, { ...initialDocumentValues, ...values });
     },
     onSuccess: async () => {
       message.success('文档已入库');
       documentForm.resetFields();
       setChunkPreviews([]);
       await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (document: KnowledgeDocument) => deleteKnowledgeDocument(document.knowledgeBaseId, document.id),
+    onSuccess: async () => {
+      message.success('文档已删除');
+      setSelectedDocument(null);
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
+  const updateChunkMutation = useMutation({
+    mutationFn: (chunk: KnowledgeChunk) => updateKnowledgeChunk(chunk.knowledgeBaseId, chunk.id, {
+      content: chunk.content,
+      enabled: !chunk.enabled
+    }),
+    onSuccess: async () => {
+      message.success('切片状态已更新');
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-chunks', selectedBase?.id, selectedDocument?.id] });
+    }
+  });
+
+  const vectorMutation = useMutation({
+    mutationFn: (values: SaveVectorStoreConfigRequest) => {
+      const request = { ...values, endpoint: values.endpoint || '' };
+      return editingVectorStore
+        ? updateVectorStoreConfig(editingVectorStore.id, request)
+        : createVectorStoreConfig(request);
+    },
+    onSuccess: async () => {
+      message.success('向量库配置已保存');
+      setEditingVectorStore(null);
+      vectorForm.setFieldsValue(initialVectorValues);
+      await queryClient.invalidateQueries({ queryKey: ['vector-store-configs'] });
     }
   });
 
@@ -149,6 +219,7 @@ export function KnowledgeBasesPage() {
 
   function openDocumentDrawer(base: KnowledgeBase) {
     setSelectedBase(base);
+    setSelectedDocument(null);
     setSearchResults([]);
     setChunkPreviews([]);
     documentForm.setFieldsValue({
@@ -159,6 +230,28 @@ export function KnowledgeBasesPage() {
     });
     searchForm.setFieldsValue({ query: '', topK: base.topK || 3 });
     setDocumentOpen(true);
+  }
+
+  function openVectorDrawer() {
+    setEditingVectorStore(null);
+    vectorForm.setFieldsValue(initialVectorValues);
+    setVectorOpen(true);
+  }
+
+  function startCreateVectorStore() {
+    setEditingVectorStore(null);
+    vectorForm.setFieldsValue(initialVectorValues);
+  }
+
+  function startEditVectorStore(store: VectorStoreConfig) {
+    setEditingVectorStore(store);
+    vectorForm.setFieldsValue({
+      name: store.name,
+      storeType: store.storeType,
+      endpoint: store.endpoint || '',
+      indexName: store.indexName,
+      enabled: store.enabled
+    });
   }
 
   const vectorStoreOptions = vectorStores.map((store) => ({
@@ -221,7 +314,7 @@ export function KnowledgeBasesPage() {
           <Typography.Text type="secondary">管理文档集合、分段策略、向量库配置和工作流检索节点可引用的数据源。</Typography.Text>
         </Space>
         <Space>
-          <Tag icon={<DatabaseOutlined />} color="blue">向量库配置</Tag>
+          <Button icon={<DatabaseOutlined />} onClick={openVectorDrawer}>向量库配置</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>新增知识库</Button>
         </Space>
       </div>
@@ -262,6 +355,65 @@ export function KnowledgeBasesPage() {
           size="middle"
         />
       </Card>
+
+      <Drawer
+        title="向量库配置"
+        open={vectorOpen}
+        width={760}
+        onClose={() => setVectorOpen(false)}
+      >
+        <Card
+          size="small"
+          title={<Space><DatabaseOutlined />配置清单</Space>}
+          extra={<Button size="small" icon={<PlusOutlined />} onClick={startCreateVectorStore}>新增向量库</Button>}
+          style={{ marginBottom: 16 }}
+        >
+          <List
+            dataSource={vectorStores}
+            locale={{ emptyText: '暂无向量库配置' }}
+            renderItem={(store) => (
+              <List.Item
+                actions={[
+                  <Button key="edit" size="small" icon={<EditOutlined />} onClick={() => startEditVectorStore(store)}>编辑</Button>
+                ]}
+              >
+                <List.Item.Meta
+                  title={<Space><Typography.Text strong>{store.name}</Typography.Text><Tag>{store.storeType}</Tag><Tag color={store.enabled ? 'green' : 'default'}>{store.enabled ? '启用' : '停用'}</Tag></Space>}
+                  description={`${store.indexName} ${store.endpoint || '本地内存'}`}
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+
+        <Card size="small" title={editingVectorStore ? '编辑向量库' : '新增向量库'}>
+          <Form form={vectorForm} layout="vertical" initialValues={initialVectorValues} onFinish={(values) => vectorMutation.mutate(values)}>
+            <Form.Item name="name" label="配置名称" rules={[{ required: true, message: '请输入配置名称' }]}>
+              <Input placeholder="Elastic dev" />
+            </Form.Item>
+            <Form.Item name="storeType" label="向量库类型">
+              <Select
+                options={[
+                  { value: 'MEMORY', label: 'Memory' },
+                  { value: 'ELASTICSEARCH', label: 'Elasticsearch' }
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="endpoint" label="连接地址">
+              <Input placeholder="http://localhost:9200" />
+            </Form.Item>
+            <Form.Item name="indexName" label="索引名称" rules={[{ required: true, message: '请输入索引名称' }]}>
+              <Input placeholder="aiworkflow_kb" />
+            </Form.Item>
+            <Form.Item name="enabled" label="状态">
+              <Select options={[{ value: true, label: '启用' }, { value: false, label: '停用' }]} />
+            </Form.Item>
+            <Button type="primary" icon={<CheckCircleOutlined />} loading={vectorMutation.isPending} onClick={() => vectorForm.submit()}>
+              保存配置
+            </Button>
+          </Form>
+        </Card>
+      </Drawer>
 
       <Drawer
         title="新增知识库"
@@ -336,7 +488,7 @@ export function KnowledgeBasesPage() {
       <Drawer
         title={selectedBase ? `管理文档 - ${selectedBase.name}` : '管理文档'}
         open={documentOpen}
-        width={840}
+        width={980}
         onClose={() => setDocumentOpen(false)}
       >
         <Card size="small" title={<Space><FileAddOutlined />文档入库</Space>} style={{ marginBottom: 16 }}>
@@ -376,7 +528,52 @@ export function KnowledgeBasesPage() {
           </Form>
         </Card>
 
-        <Card size="small" title={<Space><FileTextOutlined />切片预览</Space>} style={{ marginBottom: 16 }}>
+        <div style={documentGridStyle}>
+          <Card size="small" title={<Space><FileTextOutlined />文档列表</Space>}>
+            <List
+              loading={documentsQuery.isLoading}
+              dataSource={documents}
+              locale={{ emptyText: '暂无文档' }}
+              renderItem={(document) => (
+                <List.Item
+                  actions={[
+                    <Button key="chunks" size="small" icon={<FileSearchOutlined />} onClick={() => setSelectedDocument(document)}>查看切片</Button>,
+                    <Button key="delete" danger size="small" icon={<DeleteOutlined />} onClick={() => deleteDocumentMutation.mutate(document)}>删除文档</Button>
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={document.name}
+                    description={`${document.chunkCount} 个切片`}
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+
+          <Card size="small" title={<Space><FileTextOutlined />切片管理</Space>}>
+            <List
+              loading={chunksQuery.isLoading}
+              dataSource={chunks}
+              locale={{ emptyText: selectedDocument ? '暂无切片' : '请选择文档' }}
+              renderItem={(chunk) => (
+                <List.Item
+                  actions={[
+                    <Button key="toggle" size="small" aria-label={chunk.enabled ? '禁用' : '启用'} onClick={() => updateChunkMutation.mutate(chunk)}>
+                      {chunk.enabled ? '禁用' : '启用'}
+                    </Button>
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={<Space><Tag color={chunk.enabled ? 'green' : 'default'}>{chunk.enabled ? '启用' : '停用'}</Tag><Typography.Text type="secondary">{chunk.tokenEstimate} tokens</Typography.Text></Space>}
+                    description={<Typography.Paragraph style={{ marginBottom: 0 }}>{chunk.content}</Typography.Paragraph>}
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+        </div>
+
+        <Card size="small" title={<Space><FileTextOutlined />切片预览</Space>} style={{ marginTop: 16, marginBottom: 16 }}>
           <List
             dataSource={chunkPreviews}
             locale={{ emptyText: '暂无切片预览' }}
@@ -453,4 +650,10 @@ const metricRowStyle: React.CSSProperties = {
 
 const metricCardStyle: React.CSSProperties = {
   border: '1px solid #e7ecf3'
+};
+
+const documentGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 16,
+  gridTemplateColumns: 'minmax(280px, 0.8fr) minmax(360px, 1.2fr)'
 };

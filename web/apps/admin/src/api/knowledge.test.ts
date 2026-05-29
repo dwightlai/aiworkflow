@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addKnowledgeDocument,
+  createVectorStoreConfig,
   createKnowledgeBase,
+  deleteKnowledgeDocument,
+  listKnowledgeDocumentChunks,
+  listKnowledgeDocuments,
   listKnowledgeBases,
   listVectorStoreConfigs,
   previewKnowledgeChunks,
-  searchKnowledgeBase
+  searchKnowledgeBase,
+  updateKnowledgeChunk,
+  updateVectorStoreConfig
 } from './knowledge';
 
 describe('knowledge api', () => {
@@ -86,6 +92,54 @@ describe('knowledge api', () => {
     expect(chunks[0].content).toContain('Refund policy');
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vector-store-configs');
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/chunks/preview', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('updates vector stores and manages ingested document chunks', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { id: 'vector_1', name: 'Elastic dev', storeType: 'ELASTICSEARCH', endpoint: 'http://localhost:9200', indexName: 'kb_dev', enabled: true },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { id: 'vector_1', name: 'Elastic prod', storeType: 'ELASTICSEARCH', endpoint: 'https://es.example.com', indexName: 'kb_prod', enabled: false },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { items: [{ id: 'doc_1', knowledgeBaseId: 'kb_1', name: 'faq.txt', chunkCount: 1 }], total: 1 },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { items: [{ id: 'chunk_1', knowledgeBaseId: 'kb_1', documentId: 'doc_1', documentName: 'faq.txt', content: 'Refund policy', index: 0, enabled: true, tokenEstimate: 4 }], total: 1 },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { id: 'chunk_1', knowledgeBaseId: 'kb_1', documentId: 'doc_1', documentName: 'faq.txt', content: 'Updated refund policy', index: 0, enabled: false, tokenEstimate: 5 },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: null, error: null }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createVectorStoreConfig({ name: 'Elastic dev', storeType: 'ELASTICSEARCH', endpoint: 'http://localhost:9200', indexName: 'kb_dev', enabled: true });
+    await updateVectorStoreConfig('vector_1', { name: 'Elastic prod', storeType: 'ELASTICSEARCH', endpoint: 'https://es.example.com', indexName: 'kb_prod', enabled: false });
+    const documents = await listKnowledgeDocuments('kb_1');
+    const chunks = await listKnowledgeDocumentChunks('kb_1', 'doc_1');
+    const updatedChunk = await updateKnowledgeChunk('kb_1', 'chunk_1', { content: 'Updated refund policy', enabled: false });
+    await deleteKnowledgeDocument('kb_1', 'doc_1');
+
+    expect(documents.items[0].name).toBe('faq.txt');
+    expect(chunks.items[0].content).toBe('Refund policy');
+    expect(updatedChunk.enabled).toBe(false);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vector-store-configs', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/vector-store-configs/vector_1', expect.objectContaining({ method: 'PUT' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/knowledge-bases/kb_1/documents');
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/knowledge-bases/kb_1/documents/doc_1/chunks');
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/knowledge-bases/kb_1/chunks/chunk_1', expect.objectContaining({ method: 'PUT' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/knowledge-bases/kb_1/documents/doc_1', expect.objectContaining({ method: 'DELETE' }));
   });
 });
 

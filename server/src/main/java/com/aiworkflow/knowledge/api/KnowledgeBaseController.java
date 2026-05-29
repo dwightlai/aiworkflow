@@ -9,9 +9,11 @@ import com.aiworkflow.knowledge.domain.KnowledgeSearchResult;
 import com.aiworkflow.knowledge.service.KnowledgeBaseService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -79,6 +81,15 @@ public class KnowledgeBaseController {
         ));
     }
 
+    @DeleteMapping("/{id}/documents/{documentId}")
+    public ApiResponse<Void> deleteDocument(
+            @PathVariable String id,
+            @PathVariable String documentId
+    ) {
+        knowledgeBaseService.deleteDocument(id, documentId);
+        return ApiResponse.success(null);
+    }
+
     @GetMapping("/{id}/documents/{documentId}/chunks")
     public ApiResponse<PageResponse<KnowledgeChunk>> chunks(
             @PathVariable String id,
@@ -86,6 +97,15 @@ public class KnowledgeBaseController {
     ) {
         List<KnowledgeChunk> chunks = knowledgeBaseService.listChunks(id, documentId);
         return ApiResponse.success(new PageResponse<>(chunks, chunks.size()));
+    }
+
+    @PutMapping("/{id}/chunks/{chunkId}")
+    public ApiResponse<KnowledgeChunk> updateChunk(
+            @PathVariable String id,
+            @PathVariable String chunkId,
+            @Valid @RequestBody UpdateKnowledgeChunkRequest request
+    ) {
+        return ApiResponse.success(knowledgeBaseService.updateChunk(id, chunkId, request.content(), request.enabled()));
     }
 
     @PostMapping("/{id}/search")
@@ -123,6 +143,12 @@ public class KnowledgeBaseController {
             String splitterType,
             int chunkSize,
             int chunkOverlap
+    ) {
+    }
+
+    public record UpdateKnowledgeChunkRequest(
+            @NotBlank String content,
+            boolean enabled
     ) {
     }
 
