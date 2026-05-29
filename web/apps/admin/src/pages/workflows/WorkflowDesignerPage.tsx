@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Drawer, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { listKnowledgeBases } from '../../api/knowledge';
 import { listModelProviders } from '../../api/models';
 import { listPromptTemplates } from '../../api/prompts';
 import {
@@ -65,6 +66,10 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const promptTemplatesQuery = useQuery({
     queryKey: ['prompt-templates'],
     queryFn: listPromptTemplates
+  });
+  const knowledgeBasesQuery = useQuery({
+    queryKey: ['knowledge-bases'],
+    queryFn: listKnowledgeBases
   });
 
   useEffect(() => {
@@ -323,6 +328,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           onChange={handleUpdateNode}
           modelProviders={modelProvidersQuery.data?.items ?? []}
           promptTemplates={promptTemplatesQuery.data?.items ?? []}
+          knowledgeBases={knowledgeBasesQuery.data?.items ?? []}
         />
       </Drawer>
 

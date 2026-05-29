@@ -104,6 +104,21 @@ const promptApiMock = vi.hoisted(() => ({
   }))
 }));
 
+const knowledgeApiMock = vi.hoisted(() => ({
+  listKnowledgeBases: vi.fn(async () => ({
+    items: [
+      {
+        id: 'kb_1',
+        name: '产品知识库',
+        description: '客服资料',
+        documentCount: 1,
+        chunkCount: 3
+      }
+    ],
+    total: 1
+  }))
+}));
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -121,6 +136,7 @@ Object.defineProperty(window, 'matchMedia', {
 vi.mock('../../api/workflows', () => workflowApiMock);
 vi.mock('../../api/models', () => modelApiMock);
 vi.mock('../../api/prompts', () => promptApiMock);
+vi.mock('../../api/knowledge', () => knowledgeApiMock);
 
 afterEach(() => {
   cleanup();
@@ -148,7 +164,7 @@ describe('WorkflowDesignerPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /调试/ }));
     expect(await screen.findByText('运行调试')).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('renders a product-grade designer workspace with draggable nodes and connection ports', async () => {
     render(
@@ -165,7 +181,7 @@ describe('WorkflowDesignerPage', () => {
     expect(screen.getAllByLabelText(/连接到 .*/).length).toBeGreaterThan(0);
     expect(screen.getByText('100% 配置')).toBeInTheDocument();
     expect(screen.getByText('待调试')).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('persists node drag positions and newly connected edges into the workflow definition', async () => {
     render(

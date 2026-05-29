@@ -1,6 +1,7 @@
 import type { WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Empty, Form, Input, InputNumber, Select, Space, Typography } from 'antd';
 import type React from 'react';
+import type { KnowledgeBase } from '../../../api/knowledge';
 import type { ModelProvider } from '../../../api/models';
 import type { PromptTemplate } from '../../../api/prompts';
 
@@ -9,9 +10,10 @@ export interface NodeConfigPanelProps {
   onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void;
   modelProviders?: ModelProvider[];
   promptTemplates?: PromptTemplate[];
+  knowledgeBases?: KnowledgeBase[];
 }
 
-export function NodeConfigPanel({ node, onChange, modelProviders = [], promptTemplates = [] }: NodeConfigPanelProps) {
+export function NodeConfigPanel({ node, onChange, modelProviders = [], promptTemplates = [], knowledgeBases = [] }: NodeConfigPanelProps) {
   if (!node) {
     return (
       <aside style={panelStyle}>
@@ -31,13 +33,13 @@ export function NodeConfigPanel({ node, onChange, modelProviders = [], promptTem
         <Form.Item label="节点类型">
           <Input value={node.type} readOnly />
         </Form.Item>
-        <ConfigFields node={node} onChange={onChange} modelProviders={modelProviders} promptTemplates={promptTemplates} />
+        <ConfigFields node={node} onChange={onChange} modelProviders={modelProviders} promptTemplates={promptTemplates} knowledgeBases={knowledgeBases} />
       </Form>
     </aside>
   );
 }
 
-function ConfigFields({ node, onChange, modelProviders = [], promptTemplates = [] }: NodeConfigPanelProps & { node: WorkflowNode }) {
+function ConfigFields({ node, onChange, modelProviders = [], promptTemplates = [], knowledgeBases = [] }: NodeConfigPanelProps & { node: WorkflowNode }) {
   const config = node.config;
   const setConfig = (patch: Record<string, unknown>) => onChange(node.id, { config: { ...config, ...patch } });
 
@@ -141,6 +143,41 @@ function ConfigFields({ node, onChange, modelProviders = [], promptTemplates = [
             <InputNumber min={1} max={32000} value={Number(config.maxTokens ?? 1024)} onChange={(value) => setConfig({ maxTokens: value ?? 1024 })} />
           </Form.Item>
         </Space>
+      </>
+    );
+  }
+
+  if (node.type === 'KNOWLEDGE_RETRIEVAL') {
+    const selectedKnowledgeBaseId = typeof config.knowledgeBaseId === 'string' ? config.knowledgeBaseId : undefined;
+    return (
+      <>
+        {knowledgeBases.length > 0 ? (
+          <Form.Item label="已保存知识库">
+            <Select
+              aria-label="选择已保存知识库"
+              placeholder="选择知识库"
+              value={selectedKnowledgeBaseId}
+              options={knowledgeBases.map((knowledgeBase) => ({
+                value: knowledgeBase.id,
+                label: knowledgeBase.name
+              }))}
+              onChange={(knowledgeBaseId) => setConfig({ knowledgeBaseId })}
+            />
+          </Form.Item>
+        ) : (
+          <Typography.Text type="secondary" style={hintStyle}>
+            请先在知识库中心创建知识库并完成文档入库。
+          </Typography.Text>
+        )}
+        <Form.Item label="查询变量">
+          <Input value={String(config.queryKey ?? '')} onChange={(event) => setConfig({ queryKey: event.target.value })} />
+        </Form.Item>
+        <Form.Item label="输出变量">
+          <Input value={String(config.outputKey ?? '')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
+        </Form.Item>
+        <Form.Item label="Top K">
+          <InputNumber min={1} max={10} value={Number(config.topK ?? 3)} onChange={(value) => setConfig({ topK: value ?? 3 })} />
+        </Form.Item>
       </>
     );
   }

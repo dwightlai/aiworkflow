@@ -87,6 +87,34 @@ describe('NodeConfigPanel', () => {
       })
     });
   });
+
+  it('applies a saved knowledge base to KNOWLEDGE_RETRIEVAL node config', async () => {
+    const onChange = vi.fn();
+    render(
+      <NodeConfigPanel
+        node={knowledgeNode}
+        onChange={onChange}
+        knowledgeBases={[
+          {
+            id: 'kb_1',
+            name: '产品知识库',
+            description: '客服资料',
+            documentCount: 2,
+            chunkCount: 8
+          }
+        ]}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '选择已保存知识库' }));
+    await userEvent.click(await screen.findByText('产品知识库'));
+
+    expect(onChange).toHaveBeenCalledWith('knowledge_1', {
+      config: expect.objectContaining({
+        knowledgeBaseId: 'kb_1'
+      })
+    });
+  });
 });
 
 const llmNode: WorkflowNode = {
@@ -108,5 +136,17 @@ const promptNode: WorkflowNode = {
   config: {
     template: '',
     outputKey: 'prompt'
+  }
+};
+
+const knowledgeNode: WorkflowNode = {
+  id: 'knowledge_1',
+  type: 'KNOWLEDGE_RETRIEVAL',
+  name: '知识库检索',
+  config: {
+    knowledgeBaseId: '',
+    queryKey: 'question',
+    outputKey: 'contexts',
+    topK: 3
   }
 };

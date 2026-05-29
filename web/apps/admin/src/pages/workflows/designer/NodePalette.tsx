@@ -1,6 +1,7 @@
 import {
   BranchesOutlined,
   CommentOutlined,
+  DatabaseOutlined,
   PlayCircleOutlined,
   RobotOutlined,
   StopOutlined,
@@ -25,6 +26,7 @@ export interface NodeTemplate {
 }
 
 const nodeTemplates: NodeTemplate[] = [
+  { type: 'KNOWLEDGE_RETRIEVAL', name: '知识库检索', description: '从知识库召回相关文档片段', icon: <DatabaseOutlined />, config: { knowledgeBaseId: '', queryKey: 'question', outputKey: 'contexts', topK: 3 } },
   { type: 'START', name: '开始', description: '接收输入并初始化上下文', icon: <PlayCircleOutlined />, config: {} },
   { type: 'PROMPT', name: 'Prompt 模板', description: '把变量渲染成模型提示词', icon: <CommentOutlined />, config: { template: 'Hello {{name}}', outputKey: 'prompt' } },
   { type: 'LLM', name: '大模型调用', description: '调用模型并写入输出变量', icon: <RobotOutlined />, config: { providerId: 'default', model: 'mock', promptKey: 'prompt', outputKey: 'answer' } },

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { DashboardPage } from './pages/DashboardPage';
+import { KnowledgeBasesPage } from './pages/knowledge/KnowledgeBasesPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
@@ -70,6 +71,14 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: 'Prompt',
       breadcrumb: ['首页', 'AI 功能', 'Prompt'],
       element: <PromptTemplatesPage />
+    };
+  }
+
+  if (pathname === '/knowledge') {
+    return {
+      title: '知识库',
+      breadcrumb: ['首页', 'AI 功能', '知识库'],
+      element: <KnowledgeBasesPage />
     };
   }
 
