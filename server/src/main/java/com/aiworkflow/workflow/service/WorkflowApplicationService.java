@@ -62,7 +62,8 @@ public class WorkflowApplicationService {
         getWorkflow(workflowId);
         dagValidator.validate(definition);
 
-        WorkflowVersion draftVersion = findDraftVersion(workflowId);
+        WorkflowVersion draftVersion = findDraftVersion(workflowId)
+                .orElseGet(() -> createNextDraftVersion(workflowId, definition));
         WorkflowVersion updatedDraft = new WorkflowVersion(
                 draftVersion.id(),
                 draftVersion.workflowId(),
@@ -78,7 +79,12 @@ public class WorkflowApplicationService {
 
     public synchronized WorkflowVersion publishDraftVersion(String workflowId, String publishedBy) {
         Workflow workflow = getWorkflow(workflowId);
-        WorkflowVersion draftVersion = findDraftVersion(workflowId);
+        WorkflowVersion draftVersion = findDraftVersion(workflowId)
+                .orElseGet(() -> store.findVersionById(workflow.currentVersionId())
+                        .orElseThrow(() -> WorkflowNotFoundException.publishedVersionNotFound(workflowId)));
+        if (draftVersion.status() == WorkflowVersionStatus.PUBLISHED) {
+            return draftVersion;
+        }
         Instant publishedAt = Instant.now();
         WorkflowVersion publishedVersion = new WorkflowVersion(
                 draftVersion.id(),
@@ -132,10 +138,26 @@ public class WorkflowApplicationService {
                 .orElseThrow(() -> WorkflowNotFoundException.publishedVersionNotFound(workflowId));
     }
 
-    private WorkflowVersion findDraftVersion(String workflowId) {
+    private java.util.Optional<WorkflowVersion> findDraftVersion(String workflowId) {
         return store.listVersions(workflowId).stream()
                 .filter(version -> version.status() == WorkflowVersionStatus.DRAFT)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Workflow has no draft version: " + workflowId));
+                .findFirst();
+    }
+
+    private WorkflowVersion createNextDraftVersion(String workflowId, WorkflowDefinition definition) {
+        int nextVersion = store.listVersions(workflowId).stream()
+                .mapToInt(WorkflowVersion::version)
+                .max()
+                .orElse(0) + 1;
+        return new WorkflowVersion(
+                UUID.randomUUID().toString(),
+                workflowId,
+                nextVersion,
+                definition,
+                WorkflowVersionStatus.DRAFT,
+                null,
+                null,
+                Instant.now()
+        );
     }
 }

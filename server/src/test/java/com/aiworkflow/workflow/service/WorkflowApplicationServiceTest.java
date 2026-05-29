@@ -153,7 +153,7 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
-    void throwsWhenUpdatingAfterPublishBecauseWorkflowHasNoDraftVersion() {
+    void createsNewDraftWhenUpdatingAfterPublish() {
         Workflow workflow = service.createWorkflow(
                 "tenant-1",
                 "Support triage",
@@ -163,13 +163,18 @@ class WorkflowApplicationServiceTest {
         );
         service.publishDraftVersion(workflow.id(), "publisher-1");
 
-        assertThatThrownBy(() -> service.updateDraftDefinition(workflow.id(), definitionWithExtraTransform()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Workflow has no draft version: " + workflow.id());
+        WorkflowVersion updatedDraft = service.updateDraftDefinition(workflow.id(), definitionWithExtraTransform());
+
+        assertThat(updatedDraft.status()).isEqualTo(WorkflowVersionStatus.DRAFT);
+        assertThat(updatedDraft.version()).isEqualTo(2);
+        assertThat(updatedDraft.definition()).isEqualTo(definitionWithExtraTransform());
+        assertThat(service.listVersions(workflow.id()))
+                .extracting(WorkflowVersion::status)
+                .containsExactly(WorkflowVersionStatus.PUBLISHED, WorkflowVersionStatus.DRAFT);
     }
 
     @Test
-    void throwsWhenPublishingTwiceBecauseWorkflowHasNoDraftVersion() {
+    void publishingTwiceWithoutDraftKeepsCurrentPublishedVersion() {
         Workflow workflow = service.createWorkflow(
                 "tenant-1",
                 "Support triage",
@@ -177,11 +182,12 @@ class WorkflowApplicationServiceTest {
                 "user-1",
                 validDefinition()
         );
-        service.publishDraftVersion(workflow.id(), "publisher-1");
+        WorkflowVersion firstPublish = service.publishDraftVersion(workflow.id(), "publisher-1");
 
-        assertThatThrownBy(() -> service.publishDraftVersion(workflow.id(), "publisher-2"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Workflow has no draft version: " + workflow.id());
+        WorkflowVersion secondPublish = service.publishDraftVersion(workflow.id(), "publisher-2");
+
+        assertThat(secondPublish).isEqualTo(firstPublish);
+        assertThat(service.listVersions(workflow.id())).hasSize(1);
     }
 
     @Test
