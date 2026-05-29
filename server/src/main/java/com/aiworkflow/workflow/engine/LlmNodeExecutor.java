@@ -1,6 +1,8 @@
 package com.aiworkflow.workflow.engine;
 
+import com.aiworkflow.model.domain.ModelProvider;
 import com.aiworkflow.model.service.ChatModelClient;
+import com.aiworkflow.model.service.ModelProviderService;
 import com.aiworkflow.workflow.domain.WorkflowNode;
 import com.aiworkflow.workflow.domain.WorkflowNodeType;
 import org.springframework.stereotype.Component;
@@ -11,9 +13,11 @@ import java.util.Map;
 @Component
 public class LlmNodeExecutor implements WorkflowNodeExecutor {
     private final ChatModelClient chatModelClient;
+    private final ModelProviderService modelProviderService;
 
-    public LlmNodeExecutor(ChatModelClient chatModelClient) {
+    public LlmNodeExecutor(ChatModelClient chatModelClient, ModelProviderService modelProviderService) {
         this.chatModelClient = chatModelClient;
+        this.modelProviderService = modelProviderService;
     }
 
     @Override
@@ -24,7 +28,11 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
     @Override
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
         String providerId = requiredStringConfig(node, "providerId");
-        String model = requiredStringConfig(node, "model");
+        ModelProvider provider = modelProviderService.get(providerId);
+        if (!provider.enabled()) {
+            throw new IllegalArgumentException("Model provider is disabled: " + providerId);
+        }
+        String model = optionalStringConfig(node, "model", provider.model());
         String promptKey = requiredStringConfig(node, "promptKey");
         String outputKey = requiredStringConfig(node, "outputKey");
 
@@ -53,5 +61,13 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
             throw new IllegalArgumentException("Workflow node " + node.id() + " requires config: " + key);
         }
         return stringValue;
+    }
+
+    private String optionalStringConfig(WorkflowNode node, String key, String defaultValue) {
+        Object value = node.config().get(key);
+        if (value instanceof String stringValue && !stringValue.isBlank()) {
+            return stringValue;
+        }
+        return defaultValue;
     }
 }

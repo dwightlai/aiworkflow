@@ -84,6 +84,13 @@ public class ModelProviderService {
         return new ArrayList<>(providers);
     }
 
+    public ModelProvider get(String id) {
+        return providers.stream()
+                .filter(provider -> provider.id().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Model provider not found: " + id));
+    }
+
     public void delete(String id) {
         providers.removeIf(provider -> provider.id().equals(id));
     }
