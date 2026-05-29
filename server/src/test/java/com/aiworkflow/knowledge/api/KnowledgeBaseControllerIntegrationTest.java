@@ -246,4 +246,49 @@ class KnowledgeBaseControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.endpoint").value("https://es.example.com"))
                 .andExpect(jsonPath("$.data.enabled").value(false));
     }
+
+    @Test
+    void updatesAndDeletesKnowledgeBases() throws Exception {
+        String response = mockMvc.perform(post("/api/knowledge-bases")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"ops-kb","description":"draft docs","splitterType":"SIMPLE_TEXT","chunkSize":300,"chunkOverlap":20,"retrievalMode":"KEYWORD","topK":3}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String knowledgeBaseId = new ObjectMapper().readTree(response).path("data").path("id").asText();
+
+        mockMvc.perform(post("/api/knowledge-bases/{id}/documents", knowledgeBaseId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"runbook.txt","content":"Restart service after checking health probes."}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/knowledge-bases/{id}", knowledgeBaseId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"ops-kb-prod","description":"production docs","embeddingModelId":"embed-prod","vectorStoreConfigId":"vector-prod","splitterType":"MARKDOWN_HEADING","chunkSize":180,"chunkOverlap":30,"retrievalMode":"HYBRID","topK":6}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("ops-kb-prod"))
+                .andExpect(jsonPath("$.data.description").value("production docs"))
+                .andExpect(jsonPath("$.data.embeddingModelId").value("embed-prod"))
+                .andExpect(jsonPath("$.data.vectorStoreConfigId").value("vector-prod"))
+                .andExpect(jsonPath("$.data.splitterType").value("MARKDOWN_HEADING"))
+                .andExpect(jsonPath("$.data.retrievalMode").value("HYBRID"))
+                .andExpect(jsonPath("$.data.topK").value(6))
+                .andExpect(jsonPath("$.data.documentCount").value(1))
+                .andExpect(jsonPath("$.data.chunkCount").value(1));
+
+        mockMvc.perform(delete("/api/knowledge-bases/{id}", knowledgeBaseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/knowledge-bases"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
 }

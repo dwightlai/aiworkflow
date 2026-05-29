@@ -147,6 +147,19 @@ export async function createKnowledgeBase(request: SaveKnowledgeBaseRequest): Pr
   });
 }
 
+export async function updateKnowledgeBase(id: string, request: SaveKnowledgeBaseRequest): Promise<KnowledgeBase> {
+  return requestJson<KnowledgeBase>(`/api/knowledge-bases/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function deleteKnowledgeBase(id: string): Promise<void> {
+  await requestJson<void>(`/api/knowledge-bases/${id}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function addKnowledgeDocument(
   knowledgeBaseId: string,
   request: AddKnowledgeDocumentRequest

@@ -3,6 +3,7 @@ import {
   addKnowledgeDocument,
   createVectorStoreConfig,
   createKnowledgeBase,
+  deleteKnowledgeBase,
   deleteKnowledgeDocument,
   listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
@@ -10,6 +11,7 @@ import {
   listVectorStoreConfigs,
   previewKnowledgeChunks,
   searchKnowledgeBase,
+  updateKnowledgeBase,
   updateKnowledgeChunk,
   updateVectorStoreConfig
 } from './knowledge';
@@ -140,6 +142,48 @@ describe('knowledge api', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/knowledge-bases/kb_1/documents/doc_1/chunks');
     expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/knowledge-bases/kb_1/chunks/chunk_1', expect.objectContaining({ method: 'PUT' }));
     expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/knowledge-bases/kb_1/documents/doc_1', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('updates and deletes knowledge bases', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: {
+          id: 'kb_1',
+          name: 'ops-kb-prod',
+          description: 'production docs',
+          embeddingModelId: 'embed-prod',
+          vectorStoreConfigId: 'vector-prod',
+          splitterType: 'MARKDOWN_HEADING',
+          chunkSize: 180,
+          chunkOverlap: 30,
+          retrievalMode: 'HYBRID',
+          topK: 6,
+          documentCount: 1,
+          chunkCount: 3
+        },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: null, error: null }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const updated = await updateKnowledgeBase('kb_1', {
+      name: 'ops-kb-prod',
+      description: 'production docs',
+      embeddingModelId: 'embed-prod',
+      vectorStoreConfigId: 'vector-prod',
+      splitterType: 'MARKDOWN_HEADING',
+      chunkSize: 180,
+      chunkOverlap: 30,
+      retrievalMode: 'HYBRID',
+      topK: 6
+    });
+    await deleteKnowledgeBase('kb_1');
+
+    expect(updated.name).toBe('ops-kb-prod');
+    expect(updated.vectorStoreConfigId).toBe('vector-prod');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/knowledge-bases/kb_1', expect.objectContaining({ method: 'PUT' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/kb_1', expect.objectContaining({ method: 'DELETE' }));
   });
 });
 

@@ -73,6 +73,52 @@ public class KnowledgeBaseService {
         return new ArrayList<>(knowledgeBases);
     }
 
+    public KnowledgeBase update(
+            String id,
+            String name,
+            String description,
+            String embeddingModelId,
+            String vectorStoreConfigId,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap,
+            String retrievalMode,
+            int topK
+    ) {
+        for (int index = 0; index < knowledgeBases.size(); index += 1) {
+            KnowledgeBase current = knowledgeBases.get(index);
+            if (current.id().equals(id)) {
+                KnowledgeBase updated = new KnowledgeBase(
+                        current.id(),
+                        defaultString(name, current.name()),
+                        description,
+                        blankToNull(embeddingModelId),
+                        blankToNull(vectorStoreConfigId),
+                        defaultString(splitterType, current.splitterType()),
+                        chunkSize <= 0 ? current.chunkSize() : chunkSize,
+                        Math.max(0, chunkOverlap),
+                        defaultString(retrievalMode, current.retrievalMode()),
+                        topK <= 0 ? current.topK() : topK,
+                        current.status(),
+                        current.documentCount(),
+                        current.chunkCount(),
+                        current.createdAt(),
+                        Instant.now()
+                );
+                knowledgeBases.set(index, updated);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Knowledge base not found: " + id);
+    }
+
+    public void delete(String id) {
+        ensureKnowledgeBaseExists(id);
+        knowledgeBases.removeIf(knowledgeBase -> knowledgeBase.id().equals(id));
+        documents.removeIf(document -> document.knowledgeBaseId().equals(id));
+        chunks.removeIf(chunk -> chunk.knowledgeBaseId().equals(id));
+    }
+
     public List<KnowledgeChunkPreview> previewChunks(String content, String splitterType, int chunkSize, int chunkOverlap) {
         return splitter.preview(content, splitterType, chunkSize, chunkOverlap);
     }

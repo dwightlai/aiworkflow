@@ -35,6 +35,7 @@ import {
   addKnowledgeDocument,
   createKnowledgeBase,
   createVectorStoreConfig,
+  deleteKnowledgeBase,
   deleteKnowledgeDocument,
   listKnowledgeBases,
   listKnowledgeDocumentChunks,
@@ -42,6 +43,7 @@ import {
   listVectorStoreConfigs,
   previewKnowledgeChunks,
   searchKnowledgeBase,
+  updateKnowledgeBase,
   updateKnowledgeChunk,
   updateVectorStoreConfig,
   type AddKnowledgeDocumentRequest,
@@ -92,6 +94,7 @@ export function KnowledgeBasesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [documentOpen, setDocumentOpen] = useState(false);
   const [vectorOpen, setVectorOpen] = useState(false);
+  const [editingBase, setEditingBase] = useState<KnowledgeBase | null>(null);
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null);
   const [editingVectorStore, setEditingVectorStore] = useState<VectorStoreConfig | null>(null);
@@ -124,18 +127,30 @@ export function KnowledgeBasesPage() {
   const documentCount = useMemo(() => bases.reduce((sum, base) => sum + base.documentCount, 0), [bases]);
   const chunkCount = useMemo(() => bases.reduce((sum, base) => sum + base.chunkCount, 0), [bases]);
 
-  const createMutation = useMutation({
-    mutationFn: (values: SaveKnowledgeBaseRequest) => createKnowledgeBase({
-      ...initialBaseValues,
-      ...values,
-      description: values.description || null,
-      embeddingModelId: values.embeddingModelId || null,
-      vectorStoreConfigId: values.vectorStoreConfigId || null
-    }),
+  const saveBaseMutation = useMutation({
+    mutationFn: (values: SaveKnowledgeBaseRequest) => {
+      const request = {
+        ...initialBaseValues,
+        ...values,
+        description: values.description || null,
+        embeddingModelId: values.embeddingModelId || null,
+        vectorStoreConfigId: values.vectorStoreConfigId || null
+      };
+      return editingBase ? updateKnowledgeBase(editingBase.id, request) : createKnowledgeBase(request);
+    },
     onSuccess: async () => {
-      message.success('知识库已保存');
+      message.success(editingBase ? '知识库已修改' : '知识库已保存');
       setCreateOpen(false);
+      setEditingBase(null);
       baseForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+    }
+  });
+
+  const deleteBaseMutation = useMutation({
+    mutationFn: (base: KnowledgeBase) => deleteKnowledgeBase(base.id),
+    onSuccess: async () => {
+      message.success('知识库已删除');
       await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
     }
   });
@@ -213,7 +228,24 @@ export function KnowledgeBasesPage() {
   });
 
   function openCreateDrawer() {
+    setEditingBase(null);
     baseForm.setFieldsValue(initialBaseValues);
+    setCreateOpen(true);
+  }
+
+  function openEditDrawer(base: KnowledgeBase) {
+    setEditingBase(base);
+    baseForm.setFieldsValue({
+      name: base.name,
+      description: base.description || null,
+      embeddingModelId: base.embeddingModelId || null,
+      vectorStoreConfigId: base.vectorStoreConfigId || null,
+      splitterType: base.splitterType || 'SIMPLE_TEXT',
+      chunkSize: base.chunkSize || 500,
+      chunkOverlap: base.chunkOverlap ?? 50,
+      retrievalMode: base.retrievalMode || 'KEYWORD',
+      topK: base.topK || 3
+    });
     setCreateOpen(true);
   }
 
@@ -297,11 +329,19 @@ export function KnowledgeBasesPage() {
     },
     {
       title: '操作',
-      width: 120,
+      width: 260,
       render: (_, base) => (
-        <Button size="small" icon={<FileAddOutlined />} onClick={() => openDocumentDrawer(base)}>
-          管理文档
-        </Button>
+        <Space size={6} wrap>
+          <Button size="small" icon={<EditOutlined />} aria-label="编辑知识库" onClick={() => openEditDrawer(base)}>
+            编辑
+          </Button>
+          <Button size="small" icon={<FileAddOutlined />} onClick={() => openDocumentDrawer(base)}>
+            管理文档
+          </Button>
+          <Button size="small" danger icon={<DeleteOutlined />} aria-label="删除知识库" onClick={() => deleteBaseMutation.mutate(base)}>
+            删除
+          </Button>
+        </Space>
       )
     }
   ];
@@ -374,7 +414,7 @@ export function KnowledgeBasesPage() {
             renderItem={(store) => (
               <List.Item
                 actions={[
-                  <Button key="edit" size="small" icon={<EditOutlined />} onClick={() => startEditVectorStore(store)}>编辑</Button>
+                  <Button key="edit" size="small" icon={<EditOutlined />} aria-label="编辑向量库" onClick={() => startEditVectorStore(store)}>编辑</Button>
                 ]}
               >
                 <List.Item.Meta
@@ -416,20 +456,26 @@ export function KnowledgeBasesPage() {
       </Drawer>
 
       <Drawer
-        title="新增知识库"
+        title={editingBase ? '编辑知识库' : '新增知识库'}
         open={createOpen}
         width={620}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          setEditingBase(null);
+        }}
         footer={(
           <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setCreateOpen(false)}>取消</Button>
-            <Button type="primary" icon={<CheckCircleOutlined />} loading={createMutation.isPending} onClick={() => baseForm.submit()}>
-              保存
+            <Button onClick={() => {
+              setCreateOpen(false);
+              setEditingBase(null);
+            }}>取消</Button>
+            <Button type="primary" icon={<CheckCircleOutlined />} loading={saveBaseMutation.isPending} onClick={() => baseForm.submit()}>
+              {editingBase ? '修改' : '保存'}
             </Button>
           </Space>
         )}
       >
-        <Form form={baseForm} layout="vertical" initialValues={initialBaseValues} onFinish={(values) => createMutation.mutate(values)}>
+        <Form form={baseForm} layout="vertical" initialValues={initialBaseValues} onFinish={(values) => saveBaseMutation.mutate(values)}>
           <Form.Item name="name" label="知识库名称" rules={[{ required: true, message: '请输入知识库名称' }]}>
             <Input placeholder="产品知识库" />
           </Form.Item>

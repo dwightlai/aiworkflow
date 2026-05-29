@@ -50,6 +50,31 @@ public class KnowledgeBaseController {
         ));
     }
 
+    @PutMapping("/{id}")
+    public ApiResponse<KnowledgeBase> update(
+            @PathVariable String id,
+            @Valid @RequestBody SaveKnowledgeBaseRequest request
+    ) {
+        return ApiResponse.success(knowledgeBaseService.update(
+                id,
+                request.name(),
+                request.description(),
+                request.embeddingModelId(),
+                request.vectorStoreConfigId(),
+                request.splitterType(),
+                request.chunkSize(),
+                request.chunkOverlap(),
+                request.retrievalMode(),
+                request.topK()
+        ));
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable String id) {
+        knowledgeBaseService.delete(id);
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/chunks/preview")
     public ApiResponse<List<KnowledgeChunkPreview>> previewChunks(@Valid @RequestBody PreviewChunksRequest request) {
         return ApiResponse.success(knowledgeBaseService.previewChunks(

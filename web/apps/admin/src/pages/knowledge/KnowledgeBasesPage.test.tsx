@@ -34,6 +34,22 @@ const knowledgeApiMock = vi.hoisted(() => ({
     documentCount: 0,
     chunkCount: 0
   })),
+  updateKnowledgeBase: vi.fn(async () => ({
+    id: 'kb_1',
+    name: '运营知识库',
+    description: '生产资料',
+    embeddingModelId: 'embed-prod',
+    vectorStoreConfigId: 'vector_1',
+    splitterType: 'MARKDOWN_HEADING',
+    chunkSize: 180,
+    chunkOverlap: 30,
+    retrievalMode: 'HYBRID',
+    topK: 6,
+    status: 'READY',
+    documentCount: 1,
+    chunkCount: 2
+  })),
+  deleteKnowledgeBase: vi.fn(async () => undefined),
   addKnowledgeDocument: vi.fn(async () => ({
     id: 'doc_1',
     knowledgeBaseId: 'kb_1',
@@ -170,6 +186,29 @@ describe('KnowledgeBasesPage', () => {
     });
   });
 
+  it('edits and deletes knowledge bases from the list', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /编辑知识库/ }));
+    fireEvent.change(await screen.findByLabelText('知识库名称'), { target: { value: '运营知识库' } });
+    fireEvent.change(screen.getByLabelText('知识库描述'), { target: { value: '生产资料' } });
+    await userEvent.click(screen.getByRole('button', { name: /修改/ }));
+
+    await waitFor(() => {
+      expect(knowledgeApiMock.updateKnowledgeBase).toHaveBeenCalledWith('kb_1', expect.objectContaining({
+        name: '运营知识库',
+        description: '生产资料',
+        splitterType: 'MARKDOWN_HEADING',
+        retrievalMode: 'HYBRID'
+      }));
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /删除知识库/ }));
+    await waitFor(() => {
+      expect(knowledgeApiMock.deleteKnowledgeBase).toHaveBeenCalledWith('kb_1');
+    });
+  });
+
   it('previews chunks before document ingestion and can search the selected base', async () => {
     renderPage();
 
@@ -215,7 +254,7 @@ describe('KnowledgeBasesPage', () => {
       }));
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /编辑/ }));
+    await userEvent.click(screen.getByRole('button', { name: /编辑向量库/ }));
     fireEvent.change(await screen.findByLabelText('配置名称'), { target: { value: 'Elastic prod' } });
     await userEvent.click(screen.getByRole('button', { name: /保存配置/ }));
 
