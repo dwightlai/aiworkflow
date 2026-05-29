@@ -77,6 +77,48 @@ describe('WorkflowDesignerReact', () => {
       config: expect.objectContaining({ ui: { position: { x: 262, y: 32 } } })
     }));
   });
+
+  it('duplicates selected nodes and edits selected edge conditions', () => {
+    const onChange = vi.fn();
+    render(<WorkflowDesignerReact value={createDefinition({
+      edges: [{ id: 'edge_start_end', sourceNodeId: 'start', targetNodeId: 'end', condition: null }]
+    })} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '节点 开始' }));
+    fireEvent.click(screen.getByRole('button', { name: '复制节点' }));
+
+    expect((onChange.mock.calls.at(-1)?.[0] as WorkflowDefinition).nodes).toContainEqual(expect.objectContaining({
+      id: 'start_copy_1',
+      name: '开始 副本'
+    }));
+
+    fireEvent.click(screen.getByLabelText('选择连线 edge_start_end'));
+    fireEvent.change(screen.getByLabelText('连线条件'), { target: { value: 'intent == refund' } });
+
+    expect((onChange.mock.calls.at(-1)?.[0] as WorkflowDefinition).edges[0]).toMatchObject({
+      id: 'edge_start_end',
+      condition: 'intent == refund'
+    });
+  });
+
+  it('supports zoom fit controls and overlays node run statuses', () => {
+    render(<WorkflowDesignerReact
+      value={createDefinition()}
+      nodeRunStates={{ start: 'SUCCEEDED', end: 'RUNNING' }}
+    />);
+
+    expect(screen.getByText('SUCCEEDED')).toBeTruthy();
+    expect(screen.getByText('RUNNING')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '放大' }));
+    expect(screen.getByLabelText('工作流画布视口').getAttribute('data-zoom')).toBe('1.1');
+
+    fireEvent.click(screen.getByRole('button', { name: '缩小' }));
+    expect(screen.getByLabelText('工作流画布视口').getAttribute('data-zoom')).toBe('1');
+
+    fireEvent.click(screen.getByRole('button', { name: '适配视图' }));
+    expect(screen.getByLabelText('工作流画布视口').getAttribute('data-zoom')).toBe('0.85');
+  });
 });
 
 function createDefinition(patch: Partial<WorkflowDefinition> = {}): WorkflowDefinition {

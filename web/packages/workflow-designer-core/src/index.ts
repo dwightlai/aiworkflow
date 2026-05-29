@@ -5,6 +5,8 @@ const NODE_HEIGHT = 76;
 const COLUMN_GAP = 230;
 const ROW_GAP = 118;
 const PADDING = 32;
+const PORT_OFFSET = 7;
+const DUPLICATE_OFFSET = 40;
 
 export interface WorkflowDesignerCoreOptions {
   container: HTMLElement;
@@ -19,7 +21,9 @@ export interface WorkflowDesignerCore {
   getValue(): WorkflowDefinition;
   setValue(value: WorkflowDefinition): void;
   addNode(node: WorkflowNode): void;
+  duplicateNode(nodeId: string): WorkflowNode | null;
   updateNode(nodeId: string, patch: Partial<WorkflowNode>): void;
+  updateEdge(edgeId: string, patch: Partial<WorkflowEdge>): void;
   moveNode(nodeId: string, x: number, y: number): void;
   removeNode(nodeId: string): void;
   removeEdge(edgeId: string): void;
@@ -86,9 +90,9 @@ function createLayout(definition: WorkflowDefinition, useStoredPositions: boolea
     if (!source || !target) {
       return [];
     }
-    const sourceX = source.x + source.width;
+    const sourceX = source.x + source.width + PORT_OFFSET;
     const sourceY = source.y + source.height / 2;
-    const targetX = target.x;
+    const targetX = target.x - PORT_OFFSET;
     const targetY = target.y + target.height / 2;
     const curveOffset = Math.max((targetX - sourceX) / 2, 60);
     return [{
@@ -153,10 +157,44 @@ export function createWorkflowDesignerCore(options: WorkflowDesignerCoreOptions)
         nodes: [...value.nodes.filter((item) => item.id !== node.id), node]
       }));
     },
+    duplicateNode(nodeId: string) {
+      const sourceNode = currentValue.nodes.find((node) => node.id === nodeId);
+      if (!sourceNode || options.readonly) {
+        return null;
+      }
+      const copyIndex = nextCopyIndex(currentValue.nodes, nodeId);
+      const position = readNodePosition(sourceNode);
+      const copy: WorkflowNode = {
+        ...sourceNode,
+        id: `${nodeId}_copy_${copyIndex}`,
+        name: `${sourceNode.name} 副本`,
+        config: {
+          ...cloneConfig(sourceNode.config),
+          ui: {
+            ...(isRecord(sourceNode.config.ui) ? sourceNode.config.ui : {}),
+            position: {
+              x: (position?.x ?? PADDING) + DUPLICATE_OFFSET,
+              y: (position?.y ?? PADDING) + DUPLICATE_OFFSET
+            }
+          }
+        }
+      };
+      updateValue((value) => ({
+        ...value,
+        nodes: [...value.nodes, copy]
+      }));
+      return copy;
+    },
     updateNode(nodeId: string, patch: Partial<WorkflowNode>) {
       updateValue((value) => ({
         ...value,
         nodes: value.nodes.map((node) => node.id === nodeId ? { ...node, ...patch, id: node.id } : node)
+      }));
+    },
+    updateEdge(edgeId: string, patch: Partial<WorkflowEdge>) {
+      updateValue((value) => ({
+        ...value,
+        edges: value.edges.map((edge) => edge.id === edgeId ? { ...edge, ...patch, id: edge.id } : edge)
       }));
     },
     moveNode(nodeId: string, x: number, y: number) {
@@ -283,4 +321,17 @@ function readNodePosition(node: WorkflowNode) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cloneConfig(config: Record<string, unknown>) {
+  return JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+}
+
+function nextCopyIndex(nodes: WorkflowNode[], nodeId: string) {
+  let index = 1;
+  const ids = new Set(nodes.map((node) => node.id));
+  while (ids.has(`${nodeId}_copy_${index}`)) {
+    index += 1;
+  }
+  return index;
 }

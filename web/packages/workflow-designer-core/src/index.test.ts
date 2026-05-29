@@ -103,7 +103,25 @@ describe('createWorkflowDesignerCore', () => {
 
     expect(layout.nodes[0]).toMatchObject({ id: 'start', x: 88, y: 44 });
     expect(layout.nodes[1]).toMatchObject({ id: 'end', x: 420, y: 120 });
-    expect(layout.edges[0]).toMatchObject({ sourceX: 268, targetX: 420 });
+    expect(layout.edges[0]).toMatchObject({ sourceX: 275, targetX: 413 });
+  });
+
+  it('anchors edge endpoints on node ports instead of hiding them under node cards', () => {
+    const layout = createWorkflowDesignerLayout({
+      nodes: [
+        { id: 'start', type: 'START', name: 'Start', config: { ui: { position: { x: 32, y: 32 } } } },
+        { id: 'end', type: 'END', name: 'End', config: { ui: { position: { x: 262, y: 32 } } } }
+      ],
+      edges: [{ id: 'edge-1', sourceNodeId: 'start', targetNodeId: 'end', condition: null }],
+      variables: []
+    });
+
+    expect(layout.edges[0]).toMatchObject({
+      sourceX: 219,
+      sourceY: 70,
+      targetX: 255,
+      targetY: 70
+    });
   });
 
   it('removes individual edges without deleting connected nodes', () => {
@@ -149,5 +167,49 @@ describe('createWorkflowDesignerCore', () => {
       expect.objectContaining({ id: 'prompt', config: expect.objectContaining({ ui: { position: { x: 262, y: 32 } } }) }),
       expect.objectContaining({ id: 'end', config: expect.objectContaining({ ui: { position: { x: 492, y: 32 } } }) })
     ]);
+  });
+
+  it('duplicates nodes with copied config and offset visual position', () => {
+    const designer = createWorkflowDesignerCore({
+      container: { dataset: {} } as HTMLElement,
+      value: {
+        nodes: [
+          { id: 'prompt', type: 'PROMPT', name: 'Prompt', config: { template: 'Hi', ui: { position: { x: 120, y: 80 } } } }
+        ],
+        edges: [],
+        variables: []
+      }
+    });
+
+    const copy = designer.duplicateNode('prompt');
+
+    expect(copy).toMatchObject({
+      id: 'prompt_copy_1',
+      type: 'PROMPT',
+      name: 'Prompt 副本',
+      config: {
+        template: 'Hi',
+        ui: { position: { x: 160, y: 120 } }
+      }
+    });
+    expect(designer.getValue().nodes.map((node) => node.id)).toEqual(['prompt', 'prompt_copy_1']);
+  });
+
+  it('updates edge condition metadata', () => {
+    const designer = createWorkflowDesignerCore({
+      container: { dataset: {} } as HTMLElement,
+      value: {
+        nodes: [
+          { id: 'start', type: 'START', name: 'Start', config: {} },
+          { id: 'end', type: 'END', name: 'End', config: {} }
+        ],
+        edges: [{ id: 'edge-1', sourceNodeId: 'start', targetNodeId: 'end', condition: null }],
+        variables: []
+      }
+    });
+
+    designer.updateEdge('edge-1', { condition: 'intent == refund' });
+
+    expect(designer.getValue().edges[0]).toMatchObject({ condition: 'intent == refund' });
   });
 });

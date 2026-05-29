@@ -3,20 +3,24 @@ import {
   createWorkflowDesignerLayout,
   type WorkflowDesignerCore
 } from '@aiworkflow/workflow-designer-core';
-import type { WorkflowDefinition, WorkflowNode } from '@aiworkflow/workflow-schema';
+import type { WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@aiworkflow/workflow-schema';
 import type React from 'react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 export interface WorkflowDesignerReactProps {
   value: WorkflowDefinition;
   readonly?: boolean;
+  selectedNodeId?: string | null;
+  nodeRunStates?: Record<string, string>;
   onChange?: (value: WorkflowDefinition) => void;
   onNodeSelect?: (nodeId: string) => void;
 }
 
 export interface WorkflowDesignerHandle {
   addNode(node: WorkflowNode): void;
+  duplicateNode(nodeId: string): WorkflowNode | null;
   connectNodes(sourceNodeId: string, targetNodeId: string): void;
+  updateEdge(edgeId: string, patch: Partial<WorkflowEdge>): void;
   autoLayout(): void;
   removeNode(nodeId: string): void;
   removeEdge(edgeId: string): void;
@@ -30,6 +34,7 @@ function WorkflowDesignerReact(props, ref) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [draggingNode, setDraggingNode] = useState<{
     nodeId: string;
     startClientX: number;
@@ -40,13 +45,21 @@ function WorkflowDesignerReact(props, ref) {
     y: number;
   } | null>(null);
   const layout = useMemo(() => createWorkflowDesignerLayout(props.value), [props.value]);
+  const effectiveSelectedNodeId = props.selectedNodeId === undefined ? selectedNodeId : props.selectedNodeId;
+  const selectedEdge = layout.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
   useImperativeHandle(ref, () => ({
     addNode(node: WorkflowNode) {
       designerRef.current?.addNode(node);
     },
+    duplicateNode(nodeId: string) {
+      return designerRef.current?.duplicateNode(nodeId) ?? null;
+    },
     connectNodes(sourceNodeId: string, targetNodeId: string) {
       designerRef.current?.connectNodes(createEdgeId(sourceNodeId, targetNodeId), sourceNodeId, targetNodeId);
+    },
+    updateEdge(edgeId: string, patch: Partial<WorkflowEdge>) {
+      designerRef.current?.updateEdge(edgeId, patch);
     },
     autoLayout() {
       designerRef.current?.autoLayout();
@@ -126,11 +139,25 @@ function WorkflowDesignerReact(props, ref) {
     setSelectedEdgeId(null);
   }
 
-  function handleRemoveSelectedNode() {
-    if (!selectedNodeId) {
+  function handleDuplicateSelectedNode() {
+    const nodeId = effectiveSelectedNodeId;
+    if (!nodeId) {
       return;
     }
-    designerRef.current?.removeNode(selectedNodeId);
+    const copy = designerRef.current?.duplicateNode(nodeId);
+    if (copy) {
+      setSelectedNodeId(copy.id);
+      setSelectedEdgeId(null);
+      props.onNodeSelect?.(copy.id);
+    }
+  }
+
+  function handleRemoveSelectedNode() {
+    const nodeId = effectiveSelectedNodeId;
+    if (!nodeId) {
+      return;
+    }
+    designerRef.current?.removeNode(nodeId);
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
   }
@@ -143,19 +170,44 @@ function WorkflowDesignerReact(props, ref) {
     setSelectedEdgeId(null);
   }
 
+  function handleEdgeConditionChange(value: string) {
+    if (!selectedEdgeId) {
+      return;
+    }
+    designerRef.current?.updateEdge(selectedEdgeId, { condition: value || null });
+  }
+
   return (
     <div ref={containerRef} style={containerStyle} data-readonly={props.readonly ? 'true' : 'false'}>
       {!props.readonly ? (
         <div style={toolbarStyle}>
+          <button type="button" aria-label="放大" style={iconButtonStyle} onClick={() => setZoom((value) => clampZoom(value + 0.1))}>
+            +
+          </button>
+          <button type="button" aria-label="缩小" style={iconButtonStyle} onClick={() => setZoom((value) => clampZoom(value - 0.1))}>
+            -
+          </button>
+          <button type="button" aria-label="适配视图" style={toolbarButtonStyle} onClick={() => setZoom(0.85)}>
+            适配视图
+          </button>
           <button type="button" aria-label="自动布局" style={toolbarButtonStyle} onClick={handleAutoLayout}>
             自动布局
           </button>
           <button
             type="button"
+            aria-label="复制节点"
+            style={{ ...toolbarButtonStyle, opacity: effectiveSelectedNodeId ? 1 : 0.46 }}
+            onClick={handleDuplicateSelectedNode}
+            disabled={!effectiveSelectedNodeId}
+          >
+            复制节点
+          </button>
+          <button
+            type="button"
             aria-label="删除节点"
-            style={{ ...toolbarButtonStyle, opacity: selectedNodeId ? 1 : 0.46 }}
+            style={{ ...toolbarButtonStyle, opacity: effectiveSelectedNodeId ? 1 : 0.46 }}
             onClick={handleRemoveSelectedNode}
-            disabled={!selectedNodeId}
+            disabled={!effectiveSelectedNodeId}
           >
             删除节点
           </button>
@@ -168,115 +220,144 @@ function WorkflowDesignerReact(props, ref) {
           >
             删除连线
           </button>
+          {selectedEdge ? (
+            <label style={edgeConditionStyle}>
+              <span style={edgeConditionLabelStyle}>连线条件</span>
+              <input
+                aria-label="连线条件"
+                value={String(selectedEdge.condition ?? '')}
+                onChange={(event) => handleEdgeConditionChange(event.target.value)}
+                placeholder="例如 intent == refund"
+                style={edgeConditionInputStyle}
+              />
+            </label>
+          ) : null}
         </div>
       ) : null}
-      <div style={{ ...canvasStyle, minWidth: layout.bounds.width, minHeight: layout.bounds.height }}>
-        <svg
-          width={layout.bounds.width}
-          height={layout.bounds.height}
-          viewBox={`0 0 ${layout.bounds.width} ${layout.bounds.height}`}
-          style={edgeLayerStyle}
+      <div
+        aria-label="工作流画布视口"
+        data-zoom={formatZoom(zoom)}
+        style={{ ...viewportStyle, minWidth: layout.bounds.width * zoom, minHeight: layout.bounds.height * zoom }}
+      >
+        <div
+          style={{
+            ...canvasStyle,
+            minWidth: layout.bounds.width,
+            minHeight: layout.bounds.height,
+            transform: `scale(${zoom})`,
+            transformOrigin: '0 0'
+          }}
         >
-          <defs>
-            <marker id="aiworkflow-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill="#98a2b3" />
-            </marker>
-          </defs>
-          {layout.edges.map((edge) => (
-            <path
-              key={edge.id}
-              aria-label={`选择连线 ${edge.id}`}
-              role="button"
-              d={edge.path}
-              fill="none"
-              stroke={selectedEdgeId === edge.id ? '#1677ff' : '#b8c2d2'}
-              strokeWidth={selectedEdgeId === edge.id ? 4 : 2}
-              markerEnd="url(#aiworkflow-arrow)"
-              style={{ cursor: props.readonly ? 'default' : 'pointer', pointerEvents: 'stroke' }}
-              onClick={() => {
-                if (!props.readonly) {
-                  setSelectedEdgeId(edge.id);
-                  setSelectedNodeId(null);
-                }
-              }}
-            />
-          ))}
-        </svg>
-
-        {layout.nodes.map((node) => {
-          const selected = selectedNodeId === node.id;
-          const dragged = draggingNode?.nodeId === node.id ? draggingNode : null;
-          const nodeX = dragged?.x ?? node.x;
-          const nodeY = dragged?.y ?? node.y;
-          return (
-            <button
-              key={node.id}
-              type="button"
-              aria-label={`节点 ${node.name}`}
-              style={{
-                ...nodeStyle,
-                ...nodeToneStyle(node.type),
-                borderColor: selected ? '#1677ff' : '#d8e0ec',
-                boxShadow: selected ? '0 0 0 3px rgba(22, 119, 255, 0.14)' : '0 8px 20px rgba(15, 23, 42, 0.08)',
-                height: node.height,
-                left: nodeX,
-                top: nodeY,
-                width: node.width
-              }}
-              onMouseDown={(event) => {
-                if (props.readonly) {
-                  return;
-                }
-                setSelectedNodeId(node.id);
-                setSelectedEdgeId(null);
-                designerRef.current?.selectNode(node.id);
-                props.onNodeSelect?.(node.id);
-                setDraggingNode({
-                  nodeId: node.id,
-                  startClientX: event.clientX,
-                  startClientY: event.clientY,
-                  startX: node.x,
-                  startY: node.y,
-                  x: node.x,
-                  y: node.y
-                });
-              }}
-              onClick={() => {
-                designerRef.current?.selectNode(node.id);
-                props.onNodeSelect?.(node.id);
-                setSelectedNodeId(node.id);
-                setSelectedEdgeId(null);
-              }}
-            >
-              <span
+          <svg
+            width={layout.bounds.width}
+            height={layout.bounds.height}
+            viewBox={`0 0 ${layout.bounds.width} ${layout.bounds.height}`}
+            style={edgeLayerStyle}
+          >
+            <defs>
+              <marker id="aiworkflow-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#98a2b3" />
+              </marker>
+            </defs>
+            {layout.edges.map((edge) => (
+              <path
+                key={edge.id}
+                aria-label={`选择连线 ${edge.id}`}
                 role="button"
-                aria-label={`连接到 ${node.name}`}
-                title="连接到此节点"
-                style={{ ...handleStyle, ...inputHandleStyle(connectingFromNodeId !== null) }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleInputHandleClick(node.id);
-                }}
-              />
-              <span style={nodeTypeStyle}>{node.type}</span>
-              <span style={nodeNameStyle}>{node.name}</span>
-              <span
-                role="button"
-                aria-label={`从 ${node.name} 连线`}
-                title="从此节点连线"
-                style={{ ...handleStyle, ...outputHandleStyle(connectingFromNodeId === node.id) }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
+                d={edge.path}
+                fill="none"
+                stroke={selectedEdgeId === edge.id ? '#1677ff' : '#7f90a8'}
+                strokeWidth={selectedEdgeId === edge.id ? 4 : 2.5}
+                markerEnd="url(#aiworkflow-arrow)"
+                style={{ cursor: props.readonly ? 'default' : 'pointer', pointerEvents: 'stroke' }}
+                onClick={() => {
                   if (!props.readonly) {
-                    setConnectingFromNodeId((value) => value === node.id ? null : node.id);
+                    setSelectedEdgeId(edge.id);
+                    setSelectedNodeId(null);
                   }
                 }}
               />
-            </button>
-          );
-        })}
+            ))}
+          </svg>
+
+          {layout.nodes.map((node) => {
+            const selected = effectiveSelectedNodeId === node.id;
+            const dragged = draggingNode?.nodeId === node.id ? draggingNode : null;
+            const nodeX = dragged?.x ?? node.x;
+            const nodeY = dragged?.y ?? node.y;
+            const runState = props.nodeRunStates?.[node.id];
+            return (
+              <button
+                key={node.id}
+                type="button"
+                aria-label={`节点 ${node.name}`}
+                style={{
+                  ...nodeStyle,
+                  ...nodeToneStyle(node.type),
+                  borderColor: selected ? '#1677ff' : '#d8e0ec',
+                  boxShadow: selected ? '0 0 0 3px rgba(22, 119, 255, 0.14)' : '0 8px 20px rgba(15, 23, 42, 0.08)',
+                  height: node.height,
+                  left: nodeX,
+                  top: nodeY,
+                  width: node.width,
+                  zIndex: selected ? 3 : 2
+                }}
+                onMouseDown={(event) => {
+                  if (props.readonly) {
+                    return;
+                  }
+                  setSelectedNodeId(node.id);
+                  setSelectedEdgeId(null);
+                  designerRef.current?.selectNode(node.id);
+                  props.onNodeSelect?.(node.id);
+                  setDraggingNode({
+                    nodeId: node.id,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    startX: node.x,
+                    startY: node.y,
+                    x: node.x,
+                    y: node.y
+                  });
+                }}
+                onClick={() => {
+                  designerRef.current?.selectNode(node.id);
+                  props.onNodeSelect?.(node.id);
+                  setSelectedNodeId(node.id);
+                  setSelectedEdgeId(null);
+                }}
+              >
+                <span
+                  role="button"
+                  aria-label={`连接到 ${node.name}`}
+                  title="连接到此节点"
+                  style={{ ...handleStyle, ...inputHandleStyle(connectingFromNodeId !== null) }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleInputHandleClick(node.id);
+                  }}
+                />
+                {runState ? <span style={{ ...statusBadgeStyle, ...statusToneStyle(runState) }}>{runState}</span> : null}
+                <span style={nodeTypeStyle}>{node.type}</span>
+                <span style={nodeNameStyle}>{node.name}</span>
+                <span
+                  role="button"
+                  aria-label={`从 ${node.name} 连线`}
+                  title="从此节点连线"
+                  style={{ ...handleStyle, ...outputHandleStyle(connectingFromNodeId === node.id) }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (!props.readonly) {
+                      setConnectingFromNodeId((value) => value === node.id ? null : node.id);
+                    }
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -294,6 +375,10 @@ const containerStyle: React.CSSProperties = {
 
 const canvasStyle: React.CSSProperties = {
   minHeight: 320,
+  position: 'relative'
+};
+
+const viewportStyle: React.CSSProperties = {
   position: 'relative'
 };
 
@@ -324,6 +409,34 @@ const toolbarButtonStyle: React.CSSProperties = {
   fontWeight: 700,
   height: 30,
   padding: '0 10px'
+};
+
+const iconButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  fontSize: 16,
+  padding: 0,
+  width: 30
+};
+
+const edgeConditionStyle: React.CSSProperties = {
+  alignItems: 'center',
+  display: 'flex',
+  gap: 6,
+  marginLeft: 4
+};
+
+const edgeConditionLabelStyle: React.CSSProperties = {
+  color: '#667085',
+  fontSize: 12,
+  fontWeight: 700
+};
+
+const edgeConditionInputStyle: React.CSSProperties = {
+  border: '1px solid #d8e0ec',
+  borderRadius: 6,
+  height: 30,
+  padding: '0 8px',
+  width: 180
 };
 
 const nodeStyle: React.CSSProperties = {
@@ -385,6 +498,17 @@ const nodeNameStyle: React.CSSProperties = {
   width: '100%'
 };
 
+const statusBadgeStyle: React.CSSProperties = {
+  borderRadius: 999,
+  fontSize: 10,
+  fontWeight: 800,
+  lineHeight: '16px',
+  padding: '0 7px',
+  position: 'absolute',
+  right: 10,
+  top: 8
+};
+
 function nodeToneStyle(type: WorkflowNode['type']): React.CSSProperties {
   const colorMap: Record<WorkflowNode['type'], string> = {
     CONDITION: '#fdf2f8',
@@ -403,4 +527,25 @@ function nodeToneStyle(type: WorkflowNode['type']): React.CSSProperties {
 
 function createEdgeId(sourceNodeId: string, targetNodeId: string) {
   return `edge_${sourceNodeId}_${targetNodeId}`;
+}
+
+function clampZoom(value: number) {
+  return Math.min(Math.max(Number(value.toFixed(2)), 0.5), 1.6);
+}
+
+function formatZoom(value: number) {
+  return String(Number(value.toFixed(2)));
+}
+
+function statusToneStyle(status: string): React.CSSProperties {
+  if (status === 'FAILED') {
+    return { background: '#fef2f2', color: '#b42318' };
+  }
+  if (status === 'SUCCEEDED') {
+    return { background: '#ecfdf3', color: '#027a48' };
+  }
+  if (status === 'RUNNING') {
+    return { background: '#eff6ff', color: '#175cd3' };
+  }
+  return { background: '#f2f4f7', color: '#475467' };
 }

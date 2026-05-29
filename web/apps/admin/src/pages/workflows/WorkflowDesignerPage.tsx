@@ -106,6 +106,9 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   );
   const workflowName = workflowQuery.data?.name ?? (isNewWorkflow ? '新建工作流' : '工作流设计器');
   const configCompleteness = useMemo(() => calculateConfigCompleteness(definition), [definition]);
+  const nodeRunStates = useMemo(() => {
+    return Object.fromEntries((execution?.nodeExecutions ?? []).map((node) => [node.nodeId, node.status]));
+  }, [execution]);
 
   function handleAddNode(node: WorkflowNode) {
     designerRef.current?.addNode(node);
@@ -245,6 +248,8 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
               <WorkflowDesignerReact
                 ref={designerRef}
                 value={definition}
+                selectedNodeId={selectedNodeId}
+                nodeRunStates={nodeRunStates}
                 onChange={setDefinition}
                 onNodeSelect={setSelectedNodeId}
               />

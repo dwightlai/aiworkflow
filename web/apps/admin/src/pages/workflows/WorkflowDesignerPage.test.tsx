@@ -31,7 +31,43 @@ const workflowApiMock = vi.hoisted(() => ({
   })),
   updateWorkflowDraft: vi.fn(),
   publishWorkflow: vi.fn(),
-  runWorkflow: vi.fn()
+  runWorkflow: vi.fn(async () => ({
+    id: 'run-1',
+    workflowId: 'workflow-1',
+    workflowVersionId: 'version-1',
+    status: 'SUCCEEDED',
+    input: {},
+    output: {},
+    errorMessage: null,
+    startedAt: '2026-05-29T01:00:00Z',
+    finishedAt: '2026-05-29T01:00:01Z',
+    nodeExecutions: [
+      {
+        id: 'node-exec-start',
+        workflowExecutionId: 'run-1',
+        nodeId: 'start',
+        nodeType: 'START',
+        status: 'SUCCEEDED',
+        input: {},
+        output: {},
+        errorMessage: null,
+        startedAt: '2026-05-29T01:00:00Z',
+        finishedAt: '2026-05-29T01:00:01Z'
+      },
+      {
+        id: 'node-exec-end',
+        workflowExecutionId: 'run-1',
+        nodeId: 'end',
+        nodeType: 'END',
+        status: 'SUCCEEDED',
+        input: {},
+        output: {},
+        errorMessage: null,
+        startedAt: '2026-05-29T01:00:00Z',
+        finishedAt: '2026-05-29T01:00:01Z'
+      }
+    ]
+  }))
 }));
 
 Object.defineProperty(window, 'matchMedia', {
@@ -140,6 +176,21 @@ describe('WorkflowDesignerPage', () => {
 
     expect((await screen.findAllByText('流程结构校验未通过')).length).toBeGreaterThan(0);
     expect(workflowApiMock.updateWorkflowDraft).not.toHaveBeenCalled();
+  });
+
+  it('links right panel selection with the canvas and overlays run status on nodes', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByRole('button', { name: '节点 结束' }));
+    expect(screen.getByDisplayValue('结束')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '运行' }));
+    expect((await screen.findAllByText('SUCCEEDED')).length).toBeGreaterThanOrEqual(2);
   });
 
   it('creates a workflow from the new designer and navigates to its designer route', async () => {
