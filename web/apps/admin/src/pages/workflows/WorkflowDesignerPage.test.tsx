@@ -76,6 +76,10 @@ const modelApiMock = vi.hoisted(() => ({
       {
         id: 'model_provider_1',
         name: 'OpenAI Compatible',
+        modelType: 'OpenAI',
+        description: null,
+        visionSupport: false,
+        pricePerMillionTokens: null,
         baseUrl: 'https://api.example.com/v1',
         model: 'gpt-4.1-mini',
         apiKeyRef: 'dev-key',

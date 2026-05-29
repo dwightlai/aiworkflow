@@ -12,6 +12,10 @@ const modelApiMock = vi.hoisted(() => ({
       {
         id: 'model_provider_1',
         name: 'OpenAI Compatible',
+        modelType: 'OpenAI',
+        description: '通用模型',
+        visionSupport: true,
+        pricePerMillionTokens: 12.5,
         baseUrl: 'https://api.example.com/v1',
         model: 'gpt-4.1-mini',
         apiKeyRef: 'dev-key',
@@ -23,9 +27,25 @@ const modelApiMock = vi.hoisted(() => ({
   createModelProvider: vi.fn(async () => ({
     id: 'model_provider_2',
     name: 'DeepSeek',
+    modelType: 'DeepSeek',
+    description: null,
+    visionSupport: false,
+    pricePerMillionTokens: 1,
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-chat',
     apiKeyRef: 'deepseek-key',
+    enabled: true
+  })),
+  updateModelProvider: vi.fn(async () => ({
+    id: 'model_provider_1',
+    name: 'OpenAI Compatible',
+    modelType: 'OpenAI',
+    description: '通用模型更新',
+    visionSupport: true,
+    pricePerMillionTokens: 13,
+    baseUrl: 'https://api.example.com/v1',
+    model: 'gpt-4.1-mini',
+    apiKeyRef: 'dev-key',
     enabled: true
   }))
 }));
@@ -57,30 +77,58 @@ describe('ModelProvidersPage', () => {
 
     expect(await screen.findByText('OpenAI Compatible')).toBeInTheDocument();
     expect(screen.getByText('gpt-4.1-mini')).toBeInTheDocument();
+    expect(screen.getByText('视觉')).toBeInTheDocument();
     expect(screen.getByText('工作流可调用')).toBeInTheDocument();
     expect(screen.getByText('LLM 节点选择')).toBeInTheDocument();
   });
 
-  it('creates a model provider from the form', async () => {
+  it('creates a model provider from the drawer form', async () => {
     renderPage();
 
-    await userEvent.type(screen.getByLabelText('配置名称'), 'DeepSeek');
+    await userEvent.click(screen.getByRole('button', { name: /新增模型/ }));
+    await userEvent.clear(await screen.findByLabelText('模型名称'));
+    await userEvent.type(screen.getByLabelText('模型名称'), 'DeepSeek');
+    await userEvent.clear(screen.getByLabelText('Base URL'));
     await userEvent.type(screen.getByLabelText('Base URL'), 'https://api.deepseek.com/v1');
-    await userEvent.type(screen.getByLabelText('模型标识'), 'deepseek-chat');
-    await userEvent.type(screen.getByLabelText('API Key 引用'), 'deepseek-key');
-    await userEvent.click(screen.getByRole('button', { name: /保存模型配置/ }));
+    await userEvent.clear(screen.getByLabelText('调用模型'));
+    await userEvent.type(screen.getByLabelText('调用模型'), 'deepseek-chat');
+    await userEvent.type(screen.getByLabelText('API Key'), 'deepseek-key');
+    await userEvent.click(screen.getByRole('button', { name: /保存/ }));
 
     await waitFor(() => {
       const firstCall = (modelApiMock.createModelProvider as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
       expect(firstCall?.[0]).toEqual({
         name: 'DeepSeek',
+        modelType: 'DeepSeek',
+        description: null,
+        visionSupport: false,
+        pricePerMillionTokens: null,
         baseUrl: 'https://api.deepseek.com/v1',
         model: 'deepseek-chat',
         apiKeyRef: 'deepseek-key',
         enabled: true
       });
     });
-  });
+  }, 10000);
+
+  it('updates an existing model provider from the edit drawer', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /编辑/ }));
+    await userEvent.clear(await screen.findByLabelText('模型描述'));
+    await userEvent.type(screen.getByLabelText('模型描述'), '通用模型更新');
+    await userEvent.click(screen.getByRole('button', { name: /修改/ }));
+
+    await waitFor(() => {
+      expect(modelApiMock.updateModelProvider).toHaveBeenCalledWith(
+        'model_provider_1',
+        expect.objectContaining({
+          description: '通用模型更新',
+          modelType: 'OpenAI'
+        })
+      );
+    });
+  }, 10000);
 });
 
 function renderPage() {

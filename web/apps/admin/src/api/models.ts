@@ -12,6 +12,10 @@ export interface PageResponse<T> {
 export interface ModelProvider {
   id: string;
   name: string;
+  modelType: string;
+  description: string | null;
+  visionSupport: boolean;
+  pricePerMillionTokens: number | null;
   baseUrl: string;
   model: string;
   apiKeyRef: string;
@@ -22,6 +26,10 @@ export interface ModelProvider {
 
 export interface CreateModelProviderRequest {
   name: string;
+  modelType: string;
+  description: string | null;
+  visionSupport: boolean;
+  pricePerMillionTokens: number | null;
   baseUrl: string;
   model: string;
   apiKeyRef: string;
@@ -35,6 +43,13 @@ export async function listModelProviders(): Promise<PageResponse<ModelProvider>>
 export async function createModelProvider(request: CreateModelProviderRequest): Promise<ModelProvider> {
   return requestJson<ModelProvider>('/api/model-providers', {
     method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function updateModelProvider(id: string, request: CreateModelProviderRequest): Promise<ModelProvider> {
+  return requestJson<ModelProvider>(`/api/model-providers/${id}`, {
+    method: 'PUT',
     body: JSON.stringify(request)
   });
 }
