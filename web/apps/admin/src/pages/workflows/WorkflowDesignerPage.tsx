@@ -5,10 +5,12 @@ import { Alert, Button, Card, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  createWorkflow,
   getWorkflow,
   publishWorkflow,
   runWorkflow,
   updateWorkflowDraft,
+  type Workflow,
   type WorkflowExecution
 } from '../../api/workflows';
 import { DebugPanel } from './designer/DebugPanel';
@@ -20,6 +22,7 @@ export interface WorkflowDesignerPageProps {
 }
 
 export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) {
+  const isNewWorkflow = workflowId === 'new';
   const queryClient = useQueryClient();
   const designerRef = useRef<WorkflowDesignerHandle | null>(null);
   const [definition, setDefinition] = useState<WorkflowDefinition>(() => createEmptyWorkflowDefinition());
@@ -30,7 +33,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const workflowQuery = useQuery({
     queryKey: ['workflow', workflowId],
     queryFn: () => getWorkflow(workflowId),
-    enabled: workflowId !== 'new'
+    enabled: !isNewWorkflow
   });
 
   useEffect(() => {
@@ -42,8 +45,24 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   }, [workflowQuery.data]);
 
   const saveMutation = useMutation({
-    mutationFn: () => updateWorkflowDraft(workflowId, designerRef.current?.getValue() ?? definition),
-    onSuccess: async () => {
+    mutationFn: () => {
+      const nextDefinition = designerRef.current?.getValue() ?? definition;
+      if (isNewWorkflow) {
+        return createWorkflow({
+          name: '新建工作流',
+          description: null,
+          definition: nextDefinition
+        });
+      }
+      return updateWorkflowDraft(workflowId, nextDefinition);
+    },
+    onSuccess: async (workflow: Workflow) => {
+      if (isNewWorkflow) {
+        message.success('工作流已创建');
+        await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+        navigateTo(`/workflows/${workflow.id}/designer`);
+        return;
+      }
       message.success('草稿已保存');
       await queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] });
     }
@@ -86,7 +105,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
     }));
   }
 
-  const workflowName = workflowQuery.data?.name ?? (workflowId === 'new' ? '新建工作流' : '工作流设计器');
+  const workflowName = workflowQuery.data?.name ?? (isNewWorkflow ? '新建工作流' : '工作流设计器');
 
   return (
     <section style={pageStyle}>
@@ -98,13 +117,13 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           </Tag>
         </Space>
         <Space>
-          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={workflowId === 'new'}>
-            保存草稿
+          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending}>
+            {isNewWorkflow ? '创建工作流' : '保存草稿'}
           </Button>
-          <Button onClick={() => publishMutation.mutate()} loading={publishMutation.isPending} disabled={workflowId === 'new'}>
+          <Button onClick={() => publishMutation.mutate()} loading={publishMutation.isPending} disabled={isNewWorkflow}>
             发布
           </Button>
-          <Button type="primary" onClick={() => runMutation.mutate()} loading={runMutation.isPending} disabled={workflowId === 'new'}>
+          <Button type="primary" onClick={() => runMutation.mutate()} loading={runMutation.isPending} disabled={isNewWorkflow}>
             运行
           </Button>
         </Space>
@@ -159,6 +178,11 @@ function parseJson(value: string) {
   } catch {
     return {};
   }
+}
+
+function navigateTo(path: string) {
+  window.history.pushState(null, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 const pageStyle: React.CSSProperties = {

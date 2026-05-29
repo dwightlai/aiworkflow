@@ -2,24 +2,18 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkflowDesignerPage } from './WorkflowDesignerPage';
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn()
-  }))
-});
-
-vi.mock('../../api/workflows', () => ({
+const workflowApiMock = vi.hoisted(() => ({
+  createWorkflow: vi.fn(async () => ({
+    id: 'workflow-created',
+    name: '新建工作流',
+    description: null,
+    status: 'DRAFT',
+    latestVersion: null
+  })),
   getWorkflow: vi.fn(async () => ({
     id: 'workflow-1',
     name: '客服意图识别',
@@ -37,6 +31,22 @@ vi.mock('../../api/workflows', () => ({
   runWorkflow: vi.fn()
 }));
 
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  }))
+});
+
+vi.mock('../../api/workflows', () => workflowApiMock);
+
 describe('WorkflowDesignerPage', () => {
   it('renders palette canvas config panel and debug panel', async () => {
     render(
@@ -50,5 +60,24 @@ describe('WorkflowDesignerPage', () => {
     expect(screen.getByText('PROMPT')).toBeInTheDocument();
     expect(screen.getByText('节点配置')).toBeInTheDocument();
     expect(screen.getByText('运行调试')).toBeInTheDocument();
+  });
+
+  it('creates a workflow from the new designer and navigates to its designer route', async () => {
+    window.history.replaceState(null, '', '/workflows/new/designer');
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="new" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('新建工作流')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '创建工作流' }));
+
+    expect(workflowApiMock.createWorkflow).toHaveBeenCalledWith(expect.objectContaining({
+      name: '新建工作流',
+      description: null
+    }));
+    expect(window.location.pathname).toBe('/workflows/workflow-created/designer');
   });
 });
