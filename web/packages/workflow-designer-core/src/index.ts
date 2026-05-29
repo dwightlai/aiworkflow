@@ -22,7 +22,9 @@ export interface WorkflowDesignerCore {
   updateNode(nodeId: string, patch: Partial<WorkflowNode>): void;
   moveNode(nodeId: string, x: number, y: number): void;
   removeNode(nodeId: string): void;
+  removeEdge(edgeId: string): void;
   connectNodes(edgeId: string, sourceNodeId: string, targetNodeId: string): void;
+  autoLayout(): void;
   selectNode(nodeId: string | null): void;
   getSelectedNode(): WorkflowNode | null;
 }
@@ -52,6 +54,10 @@ export interface WorkflowDesignerLayout {
 }
 
 export function createWorkflowDesignerLayout(definition: WorkflowDefinition): WorkflowDesignerLayout {
+  return createLayout(definition, true);
+}
+
+function createLayout(definition: WorkflowDefinition, useStoredPositions: boolean): WorkflowDesignerLayout {
   const levels = resolveNodeLevels(definition);
   const groupedNodes = definition.nodes.reduce<Record<number, WorkflowNode[]>>((groups, node) => {
     const level = levels.get(node.id) ?? 0;
@@ -65,8 +71,8 @@ export function createWorkflowDesignerLayout(definition: WorkflowDefinition): Wo
       const position = readNodePosition(node);
       return {
         ...node,
-        x: position?.x ?? PADDING + level * COLUMN_GAP,
-        y: position?.y ?? PADDING + index * ROW_GAP,
+        x: useStoredPositions ? position?.x ?? PADDING + level * COLUMN_GAP : PADDING + level * COLUMN_GAP,
+        y: useStoredPositions ? position?.y ?? PADDING + index * ROW_GAP : PADDING + index * ROW_GAP,
         width: NODE_WIDTH,
         height: NODE_HEIGHT
       };
@@ -181,6 +187,12 @@ export function createWorkflowDesignerCore(options: WorkflowDesignerCoreOptions)
         selectedNodeId = null;
       }
     },
+    removeEdge(edgeId: string) {
+      updateValue((value) => ({
+        ...value,
+        edges: value.edges.filter((edge) => edge.id !== edgeId)
+      }));
+    },
     connectNodes(edgeId: string, sourceNodeId: string, targetNodeId: string) {
       const edge: WorkflowEdge = {
         id: edgeId,
@@ -192,6 +204,25 @@ export function createWorkflowDesignerCore(options: WorkflowDesignerCoreOptions)
         ...value,
         edges: [...value.edges.filter((item) => item.id !== edgeId), edge]
       }));
+    },
+    autoLayout() {
+      updateValue((value) => {
+        const layout = createLayout(value, false);
+        const positionByNodeId = new Map(layout.nodes.map((node) => [node.id, { x: node.x, y: node.y }]));
+        return {
+          ...value,
+          nodes: value.nodes.map((node) => ({
+            ...node,
+            config: {
+              ...node.config,
+              ui: {
+                ...(isRecord(node.config.ui) ? node.config.ui : {}),
+                position: positionByNodeId.get(node.id) ?? { x: PADDING, y: PADDING }
+              }
+            }
+          }))
+        };
+      });
     },
     selectNode(nodeId: string | null) {
       selectedNodeId = nodeId && currentValue.nodes.some((node) => node.id === nodeId) ? nodeId : null;

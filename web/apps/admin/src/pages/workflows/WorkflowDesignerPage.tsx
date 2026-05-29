@@ -8,7 +8,13 @@ import {
   SendOutlined
 } from '@ant-design/icons';
 import { WorkflowDesignerReact, type WorkflowDesignerHandle } from '@aiworkflow/workflow-designer-react';
-import { createEmptyWorkflowDefinition, type WorkflowDefinition, type WorkflowNode } from '@aiworkflow/workflow-schema';
+import {
+  createEmptyWorkflowDefinition,
+  validateWorkflowDefinition,
+  type WorkflowDefinition,
+  type WorkflowNode,
+  type WorkflowValidationIssue
+} from '@aiworkflow/workflow-schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Progress, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
@@ -38,6 +44,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [debugInput, setDebugInput] = useState('{\n  "name": "Ada"\n}');
   const [execution, setExecution] = useState<WorkflowExecution | null>(null);
+  const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[]>([]);
 
   const workflowQuery = useQuery({
     queryKey: ['workflow', workflowId],
@@ -107,6 +114,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       nodes: [...current.nodes.filter((item) => item.id !== node.id), node]
     }));
     setSelectedNodeId(node.id);
+    setValidationIssues([]);
   }
 
   function handleUpdateNode(nodeId: string, patch: Partial<WorkflowNode>) {
@@ -114,6 +122,33 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       ...current,
       nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, ...patch, id: node.id } : node)
     }));
+    setValidationIssues([]);
+  }
+
+  function validateCurrentDefinition() {
+    const nextDefinition = designerRef.current?.getValue() ?? definition;
+    const nextIssues = validateWorkflowDefinition(nextDefinition);
+    setDefinition(nextDefinition);
+    setValidationIssues(nextIssues);
+    return { nextDefinition, nextIssues };
+  }
+
+  function handleSave() {
+    const { nextIssues } = validateCurrentDefinition();
+    if (nextIssues.length > 0) {
+      message.warning('流程结构校验未通过');
+      return;
+    }
+    saveMutation.mutate();
+  }
+
+  function handlePublish() {
+    const { nextIssues } = validateCurrentDefinition();
+    if (nextIssues.length > 0) {
+      message.warning('流程结构校验未通过');
+      return;
+    }
+    publishMutation.mutate();
   }
 
   return (
@@ -135,7 +170,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           <Button
             aria-label={isNewWorkflow ? '创建工作流' : '保存草稿'}
             icon={<SaveOutlined />}
-            onClick={() => saveMutation.mutate()}
+            onClick={handleSave}
             loading={saveMutation.isPending}
           >
             {isNewWorkflow ? '创建工作流' : '保存草稿'}
@@ -143,7 +178,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           <Button
             aria-label="发布"
             icon={<SendOutlined />}
-            onClick={() => publishMutation.mutate()}
+            onClick={handlePublish}
             loading={publishMutation.isPending}
             disabled={isNewWorkflow}
           >
@@ -164,6 +199,22 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
 
       {workflowQuery.isError ? (
         <Alert type="error" showIcon message="工作流加载失败" description={(workflowQuery.error as Error).message} />
+      ) : null}
+
+      {validationIssues.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="流程结构校验未通过"
+          description={(
+            <ul style={validationListStyle}>
+              {validationIssues.slice(0, 5).map((issue) => (
+                <li key={`${issue.code}-${issue.nodeId ?? issue.edgeId ?? issue.message}`}>{issue.message}</li>
+              ))}
+            </ul>
+          )}
+          style={validationAlertStyle}
+        />
       ) : null}
 
       <section style={overviewStyle}>
@@ -297,6 +348,16 @@ const toolbarStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   padding: '14px 20px'
+};
+
+const validationAlertStyle: React.CSSProperties = {
+  borderRadius: 0,
+  margin: '0 16px'
+};
+
+const validationListStyle: React.CSSProperties = {
+  margin: '4px 0 0',
+  paddingLeft: 18
 };
 
 const titleIconStyle: React.CSSProperties = {

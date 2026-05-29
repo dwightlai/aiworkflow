@@ -17,6 +17,9 @@ export interface WorkflowDesignerReactProps {
 export interface WorkflowDesignerHandle {
   addNode(node: WorkflowNode): void;
   connectNodes(sourceNodeId: string, targetNodeId: string): void;
+  autoLayout(): void;
+  removeNode(nodeId: string): void;
+  removeEdge(edgeId: string): void;
   getValue(): WorkflowDefinition;
 }
 
@@ -25,6 +28,7 @@ function WorkflowDesignerReact(props, ref) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const designerRef = useRef<WorkflowDesignerCore | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [draggingNode, setDraggingNode] = useState<{
     nodeId: string;
@@ -43,6 +47,15 @@ function WorkflowDesignerReact(props, ref) {
     },
     connectNodes(sourceNodeId: string, targetNodeId: string) {
       designerRef.current?.connectNodes(createEdgeId(sourceNodeId, targetNodeId), sourceNodeId, targetNodeId);
+    },
+    autoLayout() {
+      designerRef.current?.autoLayout();
+    },
+    removeNode(nodeId: string) {
+      designerRef.current?.removeNode(nodeId);
+    },
+    removeEdge(edgeId: string) {
+      designerRef.current?.removeEdge(edgeId);
     },
     getValue() {
       return designerRef.current?.getValue() ?? props.value;
@@ -108,8 +121,55 @@ function WorkflowDesignerReact(props, ref) {
     setConnectingFromNodeId(null);
   }
 
+  function handleAutoLayout() {
+    designerRef.current?.autoLayout();
+    setSelectedEdgeId(null);
+  }
+
+  function handleRemoveSelectedNode() {
+    if (!selectedNodeId) {
+      return;
+    }
+    designerRef.current?.removeNode(selectedNodeId);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }
+
+  function handleRemoveSelectedEdge() {
+    if (!selectedEdgeId) {
+      return;
+    }
+    designerRef.current?.removeEdge(selectedEdgeId);
+    setSelectedEdgeId(null);
+  }
+
   return (
     <div ref={containerRef} style={containerStyle} data-readonly={props.readonly ? 'true' : 'false'}>
+      {!props.readonly ? (
+        <div style={toolbarStyle}>
+          <button type="button" aria-label="自动布局" style={toolbarButtonStyle} onClick={handleAutoLayout}>
+            自动布局
+          </button>
+          <button
+            type="button"
+            aria-label="删除节点"
+            style={{ ...toolbarButtonStyle, opacity: selectedNodeId ? 1 : 0.46 }}
+            onClick={handleRemoveSelectedNode}
+            disabled={!selectedNodeId}
+          >
+            删除节点
+          </button>
+          <button
+            type="button"
+            aria-label="删除连线"
+            style={{ ...toolbarButtonStyle, opacity: selectedEdgeId ? 1 : 0.46 }}
+            onClick={handleRemoveSelectedEdge}
+            disabled={!selectedEdgeId}
+          >
+            删除连线
+          </button>
+        </div>
+      ) : null}
       <div style={{ ...canvasStyle, minWidth: layout.bounds.width, minHeight: layout.bounds.height }}>
         <svg
           width={layout.bounds.width}
@@ -125,11 +185,20 @@ function WorkflowDesignerReact(props, ref) {
           {layout.edges.map((edge) => (
             <path
               key={edge.id}
+              aria-label={`选择连线 ${edge.id}`}
+              role="button"
               d={edge.path}
               fill="none"
-              stroke="#b8c2d2"
-              strokeWidth={2}
+              stroke={selectedEdgeId === edge.id ? '#1677ff' : '#b8c2d2'}
+              strokeWidth={selectedEdgeId === edge.id ? 4 : 2}
               markerEnd="url(#aiworkflow-arrow)"
+              style={{ cursor: props.readonly ? 'default' : 'pointer', pointerEvents: 'stroke' }}
+              onClick={() => {
+                if (!props.readonly) {
+                  setSelectedEdgeId(edge.id);
+                  setSelectedNodeId(null);
+                }
+              }}
             />
           ))}
         </svg>
@@ -159,6 +228,7 @@ function WorkflowDesignerReact(props, ref) {
                   return;
                 }
                 setSelectedNodeId(node.id);
+                setSelectedEdgeId(null);
                 designerRef.current?.selectNode(node.id);
                 props.onNodeSelect?.(node.id);
                 setDraggingNode({
@@ -175,6 +245,7 @@ function WorkflowDesignerReact(props, ref) {
                 designerRef.current?.selectNode(node.id);
                 props.onNodeSelect?.(node.id);
                 setSelectedNodeId(node.id);
+                setSelectedEdgeId(null);
               }}
             >
               <span
@@ -222,13 +293,37 @@ const containerStyle: React.CSSProperties = {
 };
 
 const canvasStyle: React.CSSProperties = {
+  minHeight: 320,
   position: 'relative'
 };
 
 const edgeLayerStyle: React.CSSProperties = {
   inset: 0,
-  pointerEvents: 'none',
+  pointerEvents: 'auto',
   position: 'absolute'
+};
+
+const toolbarStyle: React.CSSProperties = {
+  alignItems: 'center',
+  display: 'flex',
+  gap: 8,
+  justifyContent: 'flex-end',
+  padding: 10,
+  position: 'sticky',
+  top: 0,
+  zIndex: 5
+};
+
+const toolbarButtonStyle: React.CSSProperties = {
+  background: '#fff',
+  border: '1px solid #d8e0ec',
+  borderRadius: 6,
+  color: '#344054',
+  cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 700,
+  height: 30,
+  padding: '0 10px'
 };
 
 const nodeStyle: React.CSSProperties = {

@@ -24,7 +24,7 @@ const workflowApiMock = vi.hoisted(() => ({
           { id: 'start', type: 'START', name: '开始', config: {} },
           { id: 'end', type: 'END', name: '结束', config: {} }
         ],
-        edges: [],
+        edges: [{ id: 'edge_start_end', sourceNodeId: 'start', targetNodeId: 'end', condition: null }],
         variables: []
       }
     }
@@ -124,6 +124,22 @@ describe('WorkflowDesignerPage', () => {
         ])
       })
     );
+  });
+
+  it('blocks saving invalid graph definitions before sending them to the backend', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByLabelText('选择连线 edge_start_end'));
+    await userEvent.click(screen.getByRole('button', { name: '删除连线' }));
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+
+    expect((await screen.findAllByText('流程结构校验未通过')).length).toBeGreaterThan(0);
+    expect(workflowApiMock.updateWorkflowDraft).not.toHaveBeenCalled();
   });
 
   it('creates a workflow from the new designer and navigates to its designer route', async () => {
