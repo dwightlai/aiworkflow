@@ -19,8 +19,7 @@ import com.aiworkflow.workflow.service.InMemoryWorkflowStore;
 import com.aiworkflow.workflow.service.JdbcWorkflowStore;
 import com.aiworkflow.workflow.service.WorkflowStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,74 +27,40 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Configuration
 public class StoreConfig {
     @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    public WorkflowStore jdbcWorkflowStore(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-        return new JdbcWorkflowStore(jdbcTemplate, objectMapper);
+    public WorkflowStore workflowStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider, ObjectMapper objectMapper) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null ? new InMemoryWorkflowStore() : new JdbcWorkflowStore(jdbcTemplate, objectMapper);
     }
 
     @Bean
-    @ConditionalOnMissingBean(WorkflowStore.class)
-    public WorkflowStore inMemoryWorkflowStore() {
-        return new InMemoryWorkflowStore();
+    public WorkflowExecutionStore workflowExecutionStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider, ObjectMapper objectMapper) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null
+                ? new InMemoryWorkflowExecutionStore()
+                : new JdbcWorkflowExecutionStore(jdbcTemplate, objectMapper);
     }
 
     @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    public WorkflowExecutionStore jdbcWorkflowExecutionStore(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-        return new JdbcWorkflowExecutionStore(jdbcTemplate, objectMapper);
+    public KnowledgeStore knowledgeStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null ? new InMemoryKnowledgeStore() : new JdbcKnowledgeStore(jdbcTemplate);
     }
 
     @Bean
-    @ConditionalOnMissingBean(WorkflowExecutionStore.class)
-    public WorkflowExecutionStore inMemoryWorkflowExecutionStore() {
-        return new InMemoryWorkflowExecutionStore();
+    public VectorStoreConfigStore vectorStoreConfigStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null ? new InMemoryVectorStoreConfigStore() : new JdbcVectorStoreConfigStore(jdbcTemplate);
     }
 
     @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    public KnowledgeStore jdbcKnowledgeStore(JdbcTemplate jdbcTemplate) {
-        return new JdbcKnowledgeStore(jdbcTemplate);
+    public ModelProviderStore modelProviderStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null ? new InMemoryModelProviderStore() : new JdbcModelProviderStore(jdbcTemplate);
     }
 
     @Bean
-    @ConditionalOnMissingBean(KnowledgeStore.class)
-    public KnowledgeStore inMemoryKnowledgeStore() {
-        return new InMemoryKnowledgeStore();
-    }
-
-    @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    public VectorStoreConfigStore jdbcVectorStoreConfigStore(JdbcTemplate jdbcTemplate) {
-        return new JdbcVectorStoreConfigStore(jdbcTemplate);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(VectorStoreConfigStore.class)
-    public VectorStoreConfigStore inMemoryVectorStoreConfigStore() {
-        return new InMemoryVectorStoreConfigStore();
-    }
-
-    @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    public ModelProviderStore jdbcModelProviderStore(JdbcTemplate jdbcTemplate) {
-        return new JdbcModelProviderStore(jdbcTemplate);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(ModelProviderStore.class)
-    public ModelProviderStore inMemoryModelProviderStore() {
-        return new InMemoryModelProviderStore();
-    }
-
-    @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    public PromptTemplateStore jdbcPromptTemplateStore(JdbcTemplate jdbcTemplate) {
-        return new JdbcPromptTemplateStore(jdbcTemplate);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(PromptTemplateStore.class)
-    public PromptTemplateStore inMemoryPromptTemplateStore() {
-        return new InMemoryPromptTemplateStore();
+    public PromptTemplateStore promptTemplateStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null ? new InMemoryPromptTemplateStore() : new JdbcPromptTemplateStore(jdbcTemplate);
     }
 }
