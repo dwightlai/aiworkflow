@@ -1,17 +1,25 @@
 package com.aiworkflow.prompt.service;
 
 import com.aiworkflow.prompt.domain.PromptTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class PromptTemplateService {
-    private final List<PromptTemplate> templates = new CopyOnWriteArrayList<>();
+    private final PromptTemplateStore store;
+
+    public PromptTemplateService() {
+        this(new InMemoryPromptTemplateStore());
+    }
+
+    @Autowired
+    public PromptTemplateService(PromptTemplateStore store) {
+        this.store = store;
+    }
 
     public PromptTemplate create(String name, String template, String description) {
         Instant now = Instant.now();
@@ -23,34 +31,27 @@ public class PromptTemplateService {
                 now,
                 now
         );
-        templates.add(promptTemplate);
-        return promptTemplate;
+        return store.save(promptTemplate);
     }
 
     public PromptTemplate update(String id, String name, String template, String description) {
-        for (int index = 0; index < templates.size(); index += 1) {
-            PromptTemplate current = templates.get(index);
-            if (current.id().equals(id)) {
-                PromptTemplate updated = new PromptTemplate(
-                        current.id(),
-                        name,
-                        template,
-                        description,
-                        current.createdAt(),
-                        Instant.now()
-                );
-                templates.set(index, updated);
-                return updated;
-            }
-        }
-        throw new IllegalArgumentException("Prompt template not found: " + id);
+        PromptTemplate current = store.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Prompt template not found: " + id));
+        return store.save(new PromptTemplate(
+                current.id(),
+                name,
+                template,
+                description,
+                current.createdAt(),
+                Instant.now()
+        ));
     }
 
     public List<PromptTemplate> list() {
-        return new ArrayList<>(templates);
+        return store.list();
     }
 
     public void delete(String id) {
-        templates.removeIf(template -> template.id().equals(id));
+        store.delete(id);
     }
 }

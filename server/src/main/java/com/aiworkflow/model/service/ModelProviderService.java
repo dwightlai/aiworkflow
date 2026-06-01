@@ -1,18 +1,26 @@
 package com.aiworkflow.model.service;
 
 import com.aiworkflow.model.domain.ModelProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class ModelProviderService {
-    private final List<ModelProvider> providers = new CopyOnWriteArrayList<>();
+    private final ModelProviderStore store;
+
+    public ModelProviderService() {
+        this(new InMemoryModelProviderStore());
+    }
+
+    @Autowired
+    public ModelProviderService(ModelProviderStore store) {
+        this.store = store;
+    }
 
     public ModelProvider create(
             String name,
@@ -40,8 +48,7 @@ public class ModelProviderService {
                 now,
                 now
         );
-        providers.add(provider);
-        return provider;
+        return store.save(provider);
     }
 
     public ModelProvider update(
@@ -56,42 +63,33 @@ public class ModelProviderService {
             String apiKeyRef,
             boolean enabled
     ) {
-        for (int index = 0; index < providers.size(); index += 1) {
-            ModelProvider current = providers.get(index);
-            if (current.id().equals(id)) {
-                ModelProvider updated = new ModelProvider(
-                        current.id(),
-                        name,
-                        modelType,
-                        description,
-                        visionSupport,
-                        pricePerMillionTokens,
-                        baseUrl,
-                        model,
-                        apiKeyRef,
-                        enabled,
-                        current.createdAt(),
-                        Instant.now()
-                );
-                providers.set(index, updated);
-                return updated;
-            }
-        }
-        throw new IllegalArgumentException("Model provider not found: " + id);
+        ModelProvider current = get(id);
+        return store.save(new ModelProvider(
+                current.id(),
+                name,
+                modelType,
+                description,
+                visionSupport,
+                pricePerMillionTokens,
+                baseUrl,
+                model,
+                apiKeyRef,
+                enabled,
+                current.createdAt(),
+                Instant.now()
+        ));
     }
 
     public List<ModelProvider> list() {
-        return new ArrayList<>(providers);
+        return store.list();
     }
 
     public ModelProvider get(String id) {
-        return providers.stream()
-                .filter(provider -> provider.id().equals(id))
-                .findFirst()
+        return store.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Model provider not found: " + id));
     }
 
     public void delete(String id) {
-        providers.removeIf(provider -> provider.id().equals(id));
+        store.delete(id);
     }
 }

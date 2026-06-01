@@ -6,6 +6,12 @@ import com.aiworkflow.knowledge.service.JdbcKnowledgeStore;
 import com.aiworkflow.knowledge.service.JdbcVectorStoreConfigStore;
 import com.aiworkflow.knowledge.service.KnowledgeStore;
 import com.aiworkflow.knowledge.service.VectorStoreConfigStore;
+import com.aiworkflow.model.service.InMemoryModelProviderStore;
+import com.aiworkflow.model.service.JdbcModelProviderStore;
+import com.aiworkflow.model.service.ModelProviderStore;
+import com.aiworkflow.prompt.service.InMemoryPromptTemplateStore;
+import com.aiworkflow.prompt.service.JdbcPromptTemplateStore;
+import com.aiworkflow.prompt.service.PromptTemplateStore;
 import com.aiworkflow.workflow.engine.InMemoryWorkflowExecutionStore;
 import com.aiworkflow.workflow.engine.JdbcWorkflowExecutionStore;
 import com.aiworkflow.workflow.engine.WorkflowExecutionStore;
@@ -67,5 +73,29 @@ public class StoreConfig {
     @ConditionalOnMissingBean(VectorStoreConfigStore.class)
     public VectorStoreConfigStore inMemoryVectorStoreConfigStore() {
         return new InMemoryVectorStoreConfigStore();
+    }
+
+    @Bean
+    @ConditionalOnBean(JdbcTemplate.class)
+    public ModelProviderStore jdbcModelProviderStore(JdbcTemplate jdbcTemplate) {
+        return new JdbcModelProviderStore(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ModelProviderStore.class)
+    public ModelProviderStore inMemoryModelProviderStore() {
+        return new InMemoryModelProviderStore();
+    }
+
+    @Bean
+    @ConditionalOnBean(JdbcTemplate.class)
+    public PromptTemplateStore jdbcPromptTemplateStore(JdbcTemplate jdbcTemplate) {
+        return new JdbcPromptTemplateStore(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(PromptTemplateStore.class)
+    public PromptTemplateStore inMemoryPromptTemplateStore() {
+        return new InMemoryPromptTemplateStore();
     }
 }
