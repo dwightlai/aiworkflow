@@ -65,6 +65,7 @@ describe('NodeConfigPanel', () => {
             id: 'model_provider_1',
             name: 'OpenAI Compatible',
             modelType: 'OpenAI',
+            modelUsage: 'CHAT',
             description: null,
             visionSupport: false,
             pricePerMillionTokens: null,

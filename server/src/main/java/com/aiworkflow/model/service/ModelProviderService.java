@@ -25,6 +25,7 @@ public class ModelProviderService {
     public ModelProvider create(
             String name,
             String modelType,
+            String modelUsage,
             String description,
             boolean visionSupport,
             BigDecimal pricePerMillionTokens,
@@ -38,6 +39,7 @@ public class ModelProviderService {
                 "model_provider_" + UUID.randomUUID(),
                 name,
                 modelType,
+                normalizeUsage(modelUsage),
                 description,
                 visionSupport,
                 pricePerMillionTokens,
@@ -55,6 +57,7 @@ public class ModelProviderService {
             String id,
             String name,
             String modelType,
+            String modelUsage,
             String description,
             boolean visionSupport,
             BigDecimal pricePerMillionTokens,
@@ -68,6 +71,7 @@ public class ModelProviderService {
                 current.id(),
                 name,
                 modelType,
+                normalizeUsage(modelUsage),
                 description,
                 visionSupport,
                 pricePerMillionTokens,
@@ -91,5 +95,9 @@ public class ModelProviderService {
 
     public void delete(String id) {
         store.delete(id);
+    }
+
+    private String normalizeUsage(String modelUsage) {
+        return modelUsage == null || modelUsage.isBlank() ? "CHAT" : modelUsage.trim().toUpperCase();
     }
 }

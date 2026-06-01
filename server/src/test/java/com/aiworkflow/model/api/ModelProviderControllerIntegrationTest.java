@@ -29,18 +29,20 @@ class ModelProviderControllerIntegrationTest {
         mockMvc.perform(post("/api/model-providers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"OpenAI Compatible","modelType":"OpenAI","description":"通用模型","visionSupport":true,"pricePerMillionTokens":12.5,"baseUrl":"https://api.example.com/v1","model":"gpt-4.1-mini","apiKeyRef":"dev-key","enabled":true}
+                                {"name":"OpenAI Compatible","modelType":"OpenAI","modelUsage":"CHAT","description":"通用模型","visionSupport":true,"pricePerMillionTokens":12.5,"baseUrl":"https://api.example.com/v1","model":"gpt-4.1-mini","apiKeyRef":"dev-key","enabled":true}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.name").value("OpenAI Compatible"))
                 .andExpect(jsonPath("$.data.modelType").value("OpenAI"))
+                .andExpect(jsonPath("$.data.modelUsage").value("CHAT"))
                 .andExpect(jsonPath("$.data.model").value("gpt-4.1-mini"));
 
         mockMvc.perform(get("/api/model-providers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.items[0].baseUrl").value("https://api.example.com/v1"))
+                .andExpect(jsonPath("$.data.items[0].modelUsage").value("CHAT"))
                 .andExpect(jsonPath("$.data.items[0].visionSupport").value(true))
                 .andExpect(jsonPath("$.data.items[0].model").value("gpt-4.1-mini"));
     }
@@ -50,7 +52,7 @@ class ModelProviderControllerIntegrationTest {
         String response = mockMvc.perform(post("/api/model-providers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Delete Me","modelType":"OpenAI","description":null,"visionSupport":false,"pricePerMillionTokens":1,"baseUrl":"https://api.example.com/v1","model":"text-embedding-3-small","apiKeyRef":"dev-key","enabled":true}
+                                {"name":"Delete Me","modelType":"OpenAI","modelUsage":"EMBEDDING","description":null,"visionSupport":false,"pricePerMillionTokens":1,"baseUrl":"https://api.example.com/v1","model":"text-embedding-3-small","apiKeyRef":"dev-key","enabled":true}
                                 """))
                 .andExpect(status().isOk())
                 .andReturn()

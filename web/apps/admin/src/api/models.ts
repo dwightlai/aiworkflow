@@ -13,6 +13,7 @@ export interface ModelProvider {
   id: string;
   name: string;
   modelType: string;
+  modelUsage: string;
   description: string | null;
   visionSupport: boolean;
   pricePerMillionTokens: number | null;
@@ -27,6 +28,7 @@ export interface ModelProvider {
 export interface CreateModelProviderRequest {
   name: string;
   modelType: string;
+  modelUsage: string;
   description: string | null;
   visionSupport: boolean;
   pricePerMillionTokens: number | null;

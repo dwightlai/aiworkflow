@@ -26,6 +26,7 @@ class JdbcModelAndPromptPersistenceTest {
                 .setType(EmbeddedDatabaseType.H2)
                 .addScript("db/migration/V2__ai_studio_schema.sql")
                 .addScript("db/migration/V4__model_provider_columns.sql")
+                .addScript("db/migration/V5__model_provider_usage.sql")
                 .build();
         jdbcTemplate = new JdbcTemplate(database);
     }
@@ -41,6 +42,7 @@ class JdbcModelAndPromptPersistenceTest {
         ModelProvider provider = service.create(
                 "DeepSeek",
                 "DeepSeek",
+                "CHAT",
                 "国产大模型",
                 false,
                 new BigDecimal("2.5"),
@@ -56,6 +58,7 @@ class JdbcModelAndPromptPersistenceTest {
                 .extracting(ModelProvider::id)
                 .containsExactly(provider.id());
         assertThat(restoredService.get(provider.id()).model()).isEqualTo("deepseek-chat");
+        assertThat(restoredService.get(provider.id()).modelUsage()).isEqualTo("CHAT");
         assertThat(restoredService.get(provider.id()).pricePerMillionTokens()).isEqualByComparingTo("2.5");
     }
 

@@ -38,6 +38,7 @@ class AiNodeExecutorTest {
         String providerId = modelProviderService.create(
                 "DeepSeek",
                 "DeepSeek",
+                "CHAT",
                 null,
                 false,
                 BigDecimal.ONE,
@@ -76,6 +77,7 @@ class AiNodeExecutorTest {
         String providerId = modelProviderService.create(
                 "Disabled",
                 "OpenAI",
+                "CHAT",
                 null,
                 false,
                 BigDecimal.ONE,

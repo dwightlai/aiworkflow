@@ -37,6 +37,7 @@ public class ModelProviderController {
         return ApiResponse.success(modelProviderService.create(
                 request.name(),
                 request.modelType(),
+                request.modelUsage(),
                 request.description(),
                 request.visionSupport(),
                 request.pricePerMillionTokens(),
@@ -56,6 +57,7 @@ public class ModelProviderController {
                 id,
                 request.name(),
                 request.modelType(),
+                request.modelUsage(),
                 request.description(),
                 request.visionSupport(),
                 request.pricePerMillionTokens(),
@@ -75,6 +77,7 @@ public class ModelProviderController {
     public record SaveModelProviderRequest(
             @NotBlank String name,
             @NotBlank String modelType,
+            String modelUsage,
             String description,
             boolean visionSupport,
             BigDecimal pricePerMillionTokens,

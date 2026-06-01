@@ -1,5 +1,4 @@
 import {
-  ApiOutlined,
   CheckCircleOutlined,
   CloseOutlined,
   CloudServerOutlined,
@@ -10,7 +9,8 @@ import {
   FullscreenOutlined,
   PlusOutlined,
   RobotOutlined,
-  SafetyCertificateOutlined
+  SafetyCertificateOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -49,6 +49,7 @@ type ModelFormValues = CreateModelProviderRequest;
 const initialValues: ModelFormValues = {
   name: 'deepseek-chat',
   modelType: 'DeepSeek',
+  modelUsage: 'CHAT',
   description: null,
   visionSupport: false,
   pricePerMillionTokens: null,
@@ -72,6 +73,13 @@ const modelTypes = [
   { value: 'Custom', label: '自定义', mark: '自', color: '#0ea5e9' }
 ];
 
+const modelUsages = [
+  { value: 'CHAT', label: '对话', color: 'blue', description: '工作流 LLM 节点调用' },
+  { value: 'EMBEDDING', label: '嵌入', color: 'purple', description: '知识库向量化检索' },
+  { value: 'RERANK', label: '重排', color: 'gold', description: '检索结果二次排序' },
+  { value: 'MULTIMODAL', label: '多模态', color: 'cyan', description: '图文理解或视觉任务' }
+];
+
 export function ModelProvidersPage() {
   const [form] = Form.useForm<ModelFormValues>();
   const queryClient = useQueryClient();
@@ -86,6 +94,7 @@ export function ModelProvidersPage() {
   const providers = providersQuery.data?.items ?? [];
   const enabledCount = providers.filter((provider) => provider.enabled).length;
   const visionCount = providers.filter((provider) => provider.visionSupport).length;
+  const embeddingCount = providers.filter((provider) => provider.modelUsage === 'EMBEDDING').length;
 
   const saveMutation = useMutation({
     mutationFn: (values: ModelFormValues) => {
@@ -122,6 +131,7 @@ export function ModelProvidersPage() {
     form.setFieldsValue({
       name: provider.name,
       modelType: provider.modelType,
+      modelUsage: provider.modelUsage ?? 'CHAT',
       description: provider.description,
       visionSupport: provider.visionSupport,
       pricePerMillionTokens: provider.pricePerMillionTokens,
@@ -152,6 +162,12 @@ export function ModelProvidersPage() {
       dataIndex: 'modelType',
       width: 140,
       render: (value: string) => <ProviderTypeLabel value={value} />
+    },
+    {
+      title: '用途',
+      dataIndex: 'modelUsage',
+      width: 110,
+      render: (value: string) => <UsageTag value={value} />
     },
     {
       title: '能力',
@@ -209,7 +225,7 @@ export function ModelProvidersPage() {
       <div style={headerStyle}>
         <Space direction="vertical" size={4}>
           <Typography.Title level={3} style={{ margin: 0 }}>大模型配置</Typography.Title>
-          <Typography.Text type="secondary">统一维护可被工作流 LLM 节点调用的模型类型、地址、密钥与价格。</Typography.Text>
+          <Typography.Text type="secondary">统一维护工作流 LLM 节点、知识库嵌入检索可调用的模型、地址、密钥与价格。</Typography.Text>
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>新增模型</Button>
       </div>
@@ -222,10 +238,10 @@ export function ModelProvidersPage() {
           <Statistic title="启用中" value={enabledCount} prefix={<CheckCircleOutlined />} />
         </Card>
         <Card variant="borderless" style={metricCardStyle}>
-          <Statistic title="视觉模型" value={visionCount} prefix={<EyeOutlined />} />
+          <Statistic title="嵌入模型" value={embeddingCount} prefix={<SearchOutlined />} />
         </Card>
         <Card variant="borderless" style={metricCardStyle}>
-          <Statistic title="工作流调用方式" value="LLM 节点选择" prefix={<ApiOutlined />} valueStyle={{ fontSize: 18 }} />
+          <Statistic title="视觉模型" value={visionCount} prefix={<EyeOutlined />} />
         </Card>
       </div>
 
@@ -292,6 +308,20 @@ export function ModelProvidersPage() {
                 }))}
               />
             </Form.Item>
+            <Form.Item name="modelUsage" label="模型用途" rules={[{ required: true, message: '请选择模型用途' }]}>
+              <Select
+                aria-label="模型用途"
+                options={modelUsages.map((item) => ({
+                  value: item.value,
+                  label: (
+                    <Space size={8}>
+                      <Tag color={item.color} style={{ marginInlineEnd: 0 }}>{item.label}</Tag>
+                      <Typography.Text type="secondary">{item.description}</Typography.Text>
+                    </Space>
+                  )
+                }))}
+              />
+            </Form.Item>
             <Form.Item name="description" label="模型描述">
               <Input placeholder="请输入 模型描述" />
             </Form.Item>
@@ -323,9 +353,15 @@ export function ModelProvidersPage() {
 function normalizeValues(values: ModelFormValues): ModelFormValues {
   return {
     ...values,
+    modelUsage: values.modelUsage || 'CHAT',
     description: values.description || null,
     pricePerMillionTokens: values.pricePerMillionTokens ?? null
   };
+}
+
+function UsageTag({ value }: { value: string }) {
+  const option = modelUsages.find((item) => item.value === value) ?? modelUsages[0];
+  return <Tag color={option.color}>{option.label}</Tag>;
 }
 
 function ProviderTypeLabel({ value }: { value: string }) {

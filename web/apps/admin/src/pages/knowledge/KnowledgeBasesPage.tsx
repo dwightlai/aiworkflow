@@ -319,7 +319,7 @@ export function KnowledgeBasesPage() {
     label: `${store.name} · ${store.storeType}`
   }));
   const embeddingModelOptions = modelProviders
-    .filter((provider) => provider.enabled)
+    .filter((provider) => provider.enabled && provider.modelUsage === 'EMBEDDING')
     .map((provider) => ({
       value: provider.id,
       label: `${provider.name} / ${provider.model}`

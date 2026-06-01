@@ -7,6 +7,7 @@ public record ModelProvider(
         String id,
         String name,
         String modelType,
+        String modelUsage,
         String description,
         boolean visionSupport,
         BigDecimal pricePerMillionTokens,

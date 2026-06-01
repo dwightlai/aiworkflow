@@ -25,7 +25,7 @@ public class JdbcModelProviderStore implements ModelProviderStore {
         if (exists(provider.id())) {
             jdbcTemplate.update("""
                             UPDATE model_provider
-                            SET tenant_id = ?, name = ?, model_type = ?, description = ?, vision_support = ?,
+                            SET tenant_id = ?, name = ?, model_type = ?, model_usage = ?, description = ?, vision_support = ?,
                                 price_per_million_tokens = ?, base_url = ?, model = ?, api_key_ref = ?,
                                 enabled = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
@@ -33,6 +33,7 @@ public class JdbcModelProviderStore implements ModelProviderStore {
                     DEFAULT_TENANT_ID,
                     provider.name(),
                     provider.modelType(),
+                    provider.modelUsage(),
                     provider.description(),
                     provider.visionSupport(),
                     provider.pricePerMillionTokens(),
@@ -47,14 +48,15 @@ public class JdbcModelProviderStore implements ModelProviderStore {
         } else {
             jdbcTemplate.update("""
                             INSERT INTO model_provider
-                                (id, tenant_id, name, model_type, description, vision_support, price_per_million_tokens,
+                                (id, tenant_id, name, model_type, model_usage, description, vision_support, price_per_million_tokens,
                                  base_url, model, api_key_ref, enabled, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                     provider.id(),
                     DEFAULT_TENANT_ID,
                     provider.name(),
                     provider.modelType(),
+                    provider.modelUsage(),
                     provider.description(),
                     provider.visionSupport(),
                     provider.pricePerMillionTokens(),
@@ -96,6 +98,7 @@ public class JdbcModelProviderStore implements ModelProviderStore {
                 rs.getString("id"),
                 rs.getString("name"),
                 rs.getString("model_type"),
+                rs.getString("model_usage"),
                 rs.getString("description"),
                 rs.getBoolean("vision_support"),
                 rs.getBigDecimal("price_per_million_tokens"),

@@ -163,12 +163,26 @@ const modelApiMock = vi.hoisted(() => ({
         id: 'model_embed',
         name: 'Embedding Provider',
         modelType: 'OpenAI',
+        modelUsage: 'EMBEDDING',
         description: 'Embedding model',
         visionSupport: false,
         pricePerMillionTokens: 1,
         baseUrl: 'https://api.example.com/v1',
         model: 'text-embedding-3-small',
         apiKeyRef: 'embedding-key',
+        enabled: true
+      },
+      {
+        id: 'model_chat',
+        name: 'Chat Provider',
+        modelType: 'OpenAI',
+        modelUsage: 'CHAT',
+        description: 'Chat model',
+        visionSupport: false,
+        pricePerMillionTokens: 1,
+        baseUrl: 'https://api.example.com/v1',
+        model: 'gpt-4.1-mini',
+        apiKeyRef: 'chat-key',
         enabled: true
       }
     ],
@@ -215,6 +229,7 @@ describe('KnowledgeBasesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /新增知识库/ }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: '选择嵌入模型' }));
     await userEvent.click(await screen.findByText('Embedding Provider / text-embedding-3-small'));
+    expect(screen.queryByText('Chat Provider / gpt-4.1-mini')).not.toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText('知识库名称'), { target: { value: '检索知识库' } });
     await userEvent.click(screen.getByRole('button', { name: /保存/ }));
 

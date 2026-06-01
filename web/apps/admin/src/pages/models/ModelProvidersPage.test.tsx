@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvidersPage } from './ModelProvidersPage';
@@ -13,6 +13,7 @@ const modelApiMock = vi.hoisted(() => ({
         id: 'model_provider_1',
         name: 'OpenAI Compatible',
         modelType: 'OpenAI',
+        modelUsage: 'CHAT',
         description: '通用模型',
         visionSupport: true,
         pricePerMillionTokens: 12.5,
@@ -28,6 +29,7 @@ const modelApiMock = vi.hoisted(() => ({
     id: 'model_provider_2',
     name: 'DeepSeek',
     modelType: 'DeepSeek',
+    modelUsage: 'CHAT',
     description: null,
     visionSupport: false,
     pricePerMillionTokens: 1,
@@ -40,6 +42,7 @@ const modelApiMock = vi.hoisted(() => ({
     id: 'model_provider_1',
     name: 'OpenAI Compatible',
     modelType: 'OpenAI',
+    modelUsage: 'CHAT',
     description: '通用模型更新',
     visionSupport: true,
     pricePerMillionTokens: 13,
@@ -79,8 +82,9 @@ describe('ModelProvidersPage', () => {
     expect(await screen.findByText('OpenAI Compatible')).toBeInTheDocument();
     expect(screen.getByText('gpt-4.1-mini')).toBeInTheDocument();
     expect(screen.getByText('视觉')).toBeInTheDocument();
+    expect(screen.getByText('对话')).toBeInTheDocument();
     expect(screen.getByText('工作流可调用')).toBeInTheDocument();
-    expect(screen.getByText('LLM 节点选择')).toBeInTheDocument();
+    expect(screen.getByText('嵌入模型')).toBeInTheDocument();
   });
 
   it('creates a model provider from the drawer form', async () => {
@@ -101,6 +105,7 @@ describe('ModelProvidersPage', () => {
       expect(firstCall?.[0]).toEqual({
         name: 'DeepSeek',
         modelType: 'DeepSeek',
+        modelUsage: 'CHAT',
         description: null,
         visionSupport: false,
         pricePerMillionTokens: null,
@@ -125,9 +130,34 @@ describe('ModelProvidersPage', () => {
         'model_provider_1',
         expect.objectContaining({
           description: '通用模型更新',
-          modelType: 'OpenAI'
+          modelType: 'OpenAI',
+          modelUsage: 'CHAT'
         })
       );
+    });
+  }, 10000);
+
+  it('creates an embedding model provider that can be used by knowledge bases', async () => {
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /新增模型/ }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '模型用途' }));
+    await userEvent.click(await screen.findByText('嵌入'));
+    await userEvent.clear(screen.getByLabelText('模型名称'));
+    await userEvent.type(screen.getByLabelText('模型名称'), 'OpenAI Embedding');
+    await userEvent.clear(screen.getByLabelText('调用模型'));
+    await userEvent.type(screen.getByLabelText('调用模型'), 'text-embedding-3-small');
+    await userEvent.clear(screen.getByLabelText('Base URL'));
+    await userEvent.type(screen.getByLabelText('Base URL'), 'https://api.openai.com/v1');
+    await userEvent.type(screen.getByLabelText('API Key'), 'embedding-key');
+    await userEvent.click(screen.getByRole('button', { name: /保存/ }));
+
+    await waitFor(() => {
+      expect(modelApiMock.createModelProvider).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'OpenAI Embedding',
+        modelUsage: 'EMBEDDING',
+        model: 'text-embedding-3-small'
+      }));
     });
   }, 10000);
 
