@@ -13,10 +13,10 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Empty, Input, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
+import { Alert, Button, Card, Drawer, Empty, Input, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { archiveWorkflow, listWorkflows, type Workflow } from '../../api/workflows';
+import { archiveWorkflow, listWorkflows, runWorkflow, type Workflow } from '../../api/workflows';
 
 const demoDescription = '配置节点、Prompt、模型和工具调用，编排可运行的 AI 自动化流程。';
 const statusOptions = [
@@ -34,6 +34,9 @@ const templates = [
 export function WorkflowCardsPage() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [runningWorkflow, setRunningWorkflow] = useState<Workflow | null>(null);
+  const [runInput, setRunInput] = useState('{\n  "input": "请在这里填写运行参数"\n}');
+  const [runInputError, setRunInputError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const workflowQuery = useQuery({
     queryKey: ['workflows'],
@@ -44,6 +47,18 @@ export function WorkflowCardsPage() {
     onSuccess: async () => {
       message.success('工作流已归档');
       await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+    }
+  });
+  const runMutation = useMutation({
+    mutationFn: (payload: { workflow: Workflow; input: Record<string, unknown> }) => runWorkflow(payload.workflow.id, payload.input),
+    onSuccess: (execution) => {
+      message.success('工作流运行已完成');
+      setRunningWorkflow(null);
+      setRunInputError(null);
+      navigateTo(`/workflow-runs/${execution.id}`);
+    },
+    onError: (error) => {
+      setRunInputError((error as Error).message);
     }
   });
 
@@ -141,6 +156,7 @@ export function WorkflowCardsPage() {
                 workflow={workflow}
                 archivePending={archiveMutation.isPending}
                 onArchive={() => archiveMutation.mutate(workflow)}
+                onRun={() => openRunDrawer(workflow)}
               />
             )) : null}
           </div>
@@ -166,8 +182,67 @@ export function WorkflowCardsPage() {
           </div>
         </aside>
       </section>
+
+      <Drawer
+        title={runningWorkflow ? `运行工作流 - ${runningWorkflow.name}` : '运行工作流'}
+        open={Boolean(runningWorkflow)}
+        width={560}
+        onClose={() => {
+          setRunningWorkflow(null);
+          setRunInputError(null);
+        }}
+        footer={(
+          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setRunningWorkflow(null)}>取消</Button>
+            <Button type="primary" icon={<PlayCircleOutlined />} loading={runMutation.isPending} onClick={submitRun}>
+              开始运行
+            </Button>
+          </Space>
+        )}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="运行参数"
+            description="请输入 JSON 对象。系统会把它作为工作流本次运行的 input 传入开始节点。"
+          />
+          {runningWorkflow?.status !== 'PUBLISHED' ? (
+            <Alert type="warning" showIcon message="当前工作流尚未发布，后端可能拒绝运行。" />
+          ) : null}
+          {runInputError ? <Alert type="error" showIcon message={runInputError} /> : null}
+          <Input.TextArea
+            aria-label="运行输入 JSON"
+            value={runInput}
+            onChange={(event) => {
+              setRunInput(event.target.value);
+              setRunInputError(null);
+            }}
+            autoSize={{ minRows: 10, maxRows: 18 }}
+            style={{ fontFamily: 'Consolas, monospace' }}
+          />
+        </Space>
+      </Drawer>
     </div>
   );
+
+  function openRunDrawer(workflow: Workflow) {
+    setRunningWorkflow(workflow);
+    setRunInput('{\n  "input": "请在这里填写运行参数"\n}');
+    setRunInputError(null);
+  }
+
+  function submitRun() {
+    if (!runningWorkflow) {
+      return;
+    }
+    const parsed = parseRunInput(runInput);
+    if (!parsed.ok) {
+      setRunInputError(parsed.message);
+      return;
+    }
+    runMutation.mutate({ workflow: runningWorkflow, input: parsed.value });
+  }
 }
 
 function SummaryCard({ title, value, detail, icon }: { title: string; value: string; detail: string; icon: React.ReactNode }) {
@@ -188,11 +263,13 @@ function SummaryCard({ title, value, detail, icon }: { title: string; value: str
 function WorkflowCard({
   workflow,
   archivePending,
-  onArchive
+  onArchive,
+  onRun
 }: {
   workflow: Workflow;
   archivePending: boolean;
   onArchive: () => void;
+  onRun: () => void;
 }) {
   return (
     <Card
@@ -223,7 +300,7 @@ function WorkflowCard({
 
       <div style={cardActionsStyle}>
         <ActionButton icon={<SettingOutlined />} label="设置" />
-        <ActionButton icon={<PlayCircleOutlined />} label="运行" />
+        <ActionButton icon={<PlayCircleOutlined />} label="运行" onClick={onRun} />
         <ActionButton icon={<EditOutlined />} label="编辑" onClick={() => navigateTo(`/workflows/${workflow.id}/designer`)} />
         {workflow.status === 'ARCHIVED' ? (
           <ActionButton icon={<MoreOutlined />} label="更多" />
@@ -233,6 +310,18 @@ function WorkflowCard({
       </div>
     </Card>
   );
+}
+
+function parseRunInput(value: string): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      return { ok: false, message: '运行输入必须是 JSON 对象。' };
+    }
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false, message: '运行输入不是合法 JSON，请检查引号、逗号和括号。' };
+  }
 }
 
 function ActionButton({

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowCardsPage } from './WorkflowCardsPage';
@@ -14,6 +14,18 @@ const workflowApiMock = vi.hoisted(() => ({
     status: 'ARCHIVED',
     latestVersion: { version: 3 },
     updatedAt: '2026-05-28T10:20:00Z'
+  })),
+  runWorkflow: vi.fn(async () => ({
+    id: 'run-1',
+    workflowId: 'workflow-1',
+    workflowVersionId: 'version-1',
+    status: 'SUCCEEDED',
+    input: { question: '发票怎么申请' },
+    output: { result: '发票可以在订单完成后七日内申请。' },
+    errorMessage: null,
+    startedAt: '2026-05-28T10:21:00Z',
+    finishedAt: '2026-05-28T10:21:01Z',
+    nodeExecutions: []
   })),
   listWorkflows: vi.fn(async () => ({
     items: [
@@ -70,9 +82,25 @@ describe('WorkflowCardsPage', () => {
       expect(workflowApiMock.archiveWorkflow).toHaveBeenCalledWith('workflow-1');
     });
   });
+
+  it('runs a published workflow with JSON input and navigates to run detail', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /运行/ }));
+    const inputEditor = await screen.findByLabelText('运行输入 JSON');
+    await userEvent.clear(inputEditor);
+    fireEvent.change(inputEditor, { target: { value: '{"question":"发票怎么申请"}' } });
+    await userEvent.click(screen.getByRole('button', { name: /开始运行/ }));
+
+    await waitFor(() => {
+      expect(workflowApiMock.runWorkflow).toHaveBeenCalledWith('workflow-1', { question: '发票怎么申请' });
+    });
+    expect(window.location.pathname).toBe('/workflow-runs/run-1');
+  });
 });
 
 function renderPage() {
+  window.history.pushState(null, '', '/workflows');
   render(
     <QueryClientProvider client={new QueryClient()}>
       <WorkflowCardsPage />
