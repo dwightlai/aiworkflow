@@ -26,6 +26,58 @@ class DagValidatorTest {
     }
 
     @Test
+    void acceptsIncompleteDraftWithValidReferences() {
+        WorkflowDefinition definition = new WorkflowDefinition(
+                List.of(
+                        node("start", WorkflowNodeType.START),
+                        node("transform", WorkflowNodeType.TEXT_TRANSFORM)
+                ),
+                List.of(edge("edge-1", "start", "transform")),
+                List.of()
+        );
+
+        assertThatCode(() -> validator.validateDraft(definition))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsDraftEdgeWithMissingTargetNode() {
+        WorkflowDefinition definition = new WorkflowDefinition(
+                List.of(
+                        node("start", WorkflowNodeType.START),
+                        node("transform", WorkflowNodeType.TEXT_TRANSFORM)
+                ),
+                List.of(edge("edge-1", "start", "missing")),
+                List.of()
+        );
+
+        assertThatThrownBy(() -> validator.validateDraft(definition))
+                .isInstanceOf(DagValidationException.class)
+                .hasMessage("Workflow edge references missing node.");
+    }
+
+    @Test
+    void rejectsDraftWithCycle() {
+        WorkflowDefinition definition = new WorkflowDefinition(
+                List.of(
+                        node("start", WorkflowNodeType.START),
+                        node("transform-a", WorkflowNodeType.TEXT_TRANSFORM),
+                        node("transform-b", WorkflowNodeType.TEXT_TRANSFORM)
+                ),
+                List.of(
+                        edge("edge-1", "start", "transform-a"),
+                        edge("edge-2", "transform-a", "transform-b"),
+                        edge("edge-3", "transform-b", "transform-a")
+                ),
+                List.of()
+        );
+
+        assertThatThrownBy(() -> validator.validateDraft(definition))
+                .isInstanceOf(DagValidationException.class)
+                .hasMessage("Workflow definition must be acyclic.");
+    }
+
+    @Test
     void rejectsDefinitionWithoutStartNode() {
         WorkflowDefinition definition = new WorkflowDefinition(
                 List.of(

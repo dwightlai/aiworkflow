@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
+  archiveWorkflow,
   createWorkflow,
   getWorkflowRun,
   listWorkflows,
@@ -73,6 +74,20 @@ describe('workflow admin api', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/workflows/workflow-1/publish', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/workflows/workflow-1/runs', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/workflow-runs/run-1');
+  });
+
+  it('archives workflows without deleting them', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: { id: 'workflow-1', name: 'Greeting', status: 'ARCHIVED' },
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const archived = await archiveWorkflow('workflow-1');
+
+    expect(archived.status).toBe('ARCHIVED');
+    expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1/archive', expect.objectContaining({ method: 'POST' }));
   });
 });
 

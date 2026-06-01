@@ -31,7 +31,7 @@ public class DagValidator {
         List<WorkflowNode> nodes = listOrEmpty(definition.nodes());
         List<WorkflowEdge> edges = listOrEmpty(definition.edges());
 
-        validateNodeIds(nodes);
+        Map<String, List<String>> adjacency = validateStructure(nodes, edges);
 
         long startCount = nodes.stream()
                 .filter(node -> node.type() == WorkflowNodeType.START)
@@ -46,8 +46,24 @@ public class DagValidator {
             throw new DagValidationException(AT_LEAST_ONE_END);
         }
 
+        rejectCycles(adjacency);
+    }
+
+    public void validateDraft(WorkflowDefinition definition) {
+        if (definition == null) {
+            throw new DagValidationException(DEFINITION_REQUIRED);
+        }
+
+        List<WorkflowNode> nodes = listOrEmpty(definition.nodes());
+        List<WorkflowEdge> edges = listOrEmpty(definition.edges());
+        validateStructure(nodes, edges);
+    }
+
+    private Map<String, List<String>> validateStructure(List<WorkflowNode> nodes, List<WorkflowEdge> edges) {
+        validateNodeIds(nodes);
         Map<String, List<String>> adjacency = buildAdjacency(nodes, edges);
         rejectCycles(adjacency);
+        return adjacency;
     }
 
     private void validateNodeIds(List<WorkflowNode> nodes) {

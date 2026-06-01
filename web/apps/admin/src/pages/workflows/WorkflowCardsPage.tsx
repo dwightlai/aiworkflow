@@ -3,6 +3,7 @@ import {
   ClockCircleOutlined,
   EditOutlined,
   FileSearchOutlined,
+  FolderOutlined,
   MoreOutlined,
   PlayCircleOutlined,
   PlusOutlined,
@@ -11,17 +12,18 @@ import {
   SettingOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Empty, Input, Segmented, Skeleton, Space, Tag, Tooltip, Typography } from 'antd';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Alert, Button, Card, Empty, Input, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { listWorkflows, type Workflow } from '../../api/workflows';
+import { archiveWorkflow, listWorkflows, type Workflow } from '../../api/workflows';
 
 const demoDescription = '配置节点、Prompt、模型和工具调用，编排可运行的 AI 自动化流程。';
 const statusOptions = [
   { label: '全部', value: 'ALL' },
   { label: '草稿', value: 'DRAFT' },
-  { label: '已发布', value: 'PUBLISHED' }
+  { label: '已发布', value: 'PUBLISHED' },
+  { label: '已归档', value: 'ARCHIVED' }
 ];
 const templates = [
   { name: '客服问答助手', scene: '知识库 + LLM', detail: '适合售前咨询、工单预处理' },
@@ -32,9 +34,17 @@ const templates = [
 export function WorkflowCardsPage() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const queryClient = useQueryClient();
   const workflowQuery = useQuery({
     queryKey: ['workflows'],
     queryFn: listWorkflows
+  });
+  const archiveMutation = useMutation({
+    mutationFn: (workflow: Workflow) => archiveWorkflow(workflow.id),
+    onSuccess: async () => {
+      message.success('工作流已归档');
+      await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+    }
   });
 
   const workflows = workflowQuery.data?.items ?? [];
@@ -126,7 +136,12 @@ export function WorkflowCardsPage() {
               : null}
 
             {!workflowQuery.isLoading ? visibleWorkflows.map((workflow) => (
-                <WorkflowCard key={workflow.id} workflow={workflow} />
+              <WorkflowCard
+                key={workflow.id}
+                workflow={workflow}
+                archivePending={archiveMutation.isPending}
+                onArchive={() => archiveMutation.mutate(workflow)}
+              />
             )) : null}
           </div>
 
@@ -170,7 +185,15 @@ function SummaryCard({ title, value, detail, icon }: { title: string; value: str
   );
 }
 
-function WorkflowCard({ workflow }: { workflow: Workflow }) {
+function WorkflowCard({
+  workflow,
+  archivePending,
+  onArchive
+}: {
+  workflow: Workflow;
+  archivePending: boolean;
+  onArchive: () => void;
+}) {
   return (
     <Card
       hoverable
@@ -202,16 +225,30 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
         <ActionButton icon={<SettingOutlined />} label="设置" />
         <ActionButton icon={<PlayCircleOutlined />} label="运行" />
         <ActionButton icon={<EditOutlined />} label="编辑" onClick={() => navigateTo(`/workflows/${workflow.id}/designer`)} />
-        <ActionButton icon={<MoreOutlined />} label="更多" />
+        {workflow.status === 'ARCHIVED' ? (
+          <ActionButton icon={<MoreOutlined />} label="更多" />
+        ) : (
+          <ActionButton icon={<FolderOutlined />} label="归档工作流" loading={archivePending} onClick={onArchive} />
+        )}
       </div>
     </Card>
   );
 }
 
-function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) {
+function ActionButton({
+  icon,
+  label,
+  loading,
+  onClick
+}: {
+  icon: React.ReactNode;
+  label: string;
+  loading?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <Tooltip title={label}>
-      <Button aria-label={label} type="text" size="small" icon={icon} onClick={onClick}>
+      <Button aria-label={label} type="text" size="small" icon={icon} loading={loading} onClick={onClick}>
         {label}
       </Button>
     </Tooltip>

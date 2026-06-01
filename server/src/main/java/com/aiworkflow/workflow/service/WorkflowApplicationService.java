@@ -58,6 +58,7 @@ public class WorkflowApplicationService {
 
     public synchronized WorkflowVersion updateDraftDefinition(String workflowId, WorkflowDefinition definition) {
         getWorkflow(workflowId);
+        dagValidator.validateDraft(definition);
 
         WorkflowVersion draftVersion = findDraftVersion(workflowId)
                 .orElseGet(() -> createNextDraftVersion(workflowId, definition));
@@ -115,6 +116,22 @@ public class WorkflowApplicationService {
 
     public List<Workflow> listWorkflows() {
         return store.listWorkflows();
+    }
+
+    public synchronized Workflow archiveWorkflow(String workflowId) {
+        Workflow workflow = getWorkflow(workflowId);
+        Workflow archived = new Workflow(
+                workflow.id(),
+                workflow.tenantId(),
+                workflow.name(),
+                workflow.description(),
+                WorkflowStatus.ARCHIVED,
+                workflow.currentVersionId(),
+                workflow.createdBy(),
+                workflow.createdAt(),
+                Instant.now()
+        );
+        return store.saveWorkflow(archived);
     }
 
     public Workflow getWorkflow(String workflowId) {

@@ -115,6 +115,22 @@ class WorkflowControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.latestVersion.publishedBy").value("system"));
     }
 
+    @Test
+    void archivesWorkflowWithoutDeletingVersions() throws Exception {
+        String workflowId = createWorkflow();
+
+        mockMvc.perform(post("/api/workflows/{workflowId}/archive", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("ARCHIVED"))
+                .andExpect(jsonPath("$.data.latestVersion.version").value(1));
+
+        mockMvc.perform(get("/api/workflows/{workflowId}", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ARCHIVED"))
+                .andExpect(jsonPath("$.data.latestVersion.status").value("DRAFT"));
+    }
+
     private String createWorkflow() throws Exception {
         String response = mockMvc.perform(post("/api/workflows")
                         .contentType(MediaType.APPLICATION_JSON)

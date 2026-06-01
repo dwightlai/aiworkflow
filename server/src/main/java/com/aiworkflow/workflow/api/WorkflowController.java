@@ -69,6 +69,12 @@ public class WorkflowController {
         return ApiResponse.success(WorkflowResponse.from(workflow, publishedVersion));
     }
 
+    @PostMapping("/{workflowId}/archive")
+    public ApiResponse<WorkflowResponse> archive(@PathVariable String workflowId) {
+        Workflow workflow = workflowService.archiveWorkflow(workflowId);
+        return ApiResponse.success(toResponse(workflow));
+    }
+
     private WorkflowResponse toResponse(Workflow workflow) {
         WorkflowVersion latestVersion = workflowService.listVersions(workflow.id()).stream()
                 .max(Comparator.comparingInt(WorkflowVersion::version))

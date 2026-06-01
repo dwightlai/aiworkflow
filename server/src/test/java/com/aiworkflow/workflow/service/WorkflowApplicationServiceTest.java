@@ -85,7 +85,7 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
-    void updatesDraftDefinitionBeforePublishValidation() {
+    void updatesIncompleteDraftDefinitionBeforePublishValidation() {
         Workflow workflow = service.createWorkflow(
                 "tenant-1",
                 "Support triage",
@@ -93,16 +93,29 @@ class WorkflowApplicationServiceTest {
                 "user-1",
                 validDefinition()
         );
-        WorkflowDefinition updatedDefinition = definitionWithExtraTransform();
+        WorkflowDefinition updatedDefinition = incompleteDefinition();
 
         WorkflowVersion updatedDraft = service.updateDraftDefinition(workflow.id(), updatedDefinition);
 
         assertThat(updatedDraft.definition()).isEqualTo(updatedDefinition);
         assertThat(updatedDraft.status()).isEqualTo(WorkflowVersionStatus.DRAFT);
+    }
 
-        WorkflowVersion invalidDraft = service.updateDraftDefinition(workflow.id(), definitionWithCycle());
-        assertThat(invalidDraft.definition()).isEqualTo(definitionWithCycle());
-        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(definitionWithCycle());
+    @Test
+    void rejectsStructurallyInvalidDraftUpdate() {
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                null,
+                "user-1",
+                validDefinition()
+        );
+
+        assertThatThrownBy(() -> service.updateDraftDefinition(workflow.id(), definitionWithCycle()))
+                .isInstanceOf(DagValidationException.class)
+                .hasMessage("Workflow definition must be acyclic.");
+
+        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(validDefinition());
     }
 
     @Test
@@ -247,6 +260,17 @@ class WorkflowApplicationServiceTest {
                         edge("edge-2", "transform-1", "transform-2"),
                         edge("edge-3", "transform-2", "end")
                 ),
+                List.of()
+        );
+    }
+
+    private WorkflowDefinition incompleteDefinition() {
+        return new WorkflowDefinition(
+                List.of(
+                        node("start", WorkflowNodeType.START),
+                        node("transform", WorkflowNodeType.TEXT_TRANSFORM)
+                ),
+                List.of(edge("edge-1", "start", "transform")),
                 List.of()
         );
     }

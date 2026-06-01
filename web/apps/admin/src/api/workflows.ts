@@ -103,6 +103,12 @@ export async function publishWorkflow(workflowId: string): Promise<Workflow> {
   });
 }
 
+export async function archiveWorkflow(workflowId: string): Promise<Workflow> {
+  return requestJson<Workflow>(`/api/workflows/${workflowId}/archive`, {
+    method: 'POST'
+  });
+}
+
 export async function runWorkflow(
   workflowId: string,
   input: Record<string, unknown>
