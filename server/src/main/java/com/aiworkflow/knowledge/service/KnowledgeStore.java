@@ -2,6 +2,7 @@ package com.aiworkflow.knowledge.service;
 
 import com.aiworkflow.knowledge.domain.KnowledgeBase;
 import com.aiworkflow.knowledge.domain.KnowledgeChunk;
+import com.aiworkflow.knowledge.domain.KnowledgeChunkVector;
 import com.aiworkflow.knowledge.domain.KnowledgeDocument;
 
 import java.util.List;
@@ -33,4 +34,12 @@ public interface KnowledgeStore {
     void deleteChunks(String knowledgeBaseId);
 
     void deleteChunks(String knowledgeBaseId, String documentId);
+
+    KnowledgeChunkVector saveChunkVector(KnowledgeChunkVector vector);
+
+    List<KnowledgeChunkVector> listChunkVectors(String knowledgeBaseId);
+
+    void deleteChunkVectors(String knowledgeBaseId);
+
+    void deleteChunkVectors(String knowledgeBaseId, String documentId);
 }

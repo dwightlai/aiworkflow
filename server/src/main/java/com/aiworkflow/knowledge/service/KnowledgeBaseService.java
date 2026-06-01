@@ -3,6 +3,7 @@ package com.aiworkflow.knowledge.service;
 import com.aiworkflow.knowledge.domain.KnowledgeBase;
 import com.aiworkflow.knowledge.domain.KnowledgeChunk;
 import com.aiworkflow.knowledge.domain.KnowledgeChunkPreview;
+import com.aiworkflow.knowledge.domain.KnowledgeChunkVector;
 import com.aiworkflow.knowledge.domain.KnowledgeDocument;
 import com.aiworkflow.knowledge.domain.KnowledgeSearchResult;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,9 +11,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,15 +23,21 @@ import java.util.UUID;
 public class KnowledgeBaseService {
     private final KnowledgeSplitter splitter;
     private final KnowledgeStore store;
+    private final EmbeddingClient embeddingClient;
 
     public KnowledgeBaseService() {
-        this(new KnowledgeSplitter(), new InMemoryKnowledgeStore());
+        this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient());
+    }
+
+    public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store) {
+        this(splitter, store, new LocalEmbeddingClient());
     }
 
     @Autowired
-    public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store) {
+    public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store, EmbeddingClient embeddingClient) {
         this.splitter = splitter;
         this.store = store;
+        this.embeddingClient = embeddingClient;
     }
 
     public KnowledgeBase create(
@@ -135,7 +144,7 @@ public class KnowledgeBaseService {
         );
         store.saveDocument(document);
         for (KnowledgeChunkPreview preview : previews) {
-            store.saveChunk(new KnowledgeChunk(
+            KnowledgeChunk chunk = store.saveChunk(new KnowledgeChunk(
                     "chunk_" + UUID.randomUUID(),
                     knowledgeBaseId,
                     document.id(),
@@ -145,6 +154,7 @@ public class KnowledgeBaseService {
                     true,
                     preview.tokenEstimate()
             ));
+            saveEmbeddingIfConfigured(knowledgeBase, chunk);
         }
         refreshKnowledgeBaseStats(knowledgeBaseId);
         return document;
@@ -169,7 +179,7 @@ public class KnowledgeBaseService {
         for (KnowledgeChunk current : store.listChunks(knowledgeBaseId)) {
             if (current.id().equals(chunkId)) {
                 String updatedContent = content == null || content.isBlank() ? current.content() : content;
-                return store.saveChunk(new KnowledgeChunk(
+                KnowledgeChunk updated = store.saveChunk(new KnowledgeChunk(
                         current.id(),
                         current.knowledgeBaseId(),
                         current.documentId(),
@@ -179,6 +189,8 @@ public class KnowledgeBaseService {
                         enabled,
                         splitter.estimateTokens(updatedContent)
                 ));
+                saveEmbeddingIfConfigured(getKnowledgeBase(knowledgeBaseId), updated);
+                return updated;
             }
         }
         throw new IllegalArgumentException("Knowledge chunk not found: " + chunkId);
@@ -186,6 +198,7 @@ public class KnowledgeBaseService {
 
     public void deleteDocument(String knowledgeBaseId, String documentId) {
         ensureKnowledgeBaseExists(knowledgeBaseId);
+        store.deleteChunkVectors(knowledgeBaseId, documentId);
         store.deleteChunks(knowledgeBaseId, documentId);
         store.deleteDocument(knowledgeBaseId, documentId);
         refreshKnowledgeBaseStats(knowledgeBaseId);
@@ -195,13 +208,17 @@ public class KnowledgeBaseService {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
         Set<String> terms = tokenize(query);
         int limit = topK <= 0 ? knowledgeBase.topK() : topK;
+        Map<String, KnowledgeChunkVector> vectorsByChunkId = vectorsByChunkId(knowledgeBaseId);
+        List<Double> queryEmbedding = shouldUseVector(knowledgeBase)
+                ? embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), query)
+                : List.of();
         return store.listChunks(knowledgeBaseId).stream()
                 .filter(KnowledgeChunk::enabled)
                 .map(chunk -> new KnowledgeSearchResult(
                         chunk.id(),
                         chunk.documentName(),
                         chunk.content(),
-                        score(chunk.content(), terms)
+                        combinedScore(chunk, terms, vectorsByChunkId.get(chunk.id()), queryEmbedding, knowledgeBase.retrievalMode())
                 ))
                 .filter(result -> result.score() > 0)
                 .sorted(Comparator.comparingInt(KnowledgeSearchResult::score).reversed())
@@ -239,6 +256,69 @@ public class KnowledgeBaseService {
                 current.createdAt(),
                 Instant.now()
         ));
+    }
+
+    private void saveEmbeddingIfConfigured(KnowledgeBase knowledgeBase, KnowledgeChunk chunk) {
+        if (!shouldUseVector(knowledgeBase)) {
+            return;
+        }
+        store.saveChunkVector(new KnowledgeChunkVector(
+                chunk.id(),
+                chunk.knowledgeBaseId(),
+                chunk.documentId(),
+                knowledgeBase.embeddingModelId(),
+                embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), chunk.content()),
+                Instant.now()
+        ));
+    }
+
+    private boolean shouldUseVector(KnowledgeBase knowledgeBase) {
+        return knowledgeBase.embeddingModelId() != null && !knowledgeBase.embeddingModelId().isBlank()
+                && ("VECTOR".equalsIgnoreCase(knowledgeBase.retrievalMode()) || "HYBRID".equalsIgnoreCase(knowledgeBase.retrievalMode()));
+    }
+
+    private Map<String, KnowledgeChunkVector> vectorsByChunkId(String knowledgeBaseId) {
+        Map<String, KnowledgeChunkVector> vectors = new HashMap<>();
+        for (KnowledgeChunkVector vector : store.listChunkVectors(knowledgeBaseId)) {
+            vectors.put(vector.chunkId(), vector);
+        }
+        return vectors;
+    }
+
+    private int combinedScore(
+            KnowledgeChunk chunk,
+            Set<String> terms,
+            KnowledgeChunkVector vector,
+            List<Double> queryEmbedding,
+            String retrievalMode
+    ) {
+        int keywordScore = score(chunk.content(), terms);
+        int vectorScore = vector == null || queryEmbedding.isEmpty() ? 0 : (int) Math.round(cosine(queryEmbedding, vector.embedding()) * 1000);
+        if ("VECTOR".equalsIgnoreCase(retrievalMode)) {
+            return vectorScore;
+        }
+        if ("HYBRID".equalsIgnoreCase(retrievalMode)) {
+            return keywordScore * 100 + vectorScore;
+        }
+        return keywordScore;
+    }
+
+    private double cosine(List<Double> left, List<Double> right) {
+        int size = Math.min(left.size(), right.size());
+        double dot = 0.0;
+        double leftNorm = 0.0;
+        double rightNorm = 0.0;
+        for (int index = 0; index < size; index++) {
+            double leftValue = left.get(index);
+            double rightValue = right.get(index);
+            dot += leftValue * rightValue;
+            leftNorm += leftValue * leftValue;
+            rightNorm += rightValue * rightValue;
+        }
+        if (leftNorm == 0.0 || rightNorm == 0.0) {
+            return 0.0;
+        }
+        return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
     }
 
     private Set<String> tokenize(String query) {

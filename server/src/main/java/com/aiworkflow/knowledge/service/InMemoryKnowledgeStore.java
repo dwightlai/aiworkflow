@@ -2,6 +2,7 @@ package com.aiworkflow.knowledge.service;
 
 import com.aiworkflow.knowledge.domain.KnowledgeBase;
 import com.aiworkflow.knowledge.domain.KnowledgeChunk;
+import com.aiworkflow.knowledge.domain.KnowledgeChunkVector;
 import com.aiworkflow.knowledge.domain.KnowledgeDocument;
 
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     private final List<KnowledgeBase> knowledgeBases = new CopyOnWriteArrayList<>();
     private final List<KnowledgeDocument> documents = new CopyOnWriteArrayList<>();
     private final List<KnowledgeChunk> chunks = new CopyOnWriteArrayList<>();
+    private final List<KnowledgeChunkVector> chunkVectors = new CopyOnWriteArrayList<>();
 
     @Override
     public KnowledgeBase saveKnowledgeBase(KnowledgeBase knowledgeBase) {
@@ -39,6 +41,7 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
         deleteKnowledgeBaseOnly(id);
         deleteDocuments(id);
         deleteChunks(id);
+        deleteChunkVectors(id);
     }
 
     @Override
@@ -97,6 +100,30 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     @Override
     public void deleteChunks(String knowledgeBaseId, String documentId) {
         chunks.removeIf(chunk -> chunk.knowledgeBaseId().equals(knowledgeBaseId) && chunk.documentId().equals(documentId));
+    }
+
+    @Override
+    public KnowledgeChunkVector saveChunkVector(KnowledgeChunkVector vector) {
+        chunkVectors.removeIf(current -> current.chunkId().equals(vector.chunkId()));
+        chunkVectors.add(vector);
+        return vector;
+    }
+
+    @Override
+    public List<KnowledgeChunkVector> listChunkVectors(String knowledgeBaseId) {
+        return chunkVectors.stream()
+                .filter(vector -> vector.knowledgeBaseId().equals(knowledgeBaseId))
+                .toList();
+    }
+
+    @Override
+    public void deleteChunkVectors(String knowledgeBaseId) {
+        chunkVectors.removeIf(vector -> vector.knowledgeBaseId().equals(knowledgeBaseId));
+    }
+
+    @Override
+    public void deleteChunkVectors(String knowledgeBaseId, String documentId) {
+        chunkVectors.removeIf(vector -> vector.knowledgeBaseId().equals(knowledgeBaseId) && vector.documentId().equals(documentId));
     }
 
     private void deleteKnowledgeBaseOnly(String id) {

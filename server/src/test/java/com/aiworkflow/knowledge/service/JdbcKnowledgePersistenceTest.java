@@ -22,6 +22,7 @@ class JdbcKnowledgePersistenceTest {
         database = new EmbeddedDatabaseBuilder()
                 .setType(EmbeddedDatabaseType.H2)
                 .addScript("db/migration/V3__knowledge_schema.sql")
+                .addScript("db/migration/V6__knowledge_chunk_vectors.sql")
                 .build();
         jdbcTemplate = new JdbcTemplate(database);
     }
@@ -45,7 +46,7 @@ class JdbcKnowledgePersistenceTest {
                 "SIMPLE_TEXT",
                 500,
                 50,
-                "KEYWORD",
+                "HYBRID",
                 3
         );
         KnowledgeDocument document = service.addDocument(
@@ -76,6 +77,8 @@ class JdbcKnowledgePersistenceTest {
                 .first()
                 .extracting("documentName")
                 .isEqualTo("faq.txt");
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM knowledge_chunk_vector", Integer.class))
+                .isEqualTo(1);
     }
 
     @Test
