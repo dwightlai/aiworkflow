@@ -22,6 +22,7 @@ class JdbcKnowledgePersistenceTest {
         database = new EmbeddedDatabaseBuilder()
                 .setType(EmbeddedDatabaseType.H2)
                 .addScript("db/migration/V3__knowledge_schema.sql")
+                .addScript("db/migration/V7__knowledge_base_vector_dimension.sql")
                 .addScript("db/migration/V6__knowledge_chunk_vectors.sql")
                 .build();
         jdbcTemplate = new JdbcTemplate(database);

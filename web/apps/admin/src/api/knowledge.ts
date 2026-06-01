@@ -15,6 +15,7 @@ export interface KnowledgeBase {
   description: string | null;
   embeddingModelId?: string | null;
   vectorStoreConfigId?: string | null;
+  vectorDimension?: number;
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
@@ -83,6 +84,7 @@ export interface SaveKnowledgeBaseRequest {
   description: string | null;
   embeddingModelId?: string | null;
   vectorStoreConfigId?: string | null;
+  vectorDimension?: number;
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;

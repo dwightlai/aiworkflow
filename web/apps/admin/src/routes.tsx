@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BotsPage } from './pages/bots/BotsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { KnowledgeBasesPage } from './pages/knowledge/KnowledgeBasesPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
@@ -29,6 +30,14 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: '工作流',
       breadcrumb: ['首页', 'AI 功能', '工作流'],
       element: <WorkflowCardsPage />
+    };
+  }
+
+  if (pathname === '/bots') {
+    return {
+      title: '智能体 Bots',
+      breadcrumb: ['首页', 'AI 功能', '智能体 Bots'],
+      element: <BotsPage />
     };
   }
 

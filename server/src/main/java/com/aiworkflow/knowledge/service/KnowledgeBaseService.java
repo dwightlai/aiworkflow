@@ -21,6 +21,7 @@ import java.util.UUID;
 
 @Service
 public class KnowledgeBaseService {
+    private static final int DEFAULT_VECTOR_DIMENSION = 1536;
     private final KnowledgeSplitter splitter;
     private final KnowledgeStore store;
     private final EmbeddingClient embeddingClient;
@@ -45,6 +46,7 @@ public class KnowledgeBaseService {
             String description,
             String embeddingModelId,
             String vectorStoreConfigId,
+            int vectorDimension,
             String splitterType,
             int chunkSize,
             int chunkOverlap,
@@ -58,6 +60,7 @@ public class KnowledgeBaseService {
                 description,
                 blankToNull(embeddingModelId),
                 blankToNull(vectorStoreConfigId),
+                normalizeVectorDimension(vectorDimension),
                 defaultString(splitterType, "SIMPLE_TEXT"),
                 chunkSize <= 0 ? 500 : chunkSize,
                 Math.max(0, chunkOverlap),
@@ -73,7 +76,32 @@ public class KnowledgeBaseService {
     }
 
     public KnowledgeBase create(String name, String description) {
-        return create(name, description, null, null, "SIMPLE_TEXT", 500, 0, "KEYWORD", 3);
+        return create(name, description, null, null, DEFAULT_VECTOR_DIMENSION, "SIMPLE_TEXT", 500, 0, "KEYWORD", 3);
+    }
+
+    public KnowledgeBase create(
+            String name,
+            String description,
+            String embeddingModelId,
+            String vectorStoreConfigId,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap,
+            String retrievalMode,
+            int topK
+    ) {
+        return create(
+                name,
+                description,
+                embeddingModelId,
+                vectorStoreConfigId,
+                DEFAULT_VECTOR_DIMENSION,
+                splitterType,
+                chunkSize,
+                chunkOverlap,
+                retrievalMode,
+                topK
+        );
     }
 
     public List<KnowledgeBase> list() {
@@ -86,6 +114,7 @@ public class KnowledgeBaseService {
             String description,
             String embeddingModelId,
             String vectorStoreConfigId,
+            int vectorDimension,
             String splitterType,
             int chunkSize,
             int chunkOverlap,
@@ -99,6 +128,7 @@ public class KnowledgeBaseService {
                 description,
                 blankToNull(embeddingModelId),
                 blankToNull(vectorStoreConfigId),
+                vectorDimension <= 0 ? current.vectorDimension() : vectorDimension,
                 defaultString(splitterType, current.splitterType()),
                 chunkSize <= 0 ? current.chunkSize() : chunkSize,
                 Math.max(0, chunkOverlap),
@@ -245,6 +275,7 @@ public class KnowledgeBaseService {
                 current.description(),
                 current.embeddingModelId(),
                 current.vectorStoreConfigId(),
+                current.vectorDimension(),
                 current.splitterType(),
                 current.chunkSize(),
                 current.chunkOverlap(),
@@ -353,5 +384,9 @@ public class KnowledgeBaseService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    private int normalizeVectorDimension(int vectorDimension) {
+        return vectorDimension <= 0 ? DEFAULT_VECTOR_DIMENSION : vectorDimension;
     }
 }

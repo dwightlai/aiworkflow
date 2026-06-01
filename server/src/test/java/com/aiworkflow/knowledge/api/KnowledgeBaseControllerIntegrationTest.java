@@ -109,11 +109,12 @@ class KnowledgeBaseControllerIntegrationTest {
         mockMvc.perform(post("/api/knowledge-bases")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"support-kb","description":"support docs","embeddingModelId":"model_embed","vectorStoreConfigId":"vector_1","splitterType":"MARKDOWN_HEADING","chunkSize":160,"chunkOverlap":20,"retrievalMode":"HYBRID","topK":5}
+                                {"name":"support-kb","description":"support docs","embeddingModelId":"model_embed","vectorStoreConfigId":"vector_1","vectorDimension":1536,"splitterType":"MARKDOWN_HEADING","chunkSize":160,"chunkOverlap":20,"retrievalMode":"HYBRID","topK":5}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.embeddingModelId").value("model_embed"))
                 .andExpect(jsonPath("$.data.vectorStoreConfigId").value("vector_1"))
+                .andExpect(jsonPath("$.data.vectorDimension").value(1536))
                 .andExpect(jsonPath("$.data.splitterType").value("MARKDOWN_HEADING"))
                 .andExpect(jsonPath("$.data.retrievalMode").value("HYBRID"))
                 .andExpect(jsonPath("$.data.topK").value(5));
@@ -292,13 +293,14 @@ class KnowledgeBaseControllerIntegrationTest {
         mockMvc.perform(put("/api/knowledge-bases/{id}", knowledgeBaseId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"ops-kb-prod","description":"production docs","embeddingModelId":"embed-prod","vectorStoreConfigId":"vector-prod","splitterType":"MARKDOWN_HEADING","chunkSize":180,"chunkOverlap":30,"retrievalMode":"HYBRID","topK":6}
+                                {"name":"ops-kb-prod","description":"production docs","embeddingModelId":"embed-prod","vectorStoreConfigId":"vector-prod","vectorDimension":3072,"splitterType":"MARKDOWN_HEADING","chunkSize":180,"chunkOverlap":30,"retrievalMode":"HYBRID","topK":6}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("ops-kb-prod"))
                 .andExpect(jsonPath("$.data.description").value("production docs"))
                 .andExpect(jsonPath("$.data.embeddingModelId").value("embed-prod"))
                 .andExpect(jsonPath("$.data.vectorStoreConfigId").value("vector-prod"))
+                .andExpect(jsonPath("$.data.vectorDimension").value(3072))
                 .andExpect(jsonPath("$.data.splitterType").value("MARKDOWN_HEADING"))
                 .andExpect(jsonPath("$.data.retrievalMode").value("HYBRID"))
                 .andExpect(jsonPath("$.data.topK").value(6))

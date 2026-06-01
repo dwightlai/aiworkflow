@@ -8,6 +8,7 @@ public record KnowledgeBase(
         String description,
         String embeddingModelId,
         String vectorStoreConfigId,
+        int vectorDimension,
         String splitterType,
         int chunkSize,
         int chunkOverlap,

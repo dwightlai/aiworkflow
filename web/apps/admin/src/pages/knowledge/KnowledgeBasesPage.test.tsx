@@ -15,6 +15,7 @@ const knowledgeApiMock = vi.hoisted(() => ({
         description: '客服资料',
         embeddingModelId: 'model_embed',
         vectorStoreConfigId: 'vector_1',
+        vectorDimension: 1536,
         splitterType: 'MARKDOWN_HEADING',
         chunkSize: 500,
         chunkOverlap: 50,
@@ -203,6 +204,7 @@ describe('KnowledgeBasesPage', () => {
 
     expect(await screen.findByText('产品知识库')).toBeInTheDocument();
     expect(screen.getAllByText('向量库配置').length).toBeGreaterThan(0);
+    expect(screen.getByText('1536 维')).toBeInTheDocument();
     expect(screen.getByText('分段策略')).toBeInTheDocument();
     expect(screen.getByText('HYBRID')).toBeInTheDocument();
   });
@@ -217,6 +219,7 @@ describe('KnowledgeBasesPage', () => {
     await waitFor(() => {
       expect(knowledgeApiMock.createKnowledgeBase).toHaveBeenCalledWith(expect.objectContaining({
         name: '售后知识库',
+        vectorDimension: 1536,
         splitterType: 'SIMPLE_TEXT',
         retrievalMode: 'KEYWORD'
       }));

@@ -1,5 +1,8 @@
 package com.aiworkflow.config;
 
+import com.aiworkflow.bot.service.BotStore;
+import com.aiworkflow.bot.service.InMemoryBotStore;
+import com.aiworkflow.bot.service.JdbcBotStore;
 import com.aiworkflow.knowledge.service.InMemoryKnowledgeStore;
 import com.aiworkflow.knowledge.service.InMemoryVectorStoreConfigStore;
 import com.aiworkflow.knowledge.service.JdbcKnowledgeStore;
@@ -62,5 +65,11 @@ public class StoreConfig {
     public PromptTemplateStore promptTemplateStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
         JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
         return jdbcTemplate == null ? new InMemoryPromptTemplateStore() : new JdbcPromptTemplateStore(jdbcTemplate);
+    }
+
+    @Bean
+    public BotStore botStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
+        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+        return jdbcTemplate == null ? new InMemoryBotStore() : new JdbcBotStore(jdbcTemplate);
     }
 }

@@ -64,6 +64,7 @@ const initialBaseValues: SaveKnowledgeBaseRequest = {
   description: null,
   embeddingModelId: null,
   vectorStoreConfigId: null,
+  vectorDimension: 1536,
   splitterType: 'SIMPLE_TEXT',
   chunkSize: 500,
   chunkOverlap: 50,
@@ -261,6 +262,7 @@ export function KnowledgeBasesPage() {
       description: base.description || null,
       embeddingModelId: base.embeddingModelId || null,
       vectorStoreConfigId: base.vectorStoreConfigId || null,
+      vectorDimension: base.vectorDimension || 1536,
       splitterType: base.splitterType || 'SIMPLE_TEXT',
       chunkSize: base.chunkSize || 500,
       chunkOverlap: base.chunkOverlap ?? 50,
@@ -340,6 +342,11 @@ export function KnowledgeBasesPage() {
       title: '向量库配置',
       width: 180,
       render: (_, base) => <Tag color={base.vectorStoreConfigId ? 'geekblue' : 'default'}>{base.vectorStoreConfigId || '默认内存'}</Tag>
+    },
+    {
+      title: '向量维度',
+      width: 110,
+      render: (_, base) => <Tag color="purple">{base.vectorDimension || 1536} 维</Tag>
     },
     {
       title: '分段策略',
@@ -535,6 +542,9 @@ export function KnowledgeBasesPage() {
               options={embeddingModelOptions}
               placeholder="选择已保存的 embedding 模型"
             />
+          </Form.Item>
+          <Form.Item name="vectorDimension" label="向量维度" rules={[{ required: true, message: '请输入向量维度' }]}>
+            <InputNumber min={1} max={32768} style={{ width: '100%' }} placeholder="1536" />
           </Form.Item>
           <Form.Item name="vectorStoreConfigId" label="向量库配置">
             <Select allowClear placeholder="默认使用内存向量库" options={vectorStoreOptions} />

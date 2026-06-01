@@ -33,7 +33,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
             jdbcTemplate.update("""
                             UPDATE knowledge_base
                             SET name = ?, description = ?, embedding_model_id = ?, vector_store_config_id = ?,
-                                splitter_type = ?, chunk_size = ?, chunk_overlap = ?, retrieval_mode = ?, top_k = ?,
+                                vector_dimension = ?, splitter_type = ?, chunk_size = ?, chunk_overlap = ?, retrieval_mode = ?, top_k = ?,
                                 status = ?, document_count = ?, chunk_count = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
                             """,
@@ -41,6 +41,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
                     knowledgeBase.description(),
                     knowledgeBase.embeddingModelId(),
                     knowledgeBase.vectorStoreConfigId(),
+                    knowledgeBase.vectorDimension(),
                     knowledgeBase.splitterType(),
                     knowledgeBase.chunkSize(),
                     knowledgeBase.chunkOverlap(),
@@ -56,16 +57,17 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
         } else {
             jdbcTemplate.update("""
                             INSERT INTO knowledge_base
-                                (id, name, description, embedding_model_id, vector_store_config_id, splitter_type,
+                                (id, name, description, embedding_model_id, vector_store_config_id, vector_dimension, splitter_type,
                                  chunk_size, chunk_overlap, retrieval_mode, top_k, status, document_count, chunk_count,
                                  created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                     knowledgeBase.id(),
                     knowledgeBase.name(),
                     knowledgeBase.description(),
                     knowledgeBase.embeddingModelId(),
                     knowledgeBase.vectorStoreConfigId(),
+                    knowledgeBase.vectorDimension(),
                     knowledgeBase.splitterType(),
                     knowledgeBase.chunkSize(),
                     knowledgeBase.chunkOverlap(),
@@ -284,6 +286,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
                 rs.getString("description"),
                 rs.getString("embedding_model_id"),
                 rs.getString("vector_store_config_id"),
+                rs.getInt("vector_dimension"),
                 rs.getString("splitter_type"),
                 rs.getInt("chunk_size"),
                 rs.getInt("chunk_overlap"),
