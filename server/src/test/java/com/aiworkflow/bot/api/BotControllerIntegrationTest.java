@@ -114,6 +114,82 @@ class BotControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.total").value(0));
     }
 
+    @Test
+    void chatsWithBotAcrossMultipleTurnsAndStoresHistory() throws Exception {
+        String workflowId = createAndPublishWorkflow();
+        String botId = createBot(workflowId);
+
+        String firstResponse = mockMvc.perform(post("/api/bots/{botId}/chat", botId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "message": "Ada",
+                                  "input": {
+                                    "channel": "web"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.botId").value(botId))
+                .andExpect(jsonPath("$.data.reply.role").value("ASSISTANT"))
+                .andExpect(jsonPath("$.data.reply.content").value("Hello Ada"))
+                .andExpect(jsonPath("$.data.messages.length()").value(2))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String sessionId = objectMapper.readTree(firstResponse).path("data").path("session").path("id").asText();
+
+        mockMvc.perform(post("/api/bots/{botId}/chat", botId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sessionId": "%s",
+                                  "message": "Grace",
+                                  "input": {}
+                                }
+                                """.formatted(sessionId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.id").value(sessionId))
+                .andExpect(jsonPath("$.data.reply.content").value("Hello Grace"))
+                .andExpect(jsonPath("$.data.messages.length()").value(4))
+                .andExpect(jsonPath("$.data.execution.input.history[0].role").value("USER"))
+                .andExpect(jsonPath("$.data.execution.input.history[1].content").value("Hello Ada"));
+
+        mockMvc.perform(get("/api/bots/{botId}/sessions", botId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].messageCount").value(4));
+
+        mockMvc.perform(get("/api/bots/{botId}/sessions/{sessionId}/messages", botId, sessionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(4))
+                .andExpect(jsonPath("$.data.items[0].content").value("Ada"))
+                .andExpect(jsonPath("$.data.items[3].content").value("Hello Grace"));
+    }
+
+    private String createBot(String workflowId) throws Exception {
+        String createResponse = mockMvc.perform(post("/api/bots")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Support Bot",
+                                  "description": "Answers support questions",
+                                  "avatar": "robot",
+                                  "workflowId": "%s",
+                                  "modelProviderId": "model_chat",
+                                  "knowledgeBaseId": "kb_support",
+                                  "systemPrompt": "Use the support handbook.",
+                                  "openingMessage": "Hi, how can I help?",
+                                  "status": "ENABLED"
+                                }
+                                """.formatted(workflowId)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(createResponse).path("data").path("id").asText();
+    }
+
     private String createAndPublishWorkflow() throws Exception {
         String createResponse = mockMvc.perform(post("/api/workflows")
                         .contentType(MediaType.APPLICATION_JSON)

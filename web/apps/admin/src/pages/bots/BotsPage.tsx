@@ -9,11 +9,24 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Avatar, Button, Card, Drawer, Empty, Form, Input, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Alert, Avatar, Button, Card, Drawer, Empty, Form, Input, List, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { createBot, deleteBot, listBots, runBot, updateBot, type Bot, type BotRunResult, type SaveBotRequest } from '../../api/bots';
+import {
+  chatBot,
+  createBot,
+  deleteBot,
+  listBotMessages,
+  listBotSessions,
+  listBots,
+  updateBot,
+  type Bot,
+  type BotChatResult,
+  type BotMessage,
+  type BotSession,
+  type SaveBotRequest
+} from '../../api/bots';
 import { listKnowledgeBases } from '../../api/knowledge';
 import { listModelProviders } from '../../api/models';
 import { listWorkflows } from '../../api/workflows';
@@ -32,24 +45,38 @@ const initialBotValues: SaveBotRequest = {
 
 export function BotsPage() {
   const [botForm] = Form.useForm<SaveBotRequest>();
-  const [runForm] = Form.useForm<{ message: string; input: string }>();
+  const [chatForm] = Form.useForm<{ message: string; input: string }>();
   const queryClient = useQueryClient();
   const [keyword, setKeyword] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingBot, setEditingBot] = useState<Bot | null>(null);
   const [runningBot, setRunningBot] = useState<Bot | null>(null);
-  const [runResult, setRunResult] = useState<BotRunResult | null>(null);
+  const [selectedSession, setSelectedSession] = useState<BotSession | null>(null);
+  const [localMessages, setLocalMessages] = useState<BotMessage[]>([]);
+  const [chatResult, setChatResult] = useState<BotChatResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
   const botsQuery = useQuery({ queryKey: ['bots'], queryFn: listBots });
   const workflowsQuery = useQuery({ queryKey: ['workflows'], queryFn: listWorkflows });
   const modelsQuery = useQuery({ queryKey: ['model-providers'], queryFn: listModelProviders });
   const knowledgeQuery = useQuery({ queryKey: ['knowledge-bases'], queryFn: listKnowledgeBases });
+  const sessionsQuery = useQuery({
+    queryKey: ['bot-sessions', runningBot?.id],
+    queryFn: () => listBotSessions(runningBot!.id),
+    enabled: Boolean(runningBot)
+  });
+  const messagesQuery = useQuery({
+    queryKey: ['bot-messages', runningBot?.id, selectedSession?.id],
+    queryFn: () => listBotMessages(runningBot!.id, selectedSession!.id),
+    enabled: Boolean(runningBot && selectedSession)
+  });
 
   const bots = botsQuery.data?.items ?? [];
   const workflows = workflowsQuery.data?.items ?? [];
   const models = modelsQuery.data?.items ?? [];
   const knowledgeBases = knowledgeQuery.data?.items ?? [];
+  const sessions = sessionsQuery.data?.items ?? [];
+  const messages = selectedSession ? (messagesQuery.data?.items ?? []) : localMessages;
 
   const workflowNameById = useMemo(() => new Map(workflows.map((workflow) => [workflow.id, workflow.name])), [workflows]);
   const modelNameById = useMemo(() => new Map(models.map((model) => [model.id, `${model.name} / ${model.model}`])), [models]);
@@ -90,7 +117,7 @@ export function BotsPage() {
     }
   });
 
-  const runMutation = useMutation({
+  const chatMutation = useMutation({
     mutationFn: (values: { message: string; input: string }) => {
       if (!runningBot) {
         throw new Error('请选择智能体');
@@ -99,12 +126,17 @@ export function BotsPage() {
       if (!parsed.ok) {
         throw new Error(parsed.message);
       }
-      return runBot(runningBot.id, { message: values.message, input: parsed.value });
+      return chatBot(runningBot.id, { sessionId: selectedSession?.id, message: values.message, input: parsed.value });
     },
     onSuccess: async (result) => {
-      setRunResult(result);
+      setSelectedSession(result.session);
+      setLocalMessages(result.messages);
+      setChatResult(result);
       setRunError(null);
+      chatForm.setFieldsValue({ message: '', input: chatForm.getFieldValue('input') || '{}' });
       await queryClient.invalidateQueries({ queryKey: ['bots'] });
+      await queryClient.invalidateQueries({ queryKey: ['bot-sessions', runningBot?.id] });
+      await queryClient.invalidateQueries({ queryKey: ['bot-messages', runningBot?.id, result.session.id] });
     },
     onError: (error) => {
       setRunError((error as Error).message);
@@ -254,38 +286,70 @@ export function BotsPage() {
       </Drawer>
 
       <Drawer
-        title={runningBot ? `运行智能体 - ${runningBot.name}` : '运行智能体'}
+        title={runningBot ? `多轮对话 - ${runningBot.name}` : '多轮对话'}
         open={Boolean(runningBot)}
-        width={640}
+        width={940}
         onClose={() => {
           setRunningBot(null);
-          setRunResult(null);
+          setSelectedSession(null);
+          setLocalMessages([]);
+          setChatResult(null);
           setRunError(null);
         }}
         footer={(
           <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button onClick={() => setRunningBot(null)}>关闭</Button>
-            <Button type="primary" icon={<PlayCircleOutlined />} loading={runMutation.isPending} onClick={() => runForm.submit()}>发送测试</Button>
+            <Button type="primary" icon={<PlayCircleOutlined />} loading={chatMutation.isPending} onClick={() => chatForm.submit()}>发送消息</Button>
           </Space>
         )}
       >
-        <Form form={runForm} layout="vertical" initialValues={{ message: '', input: '{}' }} onFinish={(values) => runMutation.mutate(values)}>
-          <Form.Item name="message" label="测试消息" rules={[{ required: true, message: '请输入测试消息' }]}>
-            <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} placeholder="输入一条用户消息" />
-          </Form.Item>
-          <Form.Item name="input" label="附加变量 JSON">
-            <Input.TextArea style={{ fontFamily: 'Consolas, monospace' }} autoSize={{ minRows: 5, maxRows: 10 }} />
-          </Form.Item>
-        </Form>
-        {runError ? <Alert type="error" showIcon message={runError} style={{ marginBottom: 12 }} /> : null}
-        {runResult ? (
-          <Alert
-            type="success"
-            showIcon
-            message={`执行状态：${runResult.execution.status}`}
-            description={<pre style={resultStyle}>{JSON.stringify(runResult.execution.output, null, 2)}</pre>}
-          />
-        ) : null}
+        <div style={chatLayoutStyle}>
+          <aside style={sessionPaneStyle}>
+            <Button block icon={<PlusOutlined />} onClick={startNewSession} style={{ marginBottom: 12 }}>新会话</Button>
+            <List
+              loading={sessionsQuery.isLoading}
+              dataSource={sessions}
+              locale={{ emptyText: '暂无会话' }}
+              renderItem={(session) => (
+                <List.Item
+                  onClick={() => selectSession(session)}
+                  style={{
+                    ...sessionItemStyle,
+                    background: selectedSession?.id === session.id ? '#eef6ff' : '#fff'
+                  }}
+                >
+                  <List.Item.Meta
+                    title={<Typography.Text strong>{session.title}</Typography.Text>}
+                    description={`${session.messageCount} 条消息`}
+                  />
+                </List.Item>
+              )}
+            />
+          </aside>
+          <section style={messagePaneStyle}>
+            <div style={messageListStyle}>
+              {messages.length === 0 ? (
+                <Empty description={runningBot?.openingMessage || '发送第一条消息开始多轮对话'} />
+              ) : messages.map((item) => (
+                <div key={item.id} style={{ ...messageBubbleRowStyle, justifyContent: item.role === 'USER' ? 'flex-end' : 'flex-start' }}>
+                  <div style={{ ...messageBubbleStyle, background: item.role === 'USER' ? '#1677ff' : '#f3f6fb', color: item.role === 'USER' ? '#fff' : '#1f2937' }}>
+                    <Typography.Text style={{ color: 'inherit', whiteSpace: 'pre-wrap' }}>{item.content}</Typography.Text>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {runError ? <Alert type="error" showIcon message={runError} style={{ marginBottom: 12 }} /> : null}
+            {chatResult ? <Typography.Text type="secondary">最近执行：{chatResult.execution.status}</Typography.Text> : null}
+            <Form form={chatForm} layout="vertical" initialValues={{ message: '', input: '{}' }} onFinish={(values) => chatMutation.mutate(values)}>
+              <Form.Item name="message" label="测试消息" rules={[{ required: true, message: '请输入测试消息' }]}>
+                <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} placeholder="输入一条用户消息，系统会携带当前会话历史" />
+              </Form.Item>
+              <Form.Item name="input" label="附加变量 JSON">
+                <Input.TextArea style={{ fontFamily: 'Consolas, monospace' }} autoSize={{ minRows: 3, maxRows: 6 }} />
+              </Form.Item>
+            </Form>
+          </section>
+        </div>
       </Drawer>
     </section>
   );
@@ -319,9 +383,25 @@ export function BotsPage() {
 
   function openRunDrawer(bot: Bot) {
     setRunningBot(bot);
-    setRunResult(null);
+    setSelectedSession(null);
+    setLocalMessages([]);
+    setChatResult(null);
     setRunError(null);
-    runForm.setFieldsValue({ message: '', input: '{}' });
+    chatForm.setFieldsValue({ message: '', input: '{}' });
+  }
+
+  function startNewSession() {
+    setSelectedSession(null);
+    setLocalMessages([]);
+    setChatResult(null);
+    chatForm.setFieldsValue({ message: '', input: '{}' });
+  }
+
+  function selectSession(session: BotSession) {
+    setSelectedSession(session);
+    setLocalMessages([]);
+    setChatResult(null);
+    setRunError(null);
   }
 }
 
@@ -361,11 +441,46 @@ const metricRowStyle: React.CSSProperties = {
   marginBottom: 16
 };
 
-const resultStyle: React.CSSProperties = {
-  background: '#0f172a',
-  borderRadius: 6,
-  color: '#dbeafe',
-  margin: '8px 0 0',
-  padding: 12,
-  whiteSpace: 'pre-wrap'
+const chatLayoutStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 16,
+  gridTemplateColumns: '260px minmax(0, 1fr)'
+};
+
+const sessionPaneStyle: React.CSSProperties = {
+  borderRight: '1px solid #edf0f5',
+  paddingRight: 12
+};
+
+const sessionItemStyle: React.CSSProperties = {
+  border: '1px solid #edf0f5',
+  borderRadius: 8,
+  cursor: 'pointer',
+  marginBottom: 8,
+  padding: '10px 12px'
+};
+
+const messagePaneStyle: React.CSSProperties = {
+  minWidth: 0
+};
+
+const messageListStyle: React.CSSProperties = {
+  background: '#fbfdff',
+  border: '1px solid #edf0f5',
+  borderRadius: 8,
+  display: 'grid',
+  gap: 10,
+  marginBottom: 16,
+  minHeight: 280,
+  padding: 16
+};
+
+const messageBubbleRowStyle: React.CSSProperties = {
+  display: 'flex'
+};
+
+const messageBubbleStyle: React.CSSProperties = {
+  borderRadius: 8,
+  maxWidth: '78%',
+  padding: '10px 12px'
 };

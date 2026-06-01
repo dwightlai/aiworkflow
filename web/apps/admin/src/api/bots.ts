@@ -30,6 +30,26 @@ export interface Bot {
   updatedAt?: string;
 }
 
+export type BotMessageRole = 'USER' | 'ASSISTANT';
+
+export interface BotSession {
+  id: string;
+  botId: string;
+  title: string;
+  messageCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BotMessage {
+  id: string;
+  sessionId: string;
+  botId: string;
+  role: BotMessageRole;
+  content: string;
+  createdAt?: string;
+}
+
 export interface SaveBotRequest {
   name: string;
   description: string | null;
@@ -47,8 +67,19 @@ export interface RunBotRequest {
   input: Record<string, unknown>;
 }
 
+export interface ChatBotRequest extends RunBotRequest {
+  sessionId?: string | null;
+}
+
 export interface BotRunResult {
   bot: Bot;
+  execution: WorkflowExecution;
+}
+
+export interface BotChatResult {
+  session: BotSession;
+  messages: BotMessage[];
+  reply: BotMessage;
   execution: WorkflowExecution;
 }
 
@@ -78,6 +109,21 @@ export async function deleteBot(id: string): Promise<void> {
 
 export async function runBot(id: string, request: RunBotRequest): Promise<BotRunResult> {
   return requestJson<BotRunResult>(`/api/bots/${id}/run`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function listBotSessions(botId: string): Promise<PageResponse<BotSession>> {
+  return requestJson<PageResponse<BotSession>>(`/api/bots/${botId}/sessions`);
+}
+
+export async function listBotMessages(botId: string, sessionId: string): Promise<PageResponse<BotMessage>> {
+  return requestJson<PageResponse<BotMessage>>(`/api/bots/${botId}/sessions/${sessionId}/messages`);
+}
+
+export async function chatBot(id: string, request: ChatBotRequest): Promise<BotChatResult> {
+  return requestJson<BotChatResult>(`/api/bots/${id}/chat`, {
     method: 'POST',
     body: JSON.stringify(request)
   });

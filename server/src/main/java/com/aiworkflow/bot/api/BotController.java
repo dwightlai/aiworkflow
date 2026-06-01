@@ -1,7 +1,10 @@
 package com.aiworkflow.bot.api;
 
 import com.aiworkflow.bot.domain.AiBot;
+import com.aiworkflow.bot.domain.BotChatResult;
+import com.aiworkflow.bot.domain.BotMessage;
 import com.aiworkflow.bot.domain.BotRunResult;
+import com.aiworkflow.bot.domain.BotSession;
 import com.aiworkflow.bot.domain.BotStatus;
 import com.aiworkflow.bot.service.BotService;
 import com.aiworkflow.common.api.ApiResponse;
@@ -79,6 +82,30 @@ public class BotController {
         return ApiResponse.success(new BotRunResponse(result.bot(), WorkflowExecutionResponse.from(result.execution())));
     }
 
+    @GetMapping("/{id}/sessions")
+    public ApiResponse<PageResponse<BotSession>> sessions(@PathVariable String id) {
+        List<BotSession> sessions = botService.listSessions(id);
+        return ApiResponse.success(new PageResponse<>(sessions, sessions.size()));
+    }
+
+    @GetMapping("/{id}/sessions/{sessionId}/messages")
+    public ApiResponse<PageResponse<BotMessage>> messages(@PathVariable String id, @PathVariable String sessionId) {
+        List<BotMessage> messages = botService.listMessages(id, sessionId);
+        return ApiResponse.success(new PageResponse<>(messages, messages.size()));
+    }
+
+    @PostMapping("/{id}/chat")
+    public ApiResponse<BotChatResponse> chat(@PathVariable String id, @RequestBody(required = false) ChatBotRequest request) {
+        ChatBotRequest safeRequest = request == null ? new ChatBotRequest(null, "", Map.of()) : request;
+        BotChatResult result = botService.chat(id, safeRequest.sessionId(), safeRequest.message(), safeRequest.input());
+        return ApiResponse.success(new BotChatResponse(
+                result.session(),
+                result.messages(),
+                result.reply(),
+                WorkflowExecutionResponse.from(result.execution())
+        ));
+    }
+
     public record SaveBotRequest(
             @NotBlank String name,
             String description,
@@ -95,7 +122,18 @@ public class BotController {
     public record RunBotRequest(String message, Map<String, Object> input) {
     }
 
+    public record ChatBotRequest(String sessionId, String message, Map<String, Object> input) {
+    }
+
     public record BotRunResponse(AiBot bot, WorkflowExecutionResponse execution) {
+    }
+
+    public record BotChatResponse(
+            BotSession session,
+            List<BotMessage> messages,
+            BotMessage reply,
+            WorkflowExecutionResponse execution
+    ) {
     }
 
     public record PageResponse<T>(List<T> items, long total) {

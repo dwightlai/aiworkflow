@@ -40,6 +40,75 @@ const botsApiMock = vi.hoisted(() => ({
     conversationCount: 12
   })),
   deleteBot: vi.fn(async () => undefined),
+  listBotSessions: vi.fn(async () => ({
+    items: [
+      {
+        id: 'session_1',
+        botId: 'bot_1',
+        title: '退货怎么处理',
+        messageCount: 2
+      }
+    ],
+    total: 1
+  })),
+  listBotMessages: vi.fn(async () => ({
+    items: [
+      {
+        id: 'msg_1',
+        sessionId: 'session_1',
+        botId: 'bot_1',
+        role: 'USER',
+        content: '退货怎么处理'
+      },
+      {
+        id: 'msg_2',
+        sessionId: 'session_1',
+        botId: 'bot_1',
+        role: 'ASSISTANT',
+        content: '七天内可申请退货'
+      }
+    ],
+    total: 2
+  })),
+  chatBot: vi.fn(async () => ({
+    session: {
+      id: 'session_1',
+      botId: 'bot_1',
+      title: '退货怎么处理',
+      messageCount: 2
+    },
+    messages: [
+      {
+        id: 'msg_1',
+        sessionId: 'session_1',
+        botId: 'bot_1',
+        role: 'USER',
+        content: '退货怎么处理'
+      },
+      {
+        id: 'msg_2',
+        sessionId: 'session_1',
+        botId: 'bot_1',
+        role: 'ASSISTANT',
+        content: '七天内可申请退货'
+      }
+    ],
+    reply: {
+      id: 'msg_2',
+      sessionId: 'session_1',
+      botId: 'bot_1',
+      role: 'ASSISTANT',
+      content: '七天内可申请退货'
+    },
+    execution: {
+      id: 'run_1',
+      workflowId: 'wf_1',
+      status: 'SUCCEEDED',
+      input: { message: '退货怎么处理', history: [] },
+      output: { answer: '七天内可申请退货' },
+      nodeExecutions: []
+    }
+  })),
   runBot: vi.fn(async () => ({
     bot: {
       id: 'bot_1',
@@ -169,9 +238,9 @@ describe('BotsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /运行智能体/ }));
     fireEvent.change(await screen.findByLabelText('测试消息'), { target: { value: '退货怎么处理' } });
-    await userEvent.click(screen.getByRole('button', { name: /发送测试/ }));
+    await userEvent.click(screen.getByRole('button', { name: /发送消息/ }));
     await waitFor(() => {
-      expect(botsApiMock.runBot).toHaveBeenCalledWith('bot_1', expect.objectContaining({
+      expect(botsApiMock.chatBot).toHaveBeenCalledWith('bot_1', expect.objectContaining({
         message: '退货怎么处理'
       }));
     });
