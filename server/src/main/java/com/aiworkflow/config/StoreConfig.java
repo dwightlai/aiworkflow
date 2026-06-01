@@ -1,5 +1,11 @@
 package com.aiworkflow.config;
 
+import com.aiworkflow.knowledge.service.InMemoryKnowledgeStore;
+import com.aiworkflow.knowledge.service.InMemoryVectorStoreConfigStore;
+import com.aiworkflow.knowledge.service.JdbcKnowledgeStore;
+import com.aiworkflow.knowledge.service.JdbcVectorStoreConfigStore;
+import com.aiworkflow.knowledge.service.KnowledgeStore;
+import com.aiworkflow.knowledge.service.VectorStoreConfigStore;
 import com.aiworkflow.workflow.engine.InMemoryWorkflowExecutionStore;
 import com.aiworkflow.workflow.engine.JdbcWorkflowExecutionStore;
 import com.aiworkflow.workflow.engine.WorkflowExecutionStore;
@@ -37,5 +43,29 @@ public class StoreConfig {
     @ConditionalOnMissingBean(WorkflowExecutionStore.class)
     public WorkflowExecutionStore inMemoryWorkflowExecutionStore() {
         return new InMemoryWorkflowExecutionStore();
+    }
+
+    @Bean
+    @ConditionalOnBean(JdbcTemplate.class)
+    public KnowledgeStore jdbcKnowledgeStore(JdbcTemplate jdbcTemplate) {
+        return new JdbcKnowledgeStore(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KnowledgeStore.class)
+    public KnowledgeStore inMemoryKnowledgeStore() {
+        return new InMemoryKnowledgeStore();
+    }
+
+    @Bean
+    @ConditionalOnBean(JdbcTemplate.class)
+    public VectorStoreConfigStore jdbcVectorStoreConfigStore(JdbcTemplate jdbcTemplate) {
+        return new JdbcVectorStoreConfigStore(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(VectorStoreConfigStore.class)
+    public VectorStoreConfigStore inMemoryVectorStoreConfigStore() {
+        return new InMemoryVectorStoreConfigStore();
     }
 }

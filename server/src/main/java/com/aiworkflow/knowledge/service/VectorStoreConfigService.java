@@ -1,17 +1,25 @@
 package com.aiworkflow.knowledge.service;
 
 import com.aiworkflow.knowledge.domain.VectorStoreConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class VectorStoreConfigService {
-    private final List<VectorStoreConfig> configs = new CopyOnWriteArrayList<>();
+    private final VectorStoreConfigStore store;
+
+    public VectorStoreConfigService() {
+        this(new InMemoryVectorStoreConfigStore());
+    }
+
+    @Autowired
+    public VectorStoreConfigService(VectorStoreConfigStore store) {
+        this.store = store;
+    }
 
     public VectorStoreConfig create(String name, String storeType, String endpoint, String indexName, boolean enabled) {
         Instant now = Instant.now();
@@ -25,36 +33,29 @@ public class VectorStoreConfigService {
                 now,
                 now
         );
-        configs.add(config);
-        return config;
+        return store.save(config);
     }
 
     public List<VectorStoreConfig> list() {
-        return new ArrayList<>(configs);
+        return store.list();
     }
 
     public VectorStoreConfig update(String id, String name, String storeType, String endpoint, String indexName, boolean enabled) {
-        for (int index = 0; index < configs.size(); index += 1) {
-            VectorStoreConfig current = configs.get(index);
-            if (current.id().equals(id)) {
-                VectorStoreConfig updated = new VectorStoreConfig(
-                        current.id(),
-                        name,
-                        storeType == null || storeType.isBlank() ? current.storeType() : storeType,
-                        endpoint,
-                        indexName,
-                        enabled,
-                        current.createdAt(),
-                        Instant.now()
-                );
-                configs.set(index, updated);
-                return updated;
-            }
-        }
-        throw new IllegalArgumentException("Vector store config not found: " + id);
+        VectorStoreConfig current = store.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Vector store config not found: " + id));
+        return store.save(new VectorStoreConfig(
+                current.id(),
+                name,
+                storeType == null || storeType.isBlank() ? current.storeType() : storeType,
+                endpoint,
+                indexName,
+                enabled,
+                current.createdAt(),
+                Instant.now()
+        ));
     }
 
     public void delete(String id) {
-        configs.removeIf(config -> config.id().equals(id));
+        store.delete(id);
     }
 }
