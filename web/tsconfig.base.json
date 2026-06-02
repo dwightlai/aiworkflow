@@ -7,6 +7,12 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "declaration": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@aiworkflow/workflow-schema": ["packages/workflow-schema/src/index.ts"],
+      "@aiworkflow/workflow-designer-core": ["packages/workflow-designer-core/src/index.ts"],
+      "@aiworkflow/workflow-designer-react": ["packages/workflow-designer-react/src/index.tsx"]
+    }
   }
 }

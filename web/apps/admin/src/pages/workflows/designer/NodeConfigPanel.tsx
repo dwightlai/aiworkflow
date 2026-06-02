@@ -1,4 +1,4 @@
-import { PlusOutlined, RobotOutlined, SearchOutlined } from '@ant-design/icons';
+import { CommentOutlined, PlusOutlined, RedoOutlined, RobotOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
 import type { WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Button, Empty, Form, Input, InputNumber, Select, Slider, Space, Typography } from 'antd';
 import type React from 'react';
@@ -18,6 +18,25 @@ interface ParamRow {
   name: string;
   value?: string;
   type: string;
+}
+
+interface KeyValueRow {
+  key: string;
+  value: string;
+}
+
+interface LoopStep {
+  type: string;
+  name?: string;
+  template?: string;
+  outputKey?: string;
+  method?: string;
+  url?: string;
+  bodyType?: string;
+  bodyTemplate?: string;
+  responseBodyType?: string;
+  headers?: KeyValueRow[];
+  params?: KeyValueRow[];
 }
 
 export function NodeConfigPanel({
@@ -40,29 +59,71 @@ export function NodeConfigPanel({
 
   if (node.type === 'LLM') {
     return (
-      <aside style={panelStyle}>
-        <TinyHeader />
-        <NodeTitle icon={<RobotOutlined />} title="大模型" description="使用大模型处理问题" node={node} onChange={onChange} />
+      <Panel node={node} title="大模型" description="使用大模型处理问题" icon={<RobotOutlined />} onChange={onChange}>
         <LlmConfig node={node} setConfig={setConfig} modelProviders={modelProviders} />
-      </aside>
+      </Panel>
     );
   }
 
   if (node.type === 'KNOWLEDGE_RETRIEVAL') {
     return (
-      <aside style={panelStyle}>
-        <TinyHeader />
-        <NodeTitle icon={<SearchOutlined />} title="知识库" description="通过知识库获取内容" node={node} onChange={onChange} />
+      <Panel node={node} title="知识库" description="通过知识库获取内容" icon={<SearchOutlined />} onChange={onChange}>
         <KnowledgeConfig node={node} setConfig={setConfig} knowledgeBases={knowledgeBases} />
-      </aside>
+      </Panel>
+    );
+  }
+
+  if (node.type === 'CONTENT_TEMPLATE') {
+    return (
+      <Panel node={node} title="内容模板" description="通过模板生成文本或 JSON 内容" icon={<CommentOutlined />} onChange={onChange}>
+        <ContentTemplateConfig node={node} setConfig={setConfig} />
+      </Panel>
+    );
+  }
+
+  if (node.type === 'HTTP_TOOL') {
+    return (
+      <Panel node={node} title="HTTP 请求" description="调用外部 API 并输出响应结构" icon={<ToolOutlined />} onChange={onChange}>
+        <HttpConfig node={node} setConfig={setConfig} />
+      </Panel>
+    );
+  }
+
+  if (node.type === 'LOOP') {
+    return (
+      <Panel node={node} title="循环" description="遍历数组并执行循环体步骤" icon={<RedoOutlined />} onChange={onChange}>
+        <LoopConfig node={node} setConfig={setConfig} />
+      </Panel>
     );
   }
 
   return (
+    <Panel node={node} title={node.name} description={node.type} onChange={onChange}>
+      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} />
+    </Panel>
+  );
+}
+
+function Panel({
+  children,
+  icon,
+  title,
+  description,
+  node,
+  onChange
+}: {
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  title: string;
+  description: string;
+  node: WorkflowNode;
+  onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void;
+}) {
+  return (
     <aside style={panelStyle}>
       <TinyHeader />
-      <NodeTitle title={node.name} description={node.type} node={node} onChange={onChange} />
-      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} />
+      <NodeTitle icon={icon} title={title} description={description} node={node} onChange={onChange} />
+      {children}
     </aside>
   );
 }
@@ -88,26 +149,14 @@ function NodeTitle({
     <div style={nodeTitleStyle}>
       <div style={nodeTitleMainStyle}>
         {icon ? <span style={nodeIconStyle}>{icon}</span> : null}
-        <Input
-          value={node.name || title}
-          style={nodeNameInputStyle}
-          onChange={(event) => onChange(node.id, { name: event.target.value })}
-        />
+        <Input value={node.name || title} style={nodeNameInputStyle} onChange={(event) => onChange(node.id, { name: event.target.value })} />
       </div>
       <Typography.Text type="secondary">{description}</Typography.Text>
     </div>
   );
 }
 
-function LlmConfig({
-  node,
-  setConfig,
-  modelProviders
-}: {
-  node: WorkflowNode;
-  setConfig: (patch: Record<string, unknown>) => void;
-  modelProviders: ModelProvider[];
-}) {
+function LlmConfig({ node, setConfig, modelProviders }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; modelProviders: ModelProvider[] }) {
   const config = node.config ?? {};
   const inputParams = readParams(config.inputParams);
   const outputParams = readParams(config.outputParams, [{ name: String(config.outputKey ?? 'output'), type: 'String' }]);
@@ -118,10 +167,7 @@ function LlmConfig({
     const next = [{ ...(outputParams[0] ?? { name: outputName, type: 'String' }), ...patch }];
     next[0].name = next[0].name || outputName;
     next[0].type = next[0].type || 'String';
-    setConfig({
-      outputParams: next,
-      outputKey: next[0].name
-    });
+    setConfig({ outputParams: next, outputKey: next[0].name });
   }
 
   return (
@@ -133,7 +179,6 @@ function LlmConfig({
         onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: 'question', type: 'String' }] })}
         onChange={(next) => setConfig({ inputParams: next })}
       />
-
       <SectionTitle title="模型设置" />
       <Form layout="vertical" size="small">
         <Form.Item label="模型">
@@ -141,10 +186,7 @@ function LlmConfig({
             aria-label="选择模型"
             placeholder="请选择模型"
             value={stringValue(config.providerId, undefined)}
-            options={enabledModels.map((provider) => ({
-              value: provider.id,
-              label: `${provider.name}-${provider.model}`
-            }))}
+            options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name}-${provider.model}` }))}
             onChange={(providerId) => {
               const provider = enabledModels.find((item) => item.id === providerId);
               setConfig({ providerId, model: provider?.model ?? '' });
@@ -155,42 +197,18 @@ function LlmConfig({
         <SliderField label="Top P" value={numberValue(config.topP, 0.9)} min={0} max={1} step={0.05} onChange={(topP) => setConfig({ topP })} />
         <SliderField label="Top K" value={numberValue(config.topK, 50)} min={1} max={100} step={1} onChange={(topK) => setConfig({ topK })} />
         <Form.Item label="系统提示词">
-          <Input.TextArea
-            placeholder="请输入系统提示词"
-            autoSize={{ minRows: 5, maxRows: 10 }}
-            value={String(config.systemPrompt ?? '')}
-            onChange={(event) => setConfig({ systemPrompt: event.target.value })}
-          />
+          <Input.TextArea placeholder="请输入系统提示词" autoSize={{ minRows: 5, maxRows: 10 }} value={String(config.systemPrompt ?? '')} onChange={(event) => setConfig({ systemPrompt: event.target.value })} />
         </Form.Item>
         <Form.Item label="用户提示词">
-          <Input.TextArea
-            placeholder="请输入用户提示词，如：{{question}}"
-            autoSize={{ minRows: 5, maxRows: 10 }}
-            value={String(config.userPrompt ?? config.promptTemplate ?? '{{question}}')}
-            onChange={(event) => setConfig({ userPrompt: event.target.value })}
-          />
+          <Input.TextArea placeholder="请输入用户提示词，如：{{question}}" autoSize={{ minRows: 5, maxRows: 10 }} value={String(config.userPrompt ?? config.promptTemplate ?? '{{question}}')} onChange={(event) => setConfig({ userPrompt: event.target.value })} />
         </Form.Item>
       </Form>
-
-      <OutputSection
-        params={outputParams}
-        format={stringValue(config.outputFormat, 'TEXT') ?? 'TEXT'}
-        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
-        onChange={(patch) => updateOutputParam(patch)}
-      />
+      <OutputSection params={outputParams} format={stringValue(config.outputFormat, 'TEXT') ?? 'TEXT'} onFormatChange={(outputFormat) => setConfig({ outputFormat })} onChange={(patch) => updateOutputParam(patch)} />
     </>
   );
 }
 
-function KnowledgeConfig({
-  node,
-  setConfig,
-  knowledgeBases
-}: {
-  node: WorkflowNode;
-  setConfig: (patch: Record<string, unknown>) => void;
-  knowledgeBases: KnowledgeBase[];
-}) {
+function KnowledgeConfig({ node, setConfig, knowledgeBases }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; knowledgeBases: KnowledgeBase[] }) {
   const config = node.config ?? {};
   const inputParams = readParams(config.inputParams, [{ name: 'search_key', value: String(config.queryKey ?? 'keyword'), type: 'String' }]);
   const outputParams = readParams(config.outputParams, [
@@ -203,76 +221,170 @@ function KnowledgeConfig({
 
   return (
     <>
-      <ParamSection
-        title="输入参数"
-        params={inputParams}
-        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'search_key', value: 'keyword', type: 'String' }] })}
-        onChange={(next) => setConfig({ inputParams: next })}
-      />
-
+      <ParamSection title="输入参数" params={inputParams} onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'search_key', value: 'keyword', type: 'String' }] })} onChange={(next) => setConfig({ inputParams: next })} />
       <SectionTitle title="知识库设置" />
       <Form layout="vertical" size="small">
         <Form.Item label="知识库">
-          <Select
-            aria-label="选择知识库"
-            placeholder="请选择知识库"
-            value={stringValue(config.knowledgeBaseId, undefined)}
-            options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}
-            onChange={(knowledgeBaseId) => setConfig({ knowledgeBaseId })}
-          />
+          <Select aria-label="选择知识库" placeholder="请选择知识库" value={stringValue(config.knowledgeBaseId, undefined)} options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))} onChange={(knowledgeBaseId) => setConfig({ knowledgeBaseId })} />
         </Form.Item>
         <Form.Item label="关键字">
           <Input
             placeholder="{{search_key}}"
             value={String(config.keywordTemplate ?? '{{search_key}}')}
-            onChange={(event) => {
-              setConfig({
-                keywordTemplate: event.target.value,
-                queryKey: firstTemplateVar(event.target.value) || config.queryKey || 'question'
-              });
-            }}
+            onChange={(event) => setConfig({ keywordTemplate: event.target.value, queryKey: firstTemplateVar(event.target.value) || config.queryKey || 'question' })}
           />
         </Form.Item>
         <Form.Item label="获取数据量">
-          <InputNumber
-            min={1}
-            max={50}
-            style={{ width: '100%' }}
-            value={numberValue(config.fetchCount ?? config.topK, 5)}
-            onChange={(fetchCount) => setConfig({ fetchCount: fetchCount ?? 5, topK: fetchCount ?? 5 })}
-          />
+          <InputNumber min={1} max={50} style={{ width: '100%' }} value={numberValue(config.fetchCount ?? config.topK, 5)} onChange={(fetchCount) => setConfig({ fetchCount: fetchCount ?? 5, topK: fetchCount ?? 5 })} />
         </Form.Item>
       </Form>
-
       <OutputSection
         params={outputParams}
         format={stringValue(config.outputFormat, 'ARRAY') ?? 'ARRAY'}
         onFormatChange={(outputFormat) => setConfig({ outputFormat })}
         onChange={(patch, index) => {
           const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
-          setConfig({
-            outputParams: next,
-            outputKey: next[0]?.name || 'documents'
-          });
+          setConfig({ outputParams: next, outputKey: next[0]?.name || 'documents' });
         }}
       />
     </>
   );
 }
 
-function ParamSection({
-  title,
-  params,
-  emptyText = '无输入参数',
-  onAdd,
-  onChange
-}: {
-  title: string;
-  params: ParamRow[];
-  emptyText?: string;
-  onAdd: () => void;
-  onChange: (params: ParamRow[]) => void;
-}) {
+function ContentTemplateConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
+  const config = node.config ?? {};
+  const outputParams = readParams(config.outputParams, [{ name: String(config.outputKey ?? 'content'), type: stringValue(config.outputFormat, 'TEXT') === 'JSON' ? 'Object' : 'String' }]);
+  return (
+    <>
+      <SectionTitle title="模板设置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="输出格式">
+          <Select value={stringValue(config.outputFormat, 'TEXT')} options={outputFormatOptions} onChange={(outputFormat) => setConfig({ outputFormat })} />
+        </Form.Item>
+        <Form.Item label="模板内容">
+          <Input.TextArea placeholder="使用 {{question}}、{{documents}} 等上下文变量" autoSize={{ minRows: 10, maxRows: 18 }} value={String(config.template ?? '')} onChange={(event) => setConfig({ template: event.target.value })} />
+        </Form.Item>
+      </Form>
+      <OutputSection
+        params={outputParams}
+        format={stringValue(config.outputFormat, 'TEXT') ?? 'TEXT'}
+        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
+        onChange={(patch, index) => {
+          const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
+          setConfig({ outputParams: next, outputKey: next[0]?.name || 'content' });
+        }}
+      />
+    </>
+  );
+}
+
+function HttpConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
+  const config = node.config ?? {};
+  const params = readKeyValues(config.params);
+  const headers = readKeyValues(config.headers, [{ key: 'Content-Type', value: 'application/json' }]);
+  const formData = readKeyValues(config.formData);
+  const outputParams = readParams(config.outputParams, [
+    { name: 'headers', type: 'Object' },
+    { name: 'statusCode', type: 'Number' },
+    { name: 'body', type: 'String' }
+  ]);
+
+  return (
+    <>
+      <SectionTitle title="请求设置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="请求方法">
+          <Select value={stringValue(config.method, 'POST')} options={methodOptions} onChange={(method) => setConfig({ method })} />
+        </Form.Item>
+        <Form.Item label="请求地址">
+          <Input placeholder="https://api.example.com/orders/{{orderId}}" value={String(config.url ?? '')} onChange={(event) => setConfig({ url: event.target.value })} />
+        </Form.Item>
+        <Form.Item label="超时时间(ms)">
+          <InputNumber min={1000} max={120000} style={{ width: '100%' }} value={numberValue(config.timeoutMs, 30000)} onChange={(timeoutMs) => setConfig({ timeoutMs: timeoutMs ?? 30000 })} />
+        </Form.Item>
+      </Form>
+      <KeyValueSection title="Params" rows={params} onAdd={() => setConfig({ params: [...params, { key: '', value: '' }] })} onChange={(next) => setConfig({ params: next })} />
+      <KeyValueSection title="Headers" rows={headers} onAdd={() => setConfig({ headers: [...headers, { key: '', value: '' }] })} onChange={(next) => setConfig({ headers: next })} />
+      <SectionTitle title="Body 设置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="Body 类型">
+          <Select value={stringValue(config.bodyType, 'JSON')} options={bodyTypeOptions} onChange={(bodyType) => setConfig({ bodyType })} />
+        </Form.Item>
+        {stringValue(config.bodyType, 'JSON') === 'FORM_DATA' ? (
+          <KeyValueSection title="Form Data" rows={formData} onAdd={() => setConfig({ formData: [...formData, { key: '', value: '' }] })} onChange={(next) => setConfig({ formData: next })} />
+        ) : (
+          <Form.Item label="Body 内容">
+            <Input.TextArea placeholder='{"question":"{{question}}"}' autoSize={{ minRows: 8, maxRows: 14 }} value={String(config.bodyTemplate ?? config.body ?? '')} onChange={(event) => setConfig({ bodyTemplate: event.target.value })} />
+          </Form.Item>
+        )}
+        <Form.Item label="响应 Body 类型">
+          <Select value={stringValue(config.responseBodyType, 'TEXT')} options={[{ value: 'TEXT', label: '文本' }, { value: 'JSON', label: 'JSON' }]} onChange={(responseBodyType) => setConfig({ responseBodyType })} />
+        </Form.Item>
+        <Form.Item label="输出变量">
+          <Input value={String(config.outputKey ?? 'httpResult')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
+        </Form.Item>
+      </Form>
+      <OutputSection params={outputParams} format="OBJECT" onFormatChange={() => undefined} onChange={(patch, index) => setConfig({ outputParams: outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param) })} />
+    </>
+  );
+}
+
+function LoopConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
+  const config = node.config ?? {};
+  const steps = readLoopSteps(config.loopSteps);
+  const outputParams = readParams(config.outputParams, [{ name: String(config.outputKey ?? 'loopResults'), type: 'Array' }]);
+  return (
+    <>
+      <SectionTitle title="循环设置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="循环变量">
+          <Input placeholder="items" value={String(config.loopVar ?? 'items')} onChange={(event) => setConfig({ loopVar: event.target.value })} />
+        </Form.Item>
+        <Form.Item label="循环项变量">
+          <Input placeholder="loopItem" value={String(config.itemVar ?? 'loopItem')} onChange={(event) => setConfig({ itemVar: event.target.value })} />
+        </Form.Item>
+        <Form.Item label="索引变量">
+          <Input placeholder="index" value={String(config.indexVar ?? 'index')} onChange={(event) => setConfig({ indexVar: event.target.value })} />
+        </Form.Item>
+        <Form.Item label="最大循环次数">
+          <InputNumber min={1} max={1000} style={{ width: '100%' }} value={numberValue(config.maxIterations, 100)} onChange={(maxIterations) => setConfig({ maxIterations: maxIterations ?? 100 })} />
+        </Form.Item>
+      </Form>
+      <section style={sectionStyle}>
+        <SectionTitle title="循环体步骤" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setConfig({ loopSteps: [...steps, defaultLoopStep()] })} />} />
+        <Space direction="vertical" style={{ width: '100%' }} size={10}>
+          {steps.map((step, index) => (
+            <div key={`${step.name}-${index}`} style={stepCardStyle}>
+              <Input placeholder="步骤名称" value={step.name} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { name: event.target.value }) })} />
+              <Select value={step.type} options={[{ value: 'CONTENT_TEMPLATE', label: '内容模板' }, { value: 'HTTP_TOOL', label: 'HTTP 请求' }]} onChange={(type) => setConfig({ loopSteps: updateLoopStep(steps, index, { type }) })} />
+              {step.type === 'HTTP_TOOL' ? (
+                <>
+                  <Select value={step.method ?? 'POST'} options={methodOptions} onChange={(method) => setConfig({ loopSteps: updateLoopStep(steps, index, { method }) })} />
+                  <Input placeholder="请求地址" value={step.url} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { url: event.target.value }) })} />
+                  <Input.TextArea placeholder='{"item":"{{loopItem}}"}' autoSize={{ minRows: 4, maxRows: 8 }} value={step.bodyTemplate} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { bodyTemplate: event.target.value }) })} />
+                </>
+              ) : (
+                <Input.TextArea placeholder="第 {{index}} 项：{{loopItem}}" autoSize={{ minRows: 4, maxRows: 8 }} value={step.template} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { template: event.target.value }) })} />
+              )}
+              <Input placeholder="输出变量" value={step.outputKey} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { outputKey: event.target.value }) })} />
+            </div>
+          ))}
+        </Space>
+      </section>
+      <OutputSection
+        params={outputParams}
+        format="ARRAY"
+        onFormatChange={() => undefined}
+        onChange={(patch, index) => {
+          const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
+          setConfig({ outputParams: next, outputKey: next[0]?.name || 'loopResults' });
+        }}
+      />
+    </>
+  );
+}
+
+function ParamSection({ title, params, emptyText = '无输入参数', onAdd, onChange }: { title: string; params: ParamRow[]; emptyText?: string; onAdd: () => void; onChange: (params: ParamRow[]) => void }) {
   return (
     <section style={sectionStyle}>
       <SectionTitle title={title} action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={onAdd} />} />
@@ -282,24 +394,9 @@ function ParamSection({
         <Space direction="vertical" style={{ width: '100%' }} size={8}>
           {params.map((param, index) => (
             <div key={`${param.name}-${index}`} style={paramGridStyle}>
-              <Input
-                aria-label={`参数名称 ${index + 1}`}
-                placeholder="参数名称"
-                value={param.name}
-                onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
-              />
-              <Input
-                aria-label={`参数值 ${index + 1}`}
-                placeholder="参数值"
-                value={param.value}
-                onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))}
-              />
-              <Select
-                aria-label={`参数类型 ${index + 1}`}
-                value={param.type}
-                options={paramTypeOptions}
-                onChange={(type) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, type } : item))}
-              />
+              <Input aria-label={`参数名称 ${index + 1}`} placeholder="参数名称" value={param.name} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
+              <Input aria-label={`参数值 ${index + 1}`} placeholder="参数值" value={param.value} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} />
+              <Select aria-label={`参数类型 ${index + 1}`} value={param.type} options={paramTypeOptions} onChange={(type) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, type } : item))} />
             </div>
           ))}
         </Space>
@@ -308,35 +405,28 @@ function ParamSection({
   );
 }
 
-function OutputSection({
-  params,
-  format,
-  onFormatChange,
-  onChange
-}: {
-  params: ParamRow[];
-  format: string;
-  onFormatChange: (format: string) => void;
-  onChange: (patch: Partial<ParamRow>, index: number) => void;
-}) {
+function KeyValueSection({ title, rows, onAdd, onChange }: { title: string; rows: KeyValueRow[]; onAdd: () => void; onChange: (rows: KeyValueRow[]) => void }) {
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle title={title} action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={onAdd} />} />
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        {rows.map((row, index) => (
+          <div key={`${row.key}-${index}`} style={keyValueGridStyle}>
+            <Input placeholder="Key" value={row.key} onChange={(event) => onChange(rows.map((item, itemIndex) => itemIndex === index ? { ...item, key: event.target.value } : item))} />
+            <Input placeholder="Value" value={row.value} onChange={(event) => onChange(rows.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} />
+          </div>
+        ))}
+      </Space>
+    </section>
+  );
+}
+
+function OutputSection({ params, format, onFormatChange, onChange }: { params: ParamRow[]; format: string; onFormatChange: (format: string) => void; onChange: (patch: Partial<ParamRow>, index: number) => void }) {
   return (
     <section style={sectionStyle}>
       <SectionTitle
         title="输出参数"
-        action={(
-          <Select
-            aria-label="输出格式"
-            size="small"
-            value={format}
-            style={{ width: 110 }}
-            options={[
-              { value: 'TEXT', label: '文本' },
-              { value: 'JSON', label: 'JSON' },
-              { value: 'ARRAY', label: '数组' }
-            ]}
-            onChange={onFormatChange}
-          />
-        )}
+        action={<Select aria-label="输出格式" size="small" value={format} style={{ width: 110 }} options={outputFormatOptions} onChange={onFormatChange} />}
       />
       <div style={outputHeaderStyle}>
         <Typography.Text type="secondary">参数名称</Typography.Text>
@@ -354,15 +444,7 @@ function OutputSection({
   );
 }
 
-function GenericConfig({
-  node,
-  setConfig,
-  promptTemplates
-}: {
-  node: WorkflowNode;
-  setConfig: (patch: Record<string, unknown>) => void;
-  promptTemplates: PromptTemplate[];
-}) {
+function GenericConfig({ node, setConfig, promptTemplates }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; promptTemplates: PromptTemplate[] }) {
   const config = node.config ?? {};
   if (node.type === 'PROMPT') {
     return (
@@ -391,14 +473,7 @@ function GenericConfig({
 
   if (node.type === 'START') {
     const params = readParams(config.inputParams, [{ name: 'question', type: 'String' }]);
-    return (
-      <ParamSection
-        title="输入参数"
-        params={params}
-        onAdd={() => setConfig({ inputParams: [...params, { name: 'question', type: 'String' }] })}
-        onChange={(inputParams) => setConfig({ inputParams })}
-      />
-    );
+    return <ParamSection title="输入参数" params={params} onAdd={() => setConfig({ inputParams: [...params, { name: 'question', type: 'String' }] })} onChange={(inputParams) => setConfig({ inputParams })} />;
   }
 
   if (node.type === 'END') {
@@ -459,6 +534,42 @@ function readParams(value: unknown, fallback: ParamRow[] = []): ParamRow[] {
     }));
 }
 
+function readKeyValues(value: unknown, fallback: KeyValueRow[] = []): KeyValueRow[] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item) => ({ key: String(item.key ?? ''), value: String(item.value ?? '') }));
+}
+
+function readLoopSteps(value: unknown): LoopStep[] {
+  if (!Array.isArray(value)) {
+    return [defaultLoopStep()];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item) => ({
+      type: String(item.type ?? 'CONTENT_TEMPLATE'),
+      name: String(item.name ?? ''),
+      template: String(item.template ?? ''),
+      outputKey: String(item.outputKey ?? 'text'),
+      method: String(item.method ?? 'POST'),
+      url: String(item.url ?? ''),
+      bodyType: String(item.bodyType ?? 'JSON'),
+      bodyTemplate: String(item.bodyTemplate ?? ''),
+      responseBodyType: String(item.responseBodyType ?? 'TEXT')
+    }));
+}
+
+function updateLoopStep(steps: LoopStep[], index: number, patch: Partial<LoopStep>) {
+  return steps.map((step, itemIndex) => itemIndex === index ? { ...step, ...patch } : step);
+}
+
+function defaultLoopStep(): LoopStep {
+  return { type: 'CONTENT_TEMPLATE', name: '模板处理', template: '第 {{index}} 项：{{loopItem}}', outputKey: 'text' };
+}
+
 function stringValue(value: unknown, fallback: string | undefined) {
   return typeof value === 'string' && value ? value : fallback;
 }
@@ -479,89 +590,32 @@ const paramTypeOptions = [
   { value: 'Array', label: 'Array' }
 ];
 
-const panelStyle: React.CSSProperties = {
-  background: '#fff',
-  borderLeft: '0',
-  height: '100%',
-  overflow: 'auto',
-  padding: 0,
-  width: '100%'
-};
+const outputFormatOptions = [
+  { value: 'TEXT', label: '文本' },
+  { value: 'JSON', label: 'JSON' },
+  { value: 'ARRAY', label: '数组' },
+  { value: 'OBJECT', label: '对象' }
+];
 
-const tinyHeaderStyle: React.CSSProperties = {
-  background: '#f5f6f8',
-  borderBottom: '1px solid #e5e7eb',
-  color: '#c1c7d0',
-  fontSize: 12,
-  lineHeight: '34px',
-  padding: '0 14px'
-};
+const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => ({ value: method, label: method }));
+const bodyTypeOptions = [
+  { value: 'JSON', label: 'JSON' },
+  { value: 'RAW', label: 'Raw' },
+  { value: 'FORM_DATA', label: 'Form Data' },
+  { value: 'NONE', label: 'None' }
+];
 
-const nodeTitleStyle: React.CSSProperties = {
-  padding: '14px 16px 8px'
-};
-
-const nodeTitleMainStyle: React.CSSProperties = {
-  alignItems: 'center',
-  display: 'flex',
-  gap: 10,
-  marginBottom: 8
-};
-
-const nodeIconStyle: React.CSSProperties = {
-  alignItems: 'center',
-  background: '#eef3ff',
-  borderRadius: 8,
-  color: '#3b82f6',
-  display: 'flex',
-  fontSize: 22,
-  height: 32,
-  justifyContent: 'center',
-  width: 32
-};
-
-const nodeNameInputStyle: React.CSSProperties = {
-  border: 0,
-  boxShadow: 'none',
-  fontSize: 16,
-  fontWeight: 700,
-  paddingLeft: 0
-};
-
-const sectionStyle: React.CSSProperties = {
-  padding: '10px 16px'
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  alignItems: 'center',
-  display: 'flex',
-  justifyContent: 'space-between',
-  marginBottom: 10
-};
-
-const emptyParamStyle: React.CSSProperties = {
-  background: '#f7f7f8',
-  borderRadius: 6,
-  color: '#8c8c8c',
-  lineHeight: '44px',
-  textAlign: 'center'
-};
-
-const paramGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 6,
-  gridTemplateColumns: 'minmax(88px, 1fr) minmax(104px, 1.2fr) 96px'
-};
-
-const outputHeaderStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 6,
-  gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)',
-  marginBottom: 6
-};
-
-const outputGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 6,
-  gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)'
-};
+const panelStyle: React.CSSProperties = { background: '#fff', borderLeft: '0', height: '100%', overflow: 'auto', padding: 0, width: '100%' };
+const tinyHeaderStyle: React.CSSProperties = { background: '#f5f6f8', borderBottom: '1px solid #e5e7eb', color: '#c1c7d0', fontSize: 12, lineHeight: '34px', padding: '0 14px' };
+const nodeTitleStyle: React.CSSProperties = { padding: '14px 16px 8px' };
+const nodeTitleMainStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', gap: 10, marginBottom: 8 };
+const nodeIconStyle: React.CSSProperties = { alignItems: 'center', background: '#eef3ff', borderRadius: 8, color: '#3b82f6', display: 'flex', fontSize: 22, height: 32, justifyContent: 'center', width: 32 };
+const nodeNameInputStyle: React.CSSProperties = { border: 0, boxShadow: 'none', fontSize: 16, fontWeight: 700, paddingLeft: 0 };
+const sectionStyle: React.CSSProperties = { padding: '10px 16px' };
+const sectionTitleStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', marginBottom: 10 };
+const emptyParamStyle: React.CSSProperties = { background: '#f7f7f8', borderRadius: 6, color: '#8c8c8c', lineHeight: '44px', textAlign: 'center' };
+const paramGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(88px, 1fr) minmax(104px, 1.2fr) 96px' };
+const keyValueGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(140px, 1.4fr)' };
+const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)', marginBottom: 6 };
+const outputGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)' };
+const stepCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: 8, display: 'grid', gap: 8, padding: 10 };

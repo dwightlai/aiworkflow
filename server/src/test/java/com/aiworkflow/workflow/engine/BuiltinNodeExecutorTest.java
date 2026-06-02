@@ -67,6 +67,43 @@ class BuiltinNodeExecutorTest {
     }
 
     @Test
+    void contentTemplateNodeRendersTextOutput() {
+        ContentTemplateNodeExecutor executor = new ContentTemplateNodeExecutor(new ObjectMapper());
+        NodeExecutionContext context = new NodeExecutionContext(
+                Map.of("name", "Ada"),
+                Map.of("name", "Ada", "company", "Lovelace Labs")
+        );
+
+        NodeExecutionResult result = executor.execute(node(
+                "template",
+                WorkflowNodeType.CONTENT_TEMPLATE,
+                Map.of("outputKey", "content", "template", "Hello {{name}} from {{company}}", "outputFormat", "TEXT")
+        ), context);
+
+        assertThat(result.output()).containsExactlyEntriesOf(Map.of("content", "Hello Ada from Lovelace Labs"));
+    }
+
+    @Test
+    void contentTemplateNodeParsesJsonOutput() {
+        ContentTemplateNodeExecutor executor = new ContentTemplateNodeExecutor(new ObjectMapper());
+        NodeExecutionContext context = new NodeExecutionContext(
+                Map.of("name", "Ada"),
+                Map.of("name", "Ada")
+        );
+
+        NodeExecutionResult result = executor.execute(node(
+                "template",
+                WorkflowNodeType.CONTENT_TEMPLATE,
+                Map.of("outputKey", "payload", "template", "{\"name\":\"{{name}}\"}", "outputFormat", "JSON")
+        ), context);
+
+        assertThat(result.output()).containsKey("payload");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) result.output().get("payload");
+        assertThat(payload).containsExactlyEntriesOf(Map.of("name", "Ada"));
+    }
+
+    @Test
     void conditionNodeSelectsMatchedBranch() {
         ConditionNodeExecutor executor = new ConditionNodeExecutor();
         NodeExecutionContext context = new NodeExecutionContext(
@@ -152,6 +189,81 @@ class BuiltinNodeExecutorTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void httpToolNodeSupportsParamsHeadersAndJsonResponse() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/search", exchange -> {
+            String token = exchange.getRequestHeaders().getFirst("X-Token");
+            byte[] response = ("{\"query\":\"" + exchange.getRequestURI().getQuery() + "\",\"token\":\"" + token + "\"}").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            HttpToolNodeExecutor executor = new HttpToolNodeExecutor(new ObjectMapper());
+            NodeExecutionContext context = new NodeExecutionContext(
+                    Map.of("keyword", "refund"),
+                    Map.of("keyword", "refund", "token", "dev-token")
+            );
+
+            NodeExecutionResult result = executor.execute(node(
+                    "http",
+                    WorkflowNodeType.HTTP_TOOL,
+                    Map.of(
+                            "method", "GET",
+                            "url", "http://127.0.0.1:" + server.getAddress().getPort() + "/search",
+                            "params", List.of(Map.of("key", "q", "value", "{{keyword}}")),
+                            "headers", List.of(Map.of("key", "X-Token", "value", "{{token}}")),
+                            "responseBodyType", "JSON",
+                            "outputKey", "httpResult"
+                    )
+            ), context);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> toolResult = (Map<String, Object>) result.output().get("httpResult");
+            assertThat(toolResult.get("statusCode")).isEqualTo(200);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) toolResult.get("body");
+            assertThat(body.get("query")).isEqualTo("q=refund");
+            assertThat(body.get("token")).isEqualTo("dev-token");
+            assertThat(toolResult).containsKeys("headers", "rawBody", "success");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void loopNodeRunsTemplateStepsForEachItem() {
+        LoopNodeExecutor executor = new LoopNodeExecutor(new ObjectMapper());
+        NodeExecutionContext context = new NodeExecutionContext(
+                Map.of("items", List.of("北京", "上海")),
+                Map.of("items", List.of("北京", "上海"))
+        );
+
+        NodeExecutionResult result = executor.execute(node(
+                "loop",
+                WorkflowNodeType.LOOP,
+                Map.of(
+                        "loopVar", "items",
+                        "itemVar", "loopItem",
+                        "indexVar", "index",
+                        "outputKey", "loopResults",
+                        "loopSteps", List.of(Map.of(
+                                "type", "CONTENT_TEMPLATE",
+                                "template", "{{index}}-{{loopItem}}",
+                                "outputKey", "text"
+                        ))
+                )
+        ), context);
+
+        assertThat(result.output()).containsKey("loopResults");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> loopResults = (List<Map<String, Object>>) result.output().get("loopResults");
+        assertThat(loopResults).extracting(item -> item.get("text")).containsExactly("0-北京", "1-上海");
     }
 
     private WorkflowNode node(String id, WorkflowNodeType type, Map<String, Object> config) {

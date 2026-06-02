@@ -3,6 +3,7 @@ import {
   CommentOutlined,
   DatabaseOutlined,
   PlayCircleOutlined,
+  RedoOutlined,
   RobotOutlined,
   StopOutlined,
   ToolOutlined
@@ -34,7 +35,7 @@ const nodeTemplates: NodeTemplate[] = [
     config: {
       inputParams: [{ name: 'question', type: 'String' }],
       inputKeys: ['question'],
-      defaultInputJson: '{\n  "question": "请介绍退款政策",\n  "keyword": "退款"\n}'
+      defaultInputJson: '{\n  "question": "请介绍退款政策",\n  "keyword": "退款",\n  "items": ["北京", "上海"]\n}'
     }
   },
   {
@@ -61,13 +62,15 @@ const nodeTemplates: NodeTemplate[] = [
     }
   },
   {
-    type: 'PROMPT',
-    name: 'Prompt 模板',
-    description: '把上下文变量渲染成提示词',
+    type: 'CONTENT_TEMPLATE',
+    name: '内容模板',
+    description: '使用模板生成文本或 JSON 内容',
     icon: <CommentOutlined />,
     config: {
       template: '请结合以下知识片段回答用户问题。\n\n知识片段：{{documents}}\n\n用户问题：{{question}}',
-      outputKey: 'prompt'
+      outputKey: 'content',
+      outputFormat: 'TEXT',
+      outputParams: [{ name: 'content', type: 'String' }]
     }
   },
   {
@@ -91,6 +94,60 @@ const nodeTemplates: NodeTemplate[] = [
     }
   },
   {
+    type: 'LOOP',
+    name: '循环',
+    description: '遍历数组并执行循环体步骤',
+    icon: <RedoOutlined />,
+    config: {
+      loopVar: 'items',
+      itemVar: 'loopItem',
+      indexVar: 'index',
+      maxIterations: 100,
+      outputKey: 'loopResults',
+      loopSteps: [
+        {
+          type: 'CONTENT_TEMPLATE',
+          name: '模板处理',
+          template: '第 {{index}} 项：{{loopItem}}',
+          outputKey: 'text'
+        }
+      ],
+      outputParams: [{ name: 'loopResults', type: 'Array' }]
+    }
+  },
+  {
+    type: 'HTTP_TOOL',
+    name: 'HTTP 请求',
+    description: '调用外部 API 并输出响应结构',
+    icon: <ToolOutlined />,
+    config: {
+      method: 'POST',
+      url: '',
+      params: [],
+      headers: [{ key: 'Content-Type', value: 'application/json' }],
+      bodyType: 'JSON',
+      bodyTemplate: '{\n  "question": "{{question}}"\n}',
+      responseBodyType: 'TEXT',
+      outputKey: 'httpResult',
+      outputParams: [
+        { name: 'headers', type: 'Object' },
+        { name: 'statusCode', type: 'Number' },
+        { name: 'body', type: 'String' }
+      ],
+      timeoutMs: 30000
+    }
+  },
+  {
+    type: 'PROMPT',
+    name: 'Prompt 模板',
+    description: '引用已保存 Prompt 或渲染提示词',
+    icon: <CommentOutlined />,
+    config: {
+      template: '请回答：{{question}}',
+      outputKey: 'prompt'
+    }
+  },
+  {
     type: 'CONDITION',
     name: '条件分支',
     description: '根据上下文变量选择后续节点',
@@ -105,23 +162,9 @@ const nodeTemplates: NodeTemplate[] = [
     }
   },
   {
-    type: 'HTTP_TOOL',
-    name: 'HTTP 工具',
-    description: '调用外部业务接口',
-    icon: <ToolOutlined />,
-    config: {
-      method: 'POST',
-      url: '',
-      headersJson: '{\n  "Content-Type": "application/json"\n}',
-      bodyTemplate: '{\n  "question": "{{question}}"\n}',
-      outputKey: 'toolResult',
-      timeoutMs: 30000
-    }
-  },
-  {
     type: 'TEXT_TRANSFORM',
     name: '文本处理',
-    description: '模板渲染或字段整理',
+    description: '兼容旧版模板渲染节点',
     icon: <CommentOutlined />,
     config: { template: '{{output}}', outputKey: 'text' }
   },

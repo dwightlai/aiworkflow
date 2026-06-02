@@ -100,7 +100,9 @@ function nodeBackground(type: string) {
     HTTP_TOOL: '#fefce8',
     KNOWLEDGE_RETRIEVAL: '#f0fdf4',
     LLM: '#fff7ed',
+    LOOP: '#f0f9ff',
     PROMPT: '#eef6ff',
+    CONTENT_TEMPLATE: '#f5f3ff',
     START: '#ecfdf3',
     TEXT_TRANSFORM: '#f5f3ff'
   };

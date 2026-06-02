@@ -6,7 +6,9 @@ export type WorkflowNodeType =
   | 'KNOWLEDGE_RETRIEVAL'
   | 'HTTP_TOOL'
   | 'CONDITION'
-  | 'TEXT_TRANSFORM';
+  | 'TEXT_TRANSFORM'
+  | 'CONTENT_TEMPLATE'
+  | 'LOOP';
 
 export interface WorkflowNode {
   id: string;

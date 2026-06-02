@@ -158,6 +158,69 @@ describe('NodeConfigPanel', () => {
       })
     });
   });
+
+  it('renders content template node config and updates template fields', () => {
+    const onChange = vi.fn();
+    render(<NodeConfigPanel node={contentTemplateNode} onChange={onChange} />);
+
+    expect(screen.getByText('通过模板生成文本或 JSON 内容')).toBeInTheDocument();
+    expect(screen.getByText('模板设置')).toBeInTheDocument();
+    expect(screen.getByText('模板内容')).toBeInTheDocument();
+    expect(screen.getByText('输出参数')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('使用 {{question}}、{{documents}} 等上下文变量'), {
+      target: { value: '答案：{{question}}' }
+    });
+
+    expect(onChange).toHaveBeenCalledWith('template_1', {
+      config: expect.objectContaining({
+        template: '答案：{{question}}'
+      })
+    });
+  });
+
+  it('renders HTTP node config and updates runnable request fields', () => {
+    const onChange = vi.fn();
+    render(<NodeConfigPanel node={httpNode} onChange={onChange} />);
+
+    expect(screen.getByText('调用外部 API 并输出响应结构')).toBeInTheDocument();
+    expect(screen.getByText('请求设置')).toBeInTheDocument();
+    expect(screen.getByText('Params')).toBeInTheDocument();
+    expect(screen.getByText('Headers')).toBeInTheDocument();
+    expect(screen.getByText('Body 设置')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('httpResult')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('https://api.example.com/orders/{{orderId}}'), {
+      target: { value: 'https://api.example.com/search' }
+    });
+
+    expect(onChange).toHaveBeenCalledWith('http_1', {
+      config: expect.objectContaining({
+        url: 'https://api.example.com/search'
+      })
+    });
+  });
+
+  it('renders loop node config and updates loop variables', () => {
+    const onChange = vi.fn();
+    render(<NodeConfigPanel node={loopNode} onChange={onChange} />);
+
+    expect(screen.getByText('遍历数组并执行循环体步骤')).toBeInTheDocument();
+    expect(screen.getByText('循环设置')).toBeInTheDocument();
+    expect(screen.getByText('循环变量')).toBeInTheDocument();
+    expect(screen.getByText('循环体步骤')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('loopResults')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue('items'), {
+      target: { value: 'documents' }
+    });
+
+    expect(onChange).toHaveBeenCalledWith('loop_1', {
+      config: expect.objectContaining({
+        loopVar: 'documents'
+      })
+    });
+  });
 });
 
 const llmNode: WorkflowNode = {
@@ -208,5 +271,53 @@ const promptNode: WorkflowNode = {
   config: {
     template: '',
     outputKey: 'prompt'
+  }
+};
+
+const contentTemplateNode: WorkflowNode = {
+  id: 'template_1',
+  type: 'CONTENT_TEMPLATE',
+  name: '内容模板',
+  config: {
+    template: '请回答：{{question}}',
+    outputKey: 'content',
+    outputFormat: 'TEXT',
+    outputParams: [{ name: 'content', type: 'String' }]
+  }
+};
+
+const httpNode: WorkflowNode = {
+  id: 'http_1',
+  type: 'HTTP_TOOL',
+  name: 'HTTP 请求',
+  config: {
+    method: 'POST',
+    url: '',
+    params: [],
+    headers: [{ key: 'Content-Type', value: 'application/json' }],
+    bodyType: 'JSON',
+    bodyTemplate: '{\n  "question": "{{question}}"\n}',
+    responseBodyType: 'TEXT',
+    outputKey: 'httpResult',
+    outputParams: [
+      { name: 'headers', type: 'Object' },
+      { name: 'statusCode', type: 'Number' },
+      { name: 'body', type: 'String' }
+    ]
+  }
+};
+
+const loopNode: WorkflowNode = {
+  id: 'loop_1',
+  type: 'LOOP',
+  name: '循环',
+  config: {
+    loopVar: 'items',
+    itemVar: 'loopItem',
+    indexVar: 'index',
+    maxIterations: 100,
+    outputKey: 'loopResults',
+    loopSteps: [{ type: 'CONTENT_TEMPLATE', name: '模板处理', template: '{{loopItem}}', outputKey: 'text' }],
+    outputParams: [{ name: 'loopResults', type: 'Array' }]
   }
 };
