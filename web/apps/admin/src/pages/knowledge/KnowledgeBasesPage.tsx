@@ -63,6 +63,7 @@ import {
   type VectorStoreConfig
 } from '../../api/knowledge';
 import { listModelProviders } from '../../api/models';
+import { navigateTo } from '../../navigation';
 
 const initialBaseValues: SaveKnowledgeBaseRequest = {
   name: '',
@@ -431,7 +432,14 @@ export function KnowledgeBasesPage() {
           <Button size="small" icon={<EditOutlined />} aria-label="编辑知识库" onClick={() => openEditDrawer(base)}>
             编辑
           </Button>
-          <Button size="small" icon={<FileAddOutlined />} onClick={() => openDocumentDrawer(base)}>
+          <Button
+            size="small"
+            icon={<FileAddOutlined />}
+            onClick={() => {
+              openDocumentDrawer(base);
+              navigateTo(`/knowledge/${base.id}/documents`);
+            }}
+          >
             管理文档
           </Button>
           <Button size="small" danger icon={<DeleteOutlined />} aria-label="删除知识库" onClick={() => deleteBaseMutation.mutate(base)}>

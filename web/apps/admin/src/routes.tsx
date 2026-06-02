@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import { BotsPage } from './pages/bots/BotsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { KnowledgeBasesPage } from './pages/knowledge/KnowledgeBasesPage';
+import { KnowledgeDocumentCreatePage } from './pages/knowledge/KnowledgeDocumentCreatePage';
+import { KnowledgeDocumentEditPage } from './pages/knowledge/KnowledgeDocumentEditPage';
+import { KnowledgeDocumentsPage } from './pages/knowledge/KnowledgeDocumentsPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
@@ -88,6 +91,33 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: '知识库',
       breadcrumb: ['首页', 'AI 功能', '知识库'],
       element: <KnowledgeBasesPage />
+    };
+  }
+
+  if (pathname.startsWith('/knowledge/') && pathname.endsWith('/documents/new')) {
+    const knowledgeBaseId = pathname.split('/')[2] ?? '';
+    return {
+      title: '新增文档',
+      breadcrumb: ['首页', 'AI 功能', '知识库', '新增文档'],
+      element: <KnowledgeDocumentCreatePage knowledgeBaseId={knowledgeBaseId} />
+    };
+  }
+
+  if (pathname.startsWith('/knowledge/') && pathname.includes('/documents/') && pathname.endsWith('/edit')) {
+    const [, , knowledgeBaseId, , documentId] = pathname.split('/');
+    return {
+      title: '编辑文档',
+      breadcrumb: ['首页', 'AI 功能', '知识库', '编辑文档'],
+      element: <KnowledgeDocumentEditPage knowledgeBaseId={knowledgeBaseId ?? ''} documentId={documentId ?? ''} />
+    };
+  }
+
+  if (pathname.startsWith('/knowledge/') && pathname.endsWith('/documents')) {
+    const knowledgeBaseId = pathname.split('/')[2] ?? '';
+    return {
+      title: '知识库文档',
+      breadcrumb: ['首页', 'AI 功能', '知识库', '文档管理'],
+      element: <KnowledgeDocumentsPage knowledgeBaseId={knowledgeBaseId} />
     };
   }
 
