@@ -4,4 +4,7 @@ node_modules/
 dist/
 *.log
 .superpowers/
+.npm-cache/
+.pnpm-store/
+maven-settings.xml
 
