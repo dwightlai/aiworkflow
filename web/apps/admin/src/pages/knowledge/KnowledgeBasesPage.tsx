@@ -8,7 +8,8 @@ import {
   FileSearchOutlined,
   FileTextOutlined,
   PlusOutlined,
-  SearchOutlined
+  SearchOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,6 +23,7 @@ import {
   List,
   Select,
   Space,
+  Steps,
   Statistic,
   Table,
   Tag,
@@ -42,11 +44,13 @@ import {
   listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
   listVectorStoreConfigs,
+  previewUploadedKnowledgeDocumentFile,
   previewKnowledgeChunks,
   searchKnowledgeBase,
   updateKnowledgeBase,
   updateKnowledgeChunk,
   updateVectorStoreConfig,
+  uploadKnowledgeDocumentFile,
   type AddKnowledgeDocumentRequest,
   type KnowledgeBase,
   type KnowledgeChunk,
@@ -55,6 +59,7 @@ import {
   type KnowledgeSearchResult,
   type SaveKnowledgeBaseRequest,
   type SaveVectorStoreConfigRequest,
+  type UploadedDocumentPreview,
   type VectorStoreConfig
 } from '../../api/knowledge';
 import { listModelProviders } from '../../api/models';
@@ -88,6 +93,8 @@ const initialVectorValues: SaveVectorStoreConfigRequest = {
   enabled: true
 };
 
+const supportedUploadTypes = '.txt,.doc,.docx,.pdf,.md,.markdown,.html,.htm,.ppt,.pptx,.xls,.xlsx';
+
 export function KnowledgeBasesPage() {
   const [baseForm] = Form.useForm<SaveKnowledgeBaseRequest>();
   const [documentForm] = Form.useForm<AddKnowledgeDocumentRequest>();
@@ -105,6 +112,9 @@ export function KnowledgeBasesPage() {
   const [editingVectorStore, setEditingVectorStore] = useState<VectorStoreConfig | null>(null);
   const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
   const [chunkPreviews, setChunkPreviews] = useState<KnowledgeChunkPreview[]>([]);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<UploadedDocumentPreview | null>(null);
+  const [uploadStep, setUploadStep] = useState(0);
 
   const basesQuery = useQuery({
     queryKey: ['knowledge-bases'],
@@ -239,6 +249,48 @@ export function KnowledgeBasesPage() {
     onSuccess: setChunkPreviews
   });
 
+  const uploadPreviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!uploadFile) {
+        throw new Error('请先选择文件');
+      }
+      const values = documentForm.getFieldsValue();
+      return previewUploadedKnowledgeDocumentFile(uploadFile, {
+        splitterType: values.splitterType || 'SIMPLE_TEXT',
+        chunkSize: values.chunkSize || 500,
+        chunkOverlap: values.chunkOverlap ?? 0
+      });
+    },
+    onSuccess: (preview) => {
+      setUploadPreview(preview);
+      setChunkPreviews(preview.chunks);
+      setUploadStep(1);
+    }
+  });
+
+  const uploadFileMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedBase || !uploadFile) {
+        throw new Error('请先选择知识库和文件');
+      }
+      const values = documentForm.getFieldsValue();
+      return uploadKnowledgeDocumentFile(selectedBase.id, uploadFile, {
+        splitterType: values.splitterType || 'SIMPLE_TEXT',
+        chunkSize: values.chunkSize || 500,
+        chunkOverlap: values.chunkOverlap ?? 0
+      });
+    },
+    onSuccess: async () => {
+      message.success('文件已抽取并入库');
+      setUploadFile(null);
+      setUploadPreview(null);
+      setUploadStep(2);
+      setChunkPreviews([]);
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
   const searchMutation = useMutation({
     mutationFn: async (values: { query: string; topK: number }) => {
       if (!selectedBase) {
@@ -279,6 +331,9 @@ export function KnowledgeBasesPage() {
     setEditingChunkContent('');
     setSearchResults([]);
     setChunkPreviews([]);
+    setUploadFile(null);
+    setUploadPreview(null);
+    setUploadStep(0);
     documentForm.setFieldsValue({
       ...initialDocumentValues,
       splitterType: base.splitterType || 'SIMPLE_TEXT',
@@ -598,6 +653,109 @@ export function KnowledgeBasesPage() {
         width={980}
         onClose={() => setDocumentOpen(false)}
       >
+        <Card size="small" title={<Space><UploadOutlined />文件上传与数据处理</Space>} style={{ marginBottom: 16 }}>
+          <Steps
+            current={uploadStep}
+            items={[
+              { title: '选择文件', description: '选择要上传的数据文件' },
+              { title: '数据处理', description: '配置分段并预览' },
+              { title: '确认上传', description: '写入知识库' }
+            ]}
+            style={{ marginBottom: 20 }}
+          />
+          <div style={uploadWizardStyle}>
+            <div style={uploadPanelStyle}>
+              <label htmlFor="knowledge-upload-file" style={uploadDropStyle}>
+                <UploadOutlined style={{ color: '#1677ff', fontSize: 28 }} />
+                <Typography.Text strong>点击或拖拽文件到此处上传</Typography.Text>
+                <Typography.Text type="secondary">支持 txt、docx、pdf、md、html、pptx、xlsx 等类型文件</Typography.Text>
+                <Typography.Text type="secondary">单个文件建议不超过 100 MB</Typography.Text>
+                <input
+                  id="knowledge-upload-file"
+                  aria-label="选择知识库文件"
+                  accept={supportedUploadTypes}
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={(event) => {
+                    const nextFile = event.target.files?.[0] ?? null;
+                    setUploadFile(nextFile);
+                    setUploadPreview(null);
+                    setUploadStep(0);
+                    setChunkPreviews([]);
+                  }}
+                />
+              </label>
+              {uploadFile ? (
+                <Tag color="blue" style={{ marginTop: 12 }}>
+                  {uploadFile.name} / {(uploadFile.size / 1024 / 1024).toFixed(2)} MB
+                </Tag>
+              ) : null}
+            </div>
+            <div style={uploadPanelStyle}>
+              <Typography.Text strong>数据处理配置</Typography.Text>
+              <Form form={documentForm} layout="inline" style={{ marginTop: 12 }}>
+                <Space wrap>
+                  <Form.Item name="splitterType" label="分段策略" style={{ marginBottom: 8 }}>
+                    <Select
+                      style={{ width: 170 }}
+                      options={[
+                        { value: 'SIMPLE_TEXT', label: '固定长度分段' },
+                        { value: 'MARKDOWN_HEADING', label: 'Markdown 标题' },
+                        { value: 'REGEX', label: '段落分段' }
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="chunkSize" label="分段长度" style={{ marginBottom: 8 }}>
+                    <InputNumber min={80} max={2000} />
+                  </Form.Item>
+                  <Form.Item name="chunkOverlap" label="重叠字符" style={{ marginBottom: 8 }}>
+                    <InputNumber min={0} max={500} />
+                  </Form.Item>
+                </Space>
+              </Form>
+              <Space style={{ marginTop: 16 }}>
+                <Button
+                  icon={<FileSearchOutlined />}
+                  disabled={!uploadFile}
+                  loading={uploadPreviewMutation.isPending}
+                  onClick={() => uploadPreviewMutation.mutate()}
+                >
+                  预览分段
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<FileAddOutlined />}
+                  disabled={!uploadFile || !uploadPreview}
+                  loading={uploadFileMutation.isPending}
+                  onClick={() => uploadFileMutation.mutate()}
+                >
+                  确认上传
+                </Button>
+              </Space>
+            </div>
+          </div>
+          {uploadPreview ? (
+            <Card size="small" title={<Space><FileTextOutlined />文件预览</Space>} style={{ marginTop: 16 }}>
+              <Space style={{ marginBottom: 12 }} wrap>
+                <Tag color="blue">{uploadPreview.fileName}</Tag>
+                <Tag>{uploadPreview.characterCount} 字符</Tag>
+                <Tag>{uploadPreview.chunks.length} 个分段</Tag>
+              </Space>
+              <List
+                dataSource={uploadPreview.chunks.slice(0, 5)}
+                renderItem={(item) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={<Space><Tag color="blue">#{item.index + 1}</Tag><Typography.Text type="secondary">{item.tokenEstimate} tokens</Typography.Text></Space>}
+                      description={<Typography.Paragraph style={{ marginBottom: 0 }}>{item.content}</Typography.Paragraph>}
+                    />
+                  </List.Item>
+                )}
+              />
+            </Card>
+          ) : null}
+        </Card>
+
         <Card size="small" title={<Space><FileAddOutlined />文档入库</Space>} style={{ marginBottom: 16 }}>
           <Form form={documentForm} layout="vertical" initialValues={initialDocumentValues} onFinish={(values) => documentMutation.mutate(values)}>
             <Form.Item name="name" label="文档名称" rules={[{ required: true, message: '请输入文档名称' }]}>
@@ -815,4 +973,29 @@ const documentGridStyle: React.CSSProperties = {
   display: 'grid',
   gap: 16,
   gridTemplateColumns: 'minmax(280px, 0.8fr) minmax(360px, 1.2fr)'
+};
+
+const uploadWizardStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 16,
+  gridTemplateColumns: 'minmax(300px, 0.9fr) minmax(360px, 1.1fr)'
+};
+
+const uploadPanelStyle: React.CSSProperties = {
+  border: '1px solid #e7ecf3',
+  borderRadius: 8,
+  padding: 16
+};
+
+const uploadDropStyle: React.CSSProperties = {
+  alignItems: 'center',
+  border: '1px dashed #c9d7ef',
+  borderRadius: 8,
+  cursor: 'pointer',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  justifyContent: 'center',
+  minHeight: 150,
+  textAlign: 'center'
 };

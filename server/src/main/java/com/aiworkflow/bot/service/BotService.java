@@ -165,13 +165,14 @@ public class BotService {
                 : ensureSession(bot.id(), sessionId);
 
         List<BotMessage> history = store.listMessages(bot.id(), session.id());
+        Instant userMessageCreatedAt = Instant.now();
         BotMessage userMessage = store.saveMessage(new BotMessage(
                 "msg_" + UUID.randomUUID(),
                 session.id(),
                 bot.id(),
                 BotMessageRole.USER,
                 defaultString(message, ""),
-                Instant.now()
+                userMessageCreatedAt
         ));
         Map<String, Object> executionInput = executionInput(bot, userMessage.content(), input, history);
         WorkflowExecutionResult execution = executionService.runWorkflow(new WorkflowExecutionRequest(bot.workflowId(), executionInput));
@@ -181,7 +182,7 @@ public class BotService {
                 bot.id(),
                 BotMessageRole.ASSISTANT,
                 replyText(execution.execution().output()),
-                Instant.now()
+                userMessageCreatedAt.plusNanos(1)
         ));
         List<BotMessage> messages = store.listMessages(bot.id(), session.id());
         BotSession updatedSession = store.saveSession(new BotSession(

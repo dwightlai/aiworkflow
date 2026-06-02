@@ -25,20 +25,31 @@ public class KnowledgeBaseService {
     private final KnowledgeSplitter splitter;
     private final KnowledgeStore store;
     private final EmbeddingClient embeddingClient;
+    private final DocumentTextExtractor documentTextExtractor;
 
     public KnowledgeBaseService() {
-        this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient());
+        this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient(), new DocumentTextExtractor());
     }
 
     public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store) {
-        this(splitter, store, new LocalEmbeddingClient());
+        this(splitter, store, new LocalEmbeddingClient(), new DocumentTextExtractor());
+    }
+
+    public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store, EmbeddingClient embeddingClient) {
+        this(splitter, store, embeddingClient, new DocumentTextExtractor());
     }
 
     @Autowired
-    public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store, EmbeddingClient embeddingClient) {
+    public KnowledgeBaseService(
+            KnowledgeSplitter splitter,
+            KnowledgeStore store,
+            EmbeddingClient embeddingClient,
+            DocumentTextExtractor documentTextExtractor
+    ) {
         this.splitter = splitter;
         this.store = store;
         this.embeddingClient = embeddingClient;
+        this.documentTextExtractor = documentTextExtractor;
     }
 
     public KnowledgeBase create(
@@ -152,6 +163,19 @@ public class KnowledgeBaseService {
         return splitter.preview(content, splitterType, chunkSize, chunkOverlap);
     }
 
+    public UploadedDocumentPreview previewDocumentFile(
+            String fileName,
+            String contentType,
+            java.io.InputStream inputStream,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap
+    ) {
+        String content = documentTextExtractor.extract(fileName, contentType, inputStream);
+        List<KnowledgeChunkPreview> chunks = previewChunks(content, splitterType, chunkSize, chunkOverlap);
+        return new UploadedDocumentPreview(fileName, content.length(), chunks);
+    }
+
     public KnowledgeDocument addDocument(
             String knowledgeBaseId,
             String name,
@@ -192,6 +216,19 @@ public class KnowledgeBaseService {
 
     public KnowledgeDocument addDocument(String knowledgeBaseId, String name, String content) {
         return addDocument(knowledgeBaseId, name, content, null, 0, -1);
+    }
+
+    public KnowledgeDocument addDocumentFile(
+            String knowledgeBaseId,
+            String fileName,
+            String contentType,
+            java.io.InputStream inputStream,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap
+    ) {
+        String content = documentTextExtractor.extract(fileName, contentType, inputStream);
+        return addDocument(knowledgeBaseId, fileName, content, splitterType, chunkSize, chunkOverlap);
     }
 
     public List<KnowledgeDocument> listDocuments(String knowledgeBaseId) {
@@ -388,5 +425,12 @@ public class KnowledgeBaseService {
 
     private int normalizeVectorDimension(int vectorDimension) {
         return vectorDimension <= 0 ? DEFAULT_VECTOR_DIMENSION : vectorDimension;
+    }
+
+    public record UploadedDocumentPreview(
+            String fileName,
+            int characterCount,
+            List<KnowledgeChunkPreview> chunks
+    ) {
     }
 }

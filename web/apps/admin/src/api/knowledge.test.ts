@@ -10,11 +10,13 @@ import {
   listKnowledgeDocuments,
   listKnowledgeBases,
   listVectorStoreConfigs,
+  previewUploadedKnowledgeDocumentFile,
   previewKnowledgeChunks,
   searchKnowledgeBase,
   updateKnowledgeBase,
   updateKnowledgeChunk,
-  updateVectorStoreConfig
+  updateVectorStoreConfig,
+  uploadKnowledgeDocumentFile
 } from './knowledge';
 
 describe('knowledge api', () => {
@@ -67,6 +69,46 @@ describe('knowledge api', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/knowledge-bases', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/kb_1/documents', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/knowledge-bases/kb_1/search', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('uploads document files with multipart form data', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { fileName: 'policy.pdf', characterCount: 128, chunks: [{ index: 0, content: 'Refund policy', tokenEstimate: 3 }] },
+        error: null
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        success: true,
+        data: { id: 'doc_1', knowledgeBaseId: 'kb_1', name: 'policy.pdf', chunkCount: 3 },
+        error: null
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    const file = new File(['Refund policy'], 'policy.pdf', { type: 'application/pdf' });
+
+    const preview = await previewUploadedKnowledgeDocumentFile(file, {
+      splitterType: 'SIMPLE_TEXT',
+      chunkSize: 500,
+      chunkOverlap: 50
+    });
+    const document = await uploadKnowledgeDocumentFile('kb_1', file, {
+      splitterType: 'SIMPLE_TEXT',
+      chunkSize: 500,
+      chunkOverlap: 50
+    });
+
+    expect(preview.chunks[0].content).toBe('Refund policy');
+    expect(document.name).toBe('policy.pdf');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/knowledge-bases/documents/upload/preview', expect.objectContaining({
+      method: 'POST',
+      body: expect.any(FormData)
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/kb_1/documents/upload', expect.objectContaining({
+      method: 'POST',
+      body: expect.any(FormData)
+    }));
+    expect((fetchMock.mock.calls[0][1].body as FormData).get('file')).toBe(file);
+    expect((fetchMock.mock.calls[1][1].body as FormData).get('chunkSize')).toBe('500');
   });
 
   it('manages vector stores and previews document chunks', async () => {

@@ -131,6 +131,23 @@ const knowledgeApiMock = vi.hoisted(() => ({
       tokenEstimate: 14
     }
   ]),
+  previewUploadedKnowledgeDocumentFile: vi.fn(async () => ({
+    fileName: 'policy.pdf',
+    characterCount: 78,
+    chunks: [
+      {
+        index: 0,
+        content: 'Uploaded refund policy text',
+        tokenEstimate: 7
+      }
+    ]
+  })),
+  uploadKnowledgeDocumentFile: vi.fn(async () => ({
+    id: 'doc_upload',
+    knowledgeBaseId: 'kb_1',
+    name: 'policy.pdf',
+    chunkCount: 1
+  })),
   searchKnowledgeBase: vi.fn(async () => [
     {
       id: 'chunk_1',
@@ -293,6 +310,31 @@ describe('KnowledgeBasesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /检索/ }));
 
     expect(await screen.findByText('发票可以在订单完成后七日内申请。')).toBeInTheDocument();
+  });
+
+  it('previews and uploads files from the document wizard', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /管理文档/ }));
+    const file = new File(['Uploaded refund policy text'], 'policy.pdf', { type: 'application/pdf' });
+    fireEvent.change(await screen.findByLabelText('选择知识库文件'), {
+      target: { files: [file] }
+    });
+    await userEvent.click(screen.getByRole('button', { name: /预览分段/ }));
+
+    expect((await screen.findAllByText('Uploaded refund policy text')).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(knowledgeApiMock.previewUploadedKnowledgeDocumentFile).toHaveBeenCalledWith(file, expect.objectContaining({
+        splitterType: 'MARKDOWN_HEADING'
+      }));
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /确认上传/ }));
+    await waitFor(() => {
+      expect(knowledgeApiMock.uploadKnowledgeDocumentFile).toHaveBeenCalledWith('kb_1', file, expect.objectContaining({
+        chunkSize: 500
+      }));
+    });
   });
 
   it('manages vector store configs from the knowledge page', async () => {

@@ -60,6 +60,12 @@ export interface KnowledgeChunkPreview {
   tokenEstimate: number;
 }
 
+export interface UploadedDocumentPreview {
+  fileName: string;
+  characterCount: number;
+  chunks: KnowledgeChunkPreview[];
+}
+
 export interface VectorStoreConfig {
   id: string;
   name: string;
@@ -95,6 +101,12 @@ export interface SaveKnowledgeBaseRequest {
 export interface AddKnowledgeDocumentRequest {
   name: string;
   content: string;
+  splitterType?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+}
+
+export interface UploadKnowledgeDocumentOptions {
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
@@ -178,6 +190,49 @@ export async function addKnowledgeDocument(
   });
 }
 
+export async function uploadKnowledgeDocumentFile(
+  knowledgeBaseId: string,
+  file: File,
+  options: UploadKnowledgeDocumentOptions = {}
+): Promise<KnowledgeDocument> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (options.splitterType) {
+    formData.append('splitterType', options.splitterType);
+  }
+  if (options.chunkSize) {
+    formData.append('chunkSize', String(options.chunkSize));
+  }
+  if (options.chunkOverlap !== undefined) {
+    formData.append('chunkOverlap', String(options.chunkOverlap));
+  }
+  return requestJson<KnowledgeDocument>(`/api/knowledge-bases/${knowledgeBaseId}/documents/upload`, {
+    method: 'POST',
+    body: formData
+  }, false);
+}
+
+export async function previewUploadedKnowledgeDocumentFile(
+  file: File,
+  options: UploadKnowledgeDocumentOptions = {}
+): Promise<UploadedDocumentPreview> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (options.splitterType) {
+    formData.append('splitterType', options.splitterType);
+  }
+  if (options.chunkSize) {
+    formData.append('chunkSize', String(options.chunkSize));
+  }
+  if (options.chunkOverlap !== undefined) {
+    formData.append('chunkOverlap', String(options.chunkOverlap));
+  }
+  return requestJson<UploadedDocumentPreview>('/api/knowledge-bases/documents/upload/preview', {
+    method: 'POST',
+    body: formData
+  }, false);
+}
+
 export async function listKnowledgeDocuments(knowledgeBaseId: string): Promise<PageResponse<KnowledgeDocument>> {
   return requestJson<PageResponse<KnowledgeDocument>>(`/api/knowledge-bases/${knowledgeBaseId}/documents`);
 }
@@ -223,8 +278,8 @@ export async function searchKnowledgeBase(
   });
 }
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = init ? await fetch(url, withJsonHeaders(init)) : await fetch(url);
+async function requestJson<T>(url: string, init?: RequestInit, jsonHeaders = true): Promise<T> {
+  const response = init ? await fetch(url, jsonHeaders ? withJsonHeaders(init) : init) : await fetch(url);
   const envelope = await response.json() as ApiEnvelope<T>;
   if (!response.ok || !envelope.success) {
     throw new Error(envelope.error?.message ?? `Request failed: ${response.status}`);

@@ -8,9 +8,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -160,6 +162,55 @@ class KnowledgeBaseControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.items[0].documentId").value(documentId))
                 .andExpect(jsonPath("$.data.items[0].enabled").value(true))
                 .andExpect(jsonPath("$.data.items[0].tokenEstimate").isNumber());
+    }
+
+    @Test
+    void uploadsDocumentFileExtractsTextAndIngestsChunks() throws Exception {
+        String response = mockMvc.perform(post("/api/knowledge-bases")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"file-kb","description":null,"splitterType":"SIMPLE_TEXT","chunkSize":40,"chunkOverlap":0}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String knowledgeBaseId = new ObjectMapper().readTree(response).path("data").path("id").asText();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "policy.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                "Refund requests are handled within seven days.\nInvoices are available after payment.".getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/knowledge-bases/documents/upload/preview")
+                        .file(file)
+                        .param("splitterType", "SIMPLE_TEXT")
+                        .param("chunkSize", "40")
+                        .param("chunkOverlap", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fileName").value("policy.txt"))
+                .andExpect(jsonPath("$.data.characterCount").value(84))
+                .andExpect(jsonPath("$.data.chunks[0].content").value("Refund requests are handled within seven"));
+
+        String documentResponse = mockMvc.perform(multipart("/api/knowledge-bases/{id}/documents/upload", knowledgeBaseId)
+                        .file(file)
+                        .param("splitterType", "SIMPLE_TEXT")
+                        .param("chunkSize", "40")
+                        .param("chunkOverlap", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.name").value("policy.txt"))
+                .andExpect(jsonPath("$.data.chunkCount").value(3))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String documentId = new ObjectMapper().readTree(documentResponse).path("data").path("id").asText();
+        mockMvc.perform(get("/api/knowledge-bases/{id}/documents/{documentId}/chunks", knowledgeBaseId, documentId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].content").value("Refund requests are handled within seven"))
+                .andExpect(jsonPath("$.data.items[1].content").value("days.\nInvoices are available after paym"));
     }
 
     @Test

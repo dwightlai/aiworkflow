@@ -16,8 +16,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -87,6 +90,26 @@ public class KnowledgeBaseController {
         ));
     }
 
+    @PostMapping(value = "/documents/upload/preview", consumes = "multipart/form-data")
+    public ApiResponse<KnowledgeBaseService.UploadedDocumentPreview> previewUploadedDocument(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String splitterType,
+            @RequestParam(defaultValue = "0") int chunkSize,
+            @RequestParam(defaultValue = "-1") int chunkOverlap
+    ) throws IOException {
+        String fileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
+                ? "uploaded-document"
+                : file.getOriginalFilename();
+        return ApiResponse.success(knowledgeBaseService.previewDocumentFile(
+                fileName,
+                file.getContentType(),
+                file.getInputStream(),
+                splitterType,
+                chunkSize,
+                chunkOverlap
+        ));
+    }
+
     @GetMapping("/{id}/documents")
     public ApiResponse<PageResponse<KnowledgeDocument>> documents(@PathVariable String id) {
         List<KnowledgeDocument> documents = knowledgeBaseService.listDocuments(id);
@@ -105,6 +128,28 @@ public class KnowledgeBaseController {
                 request.splitterType(),
                 request.chunkSize(),
                 request.chunkOverlap()
+        ));
+    }
+
+    @PostMapping(value = "/{id}/documents/upload", consumes = "multipart/form-data")
+    public ApiResponse<KnowledgeDocument> uploadDocument(
+            @PathVariable String id,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String splitterType,
+            @RequestParam(defaultValue = "0") int chunkSize,
+            @RequestParam(defaultValue = "-1") int chunkOverlap
+    ) throws IOException {
+        String fileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
+                ? "uploaded-document"
+                : file.getOriginalFilename();
+        return ApiResponse.success(knowledgeBaseService.addDocumentFile(
+                id,
+                fileName,
+                file.getContentType(),
+                file.getInputStream(),
+                splitterType,
+                chunkSize,
+                chunkOverlap
         ));
     }
 
