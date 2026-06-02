@@ -29,53 +29,74 @@ const nodeTemplates: NodeTemplate[] = [
   {
     type: 'START',
     name: '开始',
-    description: '接收 API、调试或会话输入，初始化流程上下文',
+    description: '接收 API、调试或会话输入',
     icon: <PlayCircleOutlined />,
-    config: { inputKeys: ['question'], inputMode: 'JSON', defaultInputJson: '{\n  "question": "请介绍退款政策"\n}' }
+    config: {
+      inputParams: [{ name: 'question', type: 'String' }],
+      inputKeys: ['question'],
+      defaultInputJson: '{\n  "question": "请介绍退款政策",\n  "keyword": "退款"\n}'
+    }
   },
   {
     type: 'KNOWLEDGE_RETRIEVAL',
-    name: '知识库检索',
-    description: '从知识库召回相关文档片段，写入上下文',
+    name: '知识库',
+    description: '通过知识库获取内容',
     icon: <DatabaseOutlined />,
-    config: { knowledgeBaseId: '', queryKey: 'question', outputKey: 'contexts', topK: 3, minScore: 0, rerank: false }
+    config: {
+      inputParams: [{ name: 'search_key', value: 'keyword', type: 'String' }],
+      knowledgeBaseId: '',
+      keywordTemplate: '{{search_key}}',
+      queryKey: 'keyword',
+      fetchCount: 5,
+      topK: 5,
+      outputKey: 'documents',
+      outputFormat: 'ARRAY',
+      outputParams: [
+        { name: 'documents', type: 'Array' },
+        { name: 'title', type: 'String' },
+        { name: 'content', type: 'String' },
+        { name: 'documentId', type: 'Number' },
+        { name: 'knowledgeId', type: 'Number' }
+      ]
+    }
   },
   {
     type: 'PROMPT',
     name: 'Prompt 模板',
-    description: '把上下文变量渲染成模型提示词',
+    description: '把上下文变量渲染成提示词',
     icon: <CommentOutlined />,
     config: {
-      template: '请结合以下知识片段回答用户问题。\n\n知识片段：{{contexts}}\n\n用户问题：{{question}}',
-      outputKey: 'prompt',
-      missingVariablePolicy: 'EMPTY'
+      template: '请结合以下知识片段回答用户问题。\n\n知识片段：{{documents}}\n\n用户问题：{{question}}',
+      outputKey: 'prompt'
     }
   },
   {
     type: 'LLM',
-    name: '大模型调用',
-    description: '调用已保存模型并把响应写入变量',
+    name: '大模型',
+    description: '使用大模型处理问题',
     icon: <RobotOutlined />,
     config: {
+      inputParams: [],
       providerId: '',
       model: '',
-      promptKey: 'prompt',
-      outputKey: 'answer',
-      temperature: 0.7,
-      topP: 1,
-      maxTokens: 1024,
-      responseFormat: 'TEXT',
-      stream: false
+      temperature: 0.5,
+      topP: 0.9,
+      topK: 50,
+      systemPrompt: '',
+      userPrompt: '{{question}}',
+      promptKey: 'question',
+      outputKey: 'output',
+      outputFormat: 'TEXT',
+      outputParams: [{ name: 'output', type: 'String' }]
     }
   },
   {
     type: 'CONDITION',
     name: '条件分支',
-    description: '根据上下文变量或表达式选择后续节点',
+    description: '根据上下文变量选择后续节点',
     icon: <BranchesOutlined />,
     config: {
-      expression: '_state.answer && _state.answer.includes("通过")',
-      contextKey: 'answer',
+      contextKey: 'output',
       operator: 'CONTAINS',
       compareValue: '',
       equals: '',
@@ -86,7 +107,7 @@ const nodeTemplates: NodeTemplate[] = [
   {
     type: 'HTTP_TOOL',
     name: 'HTTP 工具',
-    description: '调用外部业务系统接口并保存结果',
+    description: '调用外部业务接口',
     icon: <ToolOutlined />,
     config: {
       method: 'POST',
@@ -94,23 +115,26 @@ const nodeTemplates: NodeTemplate[] = [
       headersJson: '{\n  "Content-Type": "application/json"\n}',
       bodyTemplate: '{\n  "question": "{{question}}"\n}',
       outputKey: 'toolResult',
-      authType: 'NONE',
       timeoutMs: 30000
     }
   },
   {
     type: 'TEXT_TRANSFORM',
     name: '文本处理',
-    description: '模板渲染、字段整理或轻量文本转换',
+    description: '模板渲染或字段整理',
     icon: <CommentOutlined />,
-    config: { transformType: 'TEMPLATE', template: '{{answer}}', outputKey: 'text' }
+    config: { template: '{{output}}', outputKey: 'text' }
   },
   {
     type: 'END',
     name: '结束',
     description: '整理最终输出返回调用方',
     icon: <StopOutlined />,
-    config: { outputKeys: ['answer'], includeExecutionMeta: false }
+    config: {
+      outputKeys: ['output'],
+      outputParams: [{ name: 'output', type: 'String' }],
+      outputFormat: 'JSON'
+    }
   }
 ];
 

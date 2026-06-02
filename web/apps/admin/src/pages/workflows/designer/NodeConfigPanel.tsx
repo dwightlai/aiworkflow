@@ -1,5 +1,6 @@
+import { PlusOutlined, RobotOutlined, SearchOutlined } from '@ant-design/icons';
 import type { WorkflowNode } from '@aiworkflow/workflow-schema';
-import { Alert, Checkbox, Collapse, Empty, Form, Input, InputNumber, Select, Space, Switch, Tag, Typography } from 'antd';
+import { Button, Empty, Form, Input, InputNumber, Select, Slider, Space, Typography } from 'antd';
 import type React from 'react';
 import type { KnowledgeBase } from '../../../api/knowledge';
 import type { ModelProvider } from '../../../api/models';
@@ -13,503 +14,452 @@ export interface NodeConfigPanelProps {
   knowledgeBases?: KnowledgeBase[];
 }
 
-const splitterOptions = [
-  { value: 'NONE', label: '不处理，直接透传' },
-  { value: 'JSON', label: 'JSON 解析' },
-  { value: 'TEXT', label: '文本' }
-];
+interface ParamRow {
+  name: string;
+  value?: string;
+  type: string;
+}
 
-export function NodeConfigPanel({ node, onChange, modelProviders = [], promptTemplates = [], knowledgeBases = [] }: NodeConfigPanelProps) {
+export function NodeConfigPanel({
+  node,
+  onChange,
+  modelProviders = [],
+  promptTemplates = [],
+  knowledgeBases = []
+}: NodeConfigPanelProps) {
   if (!node) {
     return (
       <aside style={panelStyle}>
-        <Typography.Title level={5} style={titleStyle}>节点属性</Typography.Title>
+        <TinyHeader />
         <Empty description="请选择画布上的节点" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </aside>
     );
   }
 
-  const config = node.config ?? {};
-  const setConfig = (patch: Record<string, unknown>) => onChange(node.id, { config: { ...config, ...patch } });
-
-  return (
-    <aside style={panelStyle}>
-      <Space direction="vertical" size={2} style={{ width: '100%', marginBottom: 12 }}>
-        <Typography.Title level={5} style={titleStyle}>节点属性</Typography.Title>
-        <Space wrap>
-          <Tag color="blue">{node.type}</Tag>
-          <Typography.Text type="secondary">{node.id}</Typography.Text>
-        </Space>
-      </Space>
-
-      <Form layout="vertical" size="small">
-        <Collapse
-          defaultActiveKey={['basic', 'config']}
-          bordered={false}
-          items={[
-            {
-              key: 'basic',
-              label: '基础信息',
-              children: (
-                <>
-                  <Form.Item label="节点名称">
-                    <Input value={node.name} onChange={(event) => onChange(node.id, { name: event.target.value })} />
-                  </Form.Item>
-                  <Form.Item label="节点说明">
-                    <Input.TextArea
-                      autoSize={{ minRows: 2, maxRows: 4 }}
-                      placeholder="说明该节点在业务流程里的职责"
-                      value={String(config.description ?? '')}
-                      onChange={(event) => setConfig({ description: event.target.value })}
-                    />
-                  </Form.Item>
-                  <Space size={8} align="start" wrap>
-                    <Form.Item label="超时(ms)">
-                      <InputNumber min={1000} max={600000} step={1000} value={numberValue(config.timeoutMs, 30000)} onChange={(value) => setConfig({ timeoutMs: value ?? 30000 })} />
-                    </Form.Item>
-                    <Form.Item label="重试次数">
-                      <InputNumber min={0} max={10} value={numberValue(config.retryCount, 0)} onChange={(value) => setConfig({ retryCount: value ?? 0 })} />
-                    </Form.Item>
-                    <Form.Item label="失败策略">
-                      <Select
-                        style={{ width: 138 }}
-                        value={stringValue(config.failPolicy, 'FAIL_WORKFLOW')}
-                        options={[
-                          { value: 'FAIL_WORKFLOW', label: '终止流程' },
-                          { value: 'CONTINUE', label: '继续执行' },
-                          { value: 'USE_FALLBACK', label: '使用兜底值' }
-                        ]}
-                        onChange={(failPolicy) => setConfig({ failPolicy })}
-                      />
-                    </Form.Item>
-                  </Space>
-                </>
-              )
-            },
-            {
-              key: 'config',
-              label: '节点配置',
-              children: (
-                <ConfigFields
-                  node={node}
-                  setConfig={setConfig}
-                  modelProviders={modelProviders}
-                  promptTemplates={promptTemplates}
-                  knowledgeBases={knowledgeBases}
-                />
-              )
-            },
-            {
-              key: 'io',
-              label: '输入输出约定',
-              children: (
-                <>
-                  <Form.Item label="输入变量映射">
-                    <Input.TextArea
-                      autoSize={{ minRows: 3, maxRows: 6 }}
-                      placeholder={'JSON，例如：\n{"question":"input.question","userId":"input.userId"}'}
-                      value={String(config.inputMappingJson ?? '')}
-                      onChange={(event) => setConfig({ inputMappingJson: event.target.value })}
-                    />
-                  </Form.Item>
-                  <Form.Item label="输出变量说明">
-                    <Input.TextArea
-                      autoSize={{ minRows: 2, maxRows: 5 }}
-                      placeholder="描述该节点会写入哪些上下文变量，便于下游引用"
-                      value={String(config.outputSchema ?? '')}
-                      onChange={(event) => setConfig({ outputSchema: event.target.value })}
-                    />
-                  </Form.Item>
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="变量引用约定"
-                    description="当前引擎上下文以 key/value 形式传递，上游 outputKey 会写入全局上下文。模板中可使用 {{question}}、{{contexts}} 一类变量。"
-                  />
-                </>
-              )
-            }
-          ]}
-        />
-      </Form>
-    </aside>
-  );
-}
-
-interface ConfigFieldsProps {
-  node: WorkflowNode;
-  setConfig: (patch: Record<string, unknown>) => void;
-  modelProviders: ModelProvider[];
-  promptTemplates: PromptTemplate[];
-  knowledgeBases: KnowledgeBase[];
-}
-
-function ConfigFields({ node, setConfig, modelProviders, promptTemplates, knowledgeBases }: ConfigFieldsProps) {
-  const config = node.config ?? {};
-
-  if (node.type === 'START') {
-    return (
-      <>
-        <Form.Item label="入参变量">
-          <Input
-            placeholder="question,userId,sessionId"
-            value={arrayOrStringValue(config.inputKeys)}
-            onChange={(event) => setConfig({ inputKeys: splitCsv(event.target.value) })}
-          />
-        </Form.Item>
-        <Form.Item label="调试默认输入">
-          <Input.TextArea
-            autoSize={{ minRows: 5, maxRows: 10 }}
-            placeholder={'{\n  "question": "请介绍退款政策"\n}'}
-            value={String(config.defaultInputJson ?? '')}
-            onChange={(event) => setConfig({ defaultInputJson: event.target.value })}
-          />
-        </Form.Item>
-        <Form.Item label="入参格式">
-          <Select
-            value={stringValue(config.inputMode, 'JSON')}
-            options={splitterOptions}
-            onChange={(inputMode) => setConfig({ inputMode })}
-          />
-        </Form.Item>
-      </>
-    );
-  }
-
-  if (node.type === 'PROMPT') {
-    const selectedPromptId = typeof config.promptTemplateId === 'string' ? config.promptTemplateId : undefined;
-    return (
-      <>
-        <Form.Item label="已保存 Prompt">
-          <Select
-            allowClear
-            aria-label="选择已保存 Prompt"
-            placeholder="选择 Prompt 模板"
-            value={selectedPromptId}
-            options={promptTemplates.map((prompt) => ({ value: prompt.id, label: prompt.name }))}
-            onChange={(promptTemplateId) => {
-              const prompt = promptTemplates.find((item) => item.id === promptTemplateId);
-              setConfig({
-                promptTemplateId,
-                template: prompt?.template ?? String(config.template ?? '')
-              });
-            }}
-          />
-        </Form.Item>
-        <Form.Item label="Prompt 模板">
-          <Input.TextArea
-            autoSize={{ minRows: 7, maxRows: 14 }}
-            placeholder="你是企业客服助手。请结合 {{contexts}} 回答：{{question}}"
-            value={String(config.template ?? '')}
-            onChange={(event) => setConfig({ template: event.target.value })}
-          />
-        </Form.Item>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="输出变量">
-            <Input value={String(config.outputKey ?? 'prompt')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
-          </Form.Item>
-          <Form.Item label="缺失变量">
-            <Select
-              style={{ width: 138 }}
-              value={stringValue(config.missingVariablePolicy, 'EMPTY')}
-              options={[
-                { value: 'EMPTY', label: '置为空' },
-                { value: 'KEEP_TOKEN', label: '保留占位符' },
-                { value: 'FAIL', label: '报错' }
-              ]}
-              onChange={(missingVariablePolicy) => setConfig({ missingVariablePolicy })}
-            />
-          </Form.Item>
-        </Space>
-      </>
-    );
-  }
+  const setConfig = (patch: Record<string, unknown>) => onChange(node.id, { config: { ...(node.config ?? {}), ...patch } });
 
   if (node.type === 'LLM') {
-    const enabledProviders = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
-    const selectedProvider = enabledProviders.find((provider) => provider.id === config.providerId);
     return (
-      <>
-        <Form.Item label="模型配置">
-          <Select
-            allowClear
-            aria-label="选择已保存模型"
-            placeholder="选择模型配置"
-            value={typeof config.providerId === 'string' && config.providerId ? String(config.providerId) : undefined}
-            options={enabledProviders.map((provider) => ({
-              value: provider.id,
-              label: `${provider.name} / ${provider.model}`
-            }))}
-            onChange={(providerId) => {
-              const provider = enabledProviders.find((item) => item.id === providerId);
-              setConfig({ providerId, model: provider?.model ?? '' });
-            }}
-          />
-        </Form.Item>
-        {selectedProvider ? (
-          <Alert
-            type="info"
-            showIcon
-            message={`${selectedProvider.modelType} / ${selectedProvider.model}`}
-            description={`Base URL: ${selectedProvider.baseUrl}，密钥引用：${selectedProvider.apiKeyRef}`}
-            style={{ marginBottom: 12 }}
-          />
-        ) : null}
-        <Form.Item label="模型标识">
-          <Input value={String(config.model ?? selectedProvider?.model ?? '')} onChange={(event) => setConfig({ model: event.target.value })} />
-        </Form.Item>
-        <Form.Item label="系统提示词">
-          <Input.TextArea
-            autoSize={{ minRows: 3, maxRows: 8 }}
-            placeholder="定义模型角色、回答边界、安全规则"
-            value={String(config.systemPrompt ?? '')}
-            onChange={(event) => setConfig({ systemPrompt: event.target.value })}
-          />
-        </Form.Item>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="Prompt 变量">
-            <Input value={String(config.promptKey ?? 'prompt')} onChange={(event) => setConfig({ promptKey: event.target.value })} />
-          </Form.Item>
-          <Form.Item label="输出变量">
-            <Input value={String(config.outputKey ?? 'answer')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
-          </Form.Item>
-        </Space>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="温度">
-            <InputNumber min={0} max={2} step={0.1} value={numberValue(config.temperature, 0.7)} onChange={(temperature) => setConfig({ temperature: temperature ?? 0 })} />
-          </Form.Item>
-          <Form.Item label="Top P">
-            <InputNumber min={0} max={1} step={0.05} value={numberValue(config.topP, 1)} onChange={(topP) => setConfig({ topP: topP ?? 1 })} />
-          </Form.Item>
-          <Form.Item label="最大 Token">
-            <InputNumber min={1} max={32000} value={numberValue(config.maxTokens, 1024)} onChange={(maxTokens) => setConfig({ maxTokens: maxTokens ?? 1024 })} />
-          </Form.Item>
-        </Space>
-        <Space size={16} wrap>
-          <Form.Item label="响应格式">
-            <Select
-              style={{ width: 130 }}
-              value={stringValue(config.responseFormat, 'TEXT')}
-              options={[
-                { value: 'TEXT', label: '文本' },
-                { value: 'JSON', label: 'JSON' }
-              ]}
-              onChange={(responseFormat) => setConfig({ responseFormat })}
-            />
-          </Form.Item>
-          <Form.Item label="流式输出">
-            <Switch checked={Boolean(config.stream)} onChange={(stream) => setConfig({ stream })} />
-          </Form.Item>
-        </Space>
-      </>
+      <aside style={panelStyle}>
+        <TinyHeader />
+        <NodeTitle icon={<RobotOutlined />} title="大模型" description="使用大模型处理问题" node={node} onChange={onChange} />
+        <LlmConfig node={node} setConfig={setConfig} modelProviders={modelProviders} />
+      </aside>
     );
   }
 
   if (node.type === 'KNOWLEDGE_RETRIEVAL') {
-    const selectedKnowledgeBaseId = typeof config.knowledgeBaseId === 'string' ? config.knowledgeBaseId : undefined;
     return (
-      <>
+      <aside style={panelStyle}>
+        <TinyHeader />
+        <NodeTitle icon={<SearchOutlined />} title="知识库" description="通过知识库获取内容" node={node} onChange={onChange} />
+        <KnowledgeConfig node={node} setConfig={setConfig} knowledgeBases={knowledgeBases} />
+      </aside>
+    );
+  }
+
+  return (
+    <aside style={panelStyle}>
+      <TinyHeader />
+      <NodeTitle title={node.name} description={node.type} node={node} onChange={onChange} />
+      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} />
+    </aside>
+  );
+}
+
+function TinyHeader() {
+  return <div style={tinyHeaderStyle}>TinyFlow.ai</div>;
+}
+
+function NodeTitle({
+  icon,
+  title,
+  description,
+  node,
+  onChange
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  description: string;
+  node: WorkflowNode;
+  onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void;
+}) {
+  return (
+    <div style={nodeTitleStyle}>
+      <div style={nodeTitleMainStyle}>
+        {icon ? <span style={nodeIconStyle}>{icon}</span> : null}
+        <Input
+          value={node.name || title}
+          style={nodeNameInputStyle}
+          onChange={(event) => onChange(node.id, { name: event.target.value })}
+        />
+      </div>
+      <Typography.Text type="secondary">{description}</Typography.Text>
+    </div>
+  );
+}
+
+function LlmConfig({
+  node,
+  setConfig,
+  modelProviders
+}: {
+  node: WorkflowNode;
+  setConfig: (patch: Record<string, unknown>) => void;
+  modelProviders: ModelProvider[];
+}) {
+  const config = node.config ?? {};
+  const inputParams = readParams(config.inputParams);
+  const outputParams = readParams(config.outputParams, [{ name: String(config.outputKey ?? 'output'), type: 'String' }]);
+  const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
+  const outputName = outputParams[0]?.name || 'output';
+
+  function updateOutputParam(patch: Partial<ParamRow>) {
+    const next = [{ ...(outputParams[0] ?? { name: outputName, type: 'String' }), ...patch }];
+    next[0].name = next[0].name || outputName;
+    next[0].type = next[0].type || 'String';
+    setConfig({
+      outputParams: next,
+      outputKey: next[0].name
+    });
+  }
+
+  return (
+    <>
+      <ParamSection
+        title="输入参数"
+        emptyText="无输入参数"
+        params={inputParams}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: 'question', type: 'String' }] })}
+        onChange={(next) => setConfig({ inputParams: next })}
+      />
+
+      <SectionTitle title="模型设置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="模型">
+          <Select
+            aria-label="选择模型"
+            placeholder="请选择模型"
+            value={stringValue(config.providerId, undefined)}
+            options={enabledModels.map((provider) => ({
+              value: provider.id,
+              label: `${provider.name}-${provider.model}`
+            }))}
+            onChange={(providerId) => {
+              const provider = enabledModels.find((item) => item.id === providerId);
+              setConfig({ providerId, model: provider?.model ?? '' });
+            }}
+          />
+        </Form.Item>
+        <SliderField label="Temperature" value={numberValue(config.temperature, 0.5)} min={0} max={2} step={0.1} onChange={(temperature) => setConfig({ temperature })} />
+        <SliderField label="Top P" value={numberValue(config.topP, 0.9)} min={0} max={1} step={0.05} onChange={(topP) => setConfig({ topP })} />
+        <SliderField label="Top K" value={numberValue(config.topK, 50)} min={1} max={100} step={1} onChange={(topK) => setConfig({ topK })} />
+        <Form.Item label="系统提示词">
+          <Input.TextArea
+            placeholder="请输入系统提示词"
+            autoSize={{ minRows: 5, maxRows: 10 }}
+            value={String(config.systemPrompt ?? '')}
+            onChange={(event) => setConfig({ systemPrompt: event.target.value })}
+          />
+        </Form.Item>
+        <Form.Item label="用户提示词">
+          <Input.TextArea
+            placeholder="请输入用户提示词，如：{{question}}"
+            autoSize={{ minRows: 5, maxRows: 10 }}
+            value={String(config.userPrompt ?? config.promptTemplate ?? '{{question}}')}
+            onChange={(event) => setConfig({ userPrompt: event.target.value })}
+          />
+        </Form.Item>
+      </Form>
+
+      <OutputSection
+        params={outputParams}
+        format={stringValue(config.outputFormat, 'TEXT') ?? 'TEXT'}
+        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
+        onChange={(patch) => updateOutputParam(patch)}
+      />
+    </>
+  );
+}
+
+function KnowledgeConfig({
+  node,
+  setConfig,
+  knowledgeBases
+}: {
+  node: WorkflowNode;
+  setConfig: (patch: Record<string, unknown>) => void;
+  knowledgeBases: KnowledgeBase[];
+}) {
+  const config = node.config ?? {};
+  const inputParams = readParams(config.inputParams, [{ name: 'search_key', value: String(config.queryKey ?? 'keyword'), type: 'String' }]);
+  const outputParams = readParams(config.outputParams, [
+    { name: String(config.outputKey ?? 'documents'), type: 'Array' },
+    { name: 'title', type: 'String' },
+    { name: 'content', type: 'String' },
+    { name: 'documentId', type: 'Number' },
+    { name: 'knowledgeId', type: 'Number' }
+  ]);
+
+  return (
+    <>
+      <ParamSection
+        title="输入参数"
+        params={inputParams}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'search_key', value: 'keyword', type: 'String' }] })}
+        onChange={(next) => setConfig({ inputParams: next })}
+      />
+
+      <SectionTitle title="知识库设置" />
+      <Form layout="vertical" size="small">
         <Form.Item label="知识库">
           <Select
-            allowClear
-            aria-label="选择已保存知识库"
-            placeholder="选择知识库"
-            value={selectedKnowledgeBaseId}
-            options={knowledgeBases.map((knowledgeBase) => ({
-              value: knowledgeBase.id,
-              label: `${knowledgeBase.name} (${knowledgeBase.documentCount} 文档 / ${knowledgeBase.chunkCount} 切片)`
-            }))}
+            aria-label="选择知识库"
+            placeholder="请选择知识库"
+            value={stringValue(config.knowledgeBaseId, undefined)}
+            options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}
             onChange={(knowledgeBaseId) => setConfig({ knowledgeBaseId })}
           />
         </Form.Item>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="查询变量">
-            <Input value={String(config.queryKey ?? 'question')} onChange={(event) => setConfig({ queryKey: event.target.value })} />
-          </Form.Item>
-          <Form.Item label="输出变量">
-            <Input value={String(config.outputKey ?? 'contexts')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
-          </Form.Item>
-        </Space>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="Top K">
-            <InputNumber min={1} max={20} value={numberValue(config.topK, 3)} onChange={(topK) => setConfig({ topK: topK ?? 3 })} />
-          </Form.Item>
-          <Form.Item label="最低分">
-            <InputNumber min={0} max={1} step={0.05} value={numberValue(config.minScore, 0)} onChange={(minScore) => setConfig({ minScore: minScore ?? 0 })} />
-          </Form.Item>
-          <Form.Item label="重排">
-            <Switch checked={Boolean(config.rerank)} onChange={(rerank) => setConfig({ rerank })} />
-          </Form.Item>
-        </Space>
-        <Form.Item label="结果模板">
-          <Input.TextArea
-            autoSize={{ minRows: 3, maxRows: 8 }}
-            placeholder="可选：把召回片段整理成给 LLM 的上下文"
-            value={String(config.resultTemplate ?? '')}
-            onChange={(event) => setConfig({ resultTemplate: event.target.value })}
+        <Form.Item label="关键字">
+          <Input
+            placeholder="{{search_key}}"
+            value={String(config.keywordTemplate ?? '{{search_key}}')}
+            onChange={(event) => {
+              setConfig({
+                keywordTemplate: event.target.value,
+                queryKey: firstTemplateVar(event.target.value) || config.queryKey || 'question'
+              });
+            }}
           />
         </Form.Item>
-      </>
-    );
-  }
-
-  if (node.type === 'HTTP_TOOL') {
-    return (
-      <>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="请求方法">
-            <Select
-              style={{ width: 118 }}
-              value={stringValue(config.method, 'POST')}
-              options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => ({ value: method, label: method }))}
-              onChange={(method) => setConfig({ method })}
-            />
-          </Form.Item>
-          <Form.Item label="输出变量">
-            <Input value={String(config.outputKey ?? 'toolResult')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
-          </Form.Item>
-        </Space>
-        <Form.Item label="请求地址">
-          <Input placeholder="https://api.example.com/orders/{{orderId}}" value={String(config.url ?? '')} onChange={(event) => setConfig({ url: event.target.value })} />
+        <Form.Item label="获取数据量">
+          <InputNumber
+            min={1}
+            max={50}
+            style={{ width: '100%' }}
+            value={numberValue(config.fetchCount ?? config.topK, 5)}
+            onChange={(fetchCount) => setConfig({ fetchCount: fetchCount ?? 5, topK: fetchCount ?? 5 })}
+          />
         </Form.Item>
-        <Form.Item label="认证方式">
+      </Form>
+
+      <OutputSection
+        params={outputParams}
+        format={stringValue(config.outputFormat, 'ARRAY') ?? 'ARRAY'}
+        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
+        onChange={(patch, index) => {
+          const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
+          setConfig({
+            outputParams: next,
+            outputKey: next[0]?.name || 'documents'
+          });
+        }}
+      />
+    </>
+  );
+}
+
+function ParamSection({
+  title,
+  params,
+  emptyText = '无输入参数',
+  onAdd,
+  onChange
+}: {
+  title: string;
+  params: ParamRow[];
+  emptyText?: string;
+  onAdd: () => void;
+  onChange: (params: ParamRow[]) => void;
+}) {
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle title={title} action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={onAdd} />} />
+      {params.length === 0 ? (
+        <div style={emptyParamStyle}>{emptyText}</div>
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {params.map((param, index) => (
+            <div key={`${param.name}-${index}`} style={paramGridStyle}>
+              <Input
+                aria-label={`参数名称 ${index + 1}`}
+                placeholder="参数名称"
+                value={param.name}
+                onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
+              />
+              <Input
+                aria-label={`参数值 ${index + 1}`}
+                placeholder="参数值"
+                value={param.value}
+                onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))}
+              />
+              <Select
+                aria-label={`参数类型 ${index + 1}`}
+                value={param.type}
+                options={paramTypeOptions}
+                onChange={(type) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, type } : item))}
+              />
+            </div>
+          ))}
+        </Space>
+      )}
+    </section>
+  );
+}
+
+function OutputSection({
+  params,
+  format,
+  onFormatChange,
+  onChange
+}: {
+  params: ParamRow[];
+  format: string;
+  onFormatChange: (format: string) => void;
+  onChange: (patch: Partial<ParamRow>, index: number) => void;
+}) {
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle
+        title="输出参数"
+        action={(
           <Select
-            value={stringValue(config.authType, 'NONE')}
+            aria-label="输出格式"
+            size="small"
+            value={format}
+            style={{ width: 110 }}
             options={[
-              { value: 'NONE', label: '无' },
-              { value: 'BEARER', label: 'Bearer Token' },
-              { value: 'API_KEY', label: 'API Key' }
+              { value: 'TEXT', label: '文本' },
+              { value: 'JSON', label: 'JSON' },
+              { value: 'ARRAY', label: '数组' }
             ]}
-            onChange={(authType) => setConfig({ authType })}
+            onChange={onFormatChange}
           />
-        </Form.Item>
-        <Form.Item label="请求头 JSON">
-          <Input.TextArea
-            autoSize={{ minRows: 3, maxRows: 8 }}
-            placeholder={'{\n  "Content-Type": "application/json"\n}'}
-            value={String(config.headersJson ?? '')}
-            onChange={(event) => setConfig({ headersJson: event.target.value })}
-          />
-        </Form.Item>
-        <Form.Item label="请求体模板">
-          <Input.TextArea
-            autoSize={{ minRows: 5, maxRows: 12 }}
-            placeholder={'{\n  "question": "{{question}}"\n}'}
-            value={String(config.bodyTemplate ?? '')}
-            onChange={(event) => setConfig({ bodyTemplate: event.target.value })}
-          />
-        </Form.Item>
-      </>
-    );
-  }
+        )}
+      />
+      <div style={outputHeaderStyle}>
+        <Typography.Text type="secondary">参数名称</Typography.Text>
+        <Typography.Text type="secondary">参数类型</Typography.Text>
+      </div>
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        {params.map((param, index) => (
+          <div key={`${param.name}-${index}`} style={outputGridStyle}>
+            <Input aria-label={`输出参数名称 ${index + 1}`} value={param.name} onChange={(event) => onChange({ name: event.target.value }, index)} />
+            <Select aria-label={`输出参数类型 ${index + 1}`} value={param.type} options={paramTypeOptions} onChange={(type) => onChange({ type }, index)} />
+          </div>
+        ))}
+      </Space>
+    </section>
+  );
+}
 
-  if (node.type === 'CONDITION') {
+function GenericConfig({
+  node,
+  setConfig,
+  promptTemplates
+}: {
+  node: WorkflowNode;
+  setConfig: (patch: Record<string, unknown>) => void;
+  promptTemplates: PromptTemplate[];
+}) {
+  const config = node.config ?? {};
+  if (node.type === 'PROMPT') {
     return (
-      <>
-        <Form.Item label="JavaScript 条件表达式">
-          <Input.TextArea
-            autoSize={{ minRows: 3, maxRows: 7 }}
-            placeholder={'例如：_state.score >= 0.8 或 answer.includes("通过")'}
-            value={String(config.expression ?? '')}
-            onChange={(event) => setConfig({ expression: event.target.value })}
-          />
-        </Form.Item>
-        <Alert
-          type="warning"
-          showIcon
-          message="当前后端会优先使用下方兼容条件执行"
-          description="表达式先作为产品配置保存；当前轻量引擎运行时使用 contextKey + operator/equals 来选择 True/False 目标。"
-          style={{ marginBottom: 12 }}
-        />
-        <Space size={8} align="start" wrap>
-          <Form.Item label="判断变量">
-            <Input value={String(config.contextKey ?? '')} onChange={(event) => setConfig({ contextKey: event.target.value })} />
-          </Form.Item>
-          <Form.Item label="操作符">
-            <Select
-              style={{ width: 150 }}
-              value={stringValue(config.operator, 'EQUALS')}
-              options={['EQUALS', 'NOT_EQUALS', 'CONTAINS', 'IS_EMPTY', 'IS_NOT_EMPTY'].map((value) => ({ value, label: value }))}
-              onChange={(operator) => setConfig({ operator })}
-            />
-          </Form.Item>
-          <Form.Item label="比较值">
-            <Input
-              value={String(config.compareValue ?? config.equals ?? '')}
-              onChange={(event) => setConfig({ compareValue: event.target.value, equals: event.target.value })}
-            />
-          </Form.Item>
-        </Space>
-        <Space size={8} align="start" wrap>
-          <Form.Item label="True 目标节点">
-            <Input value={String(config.trueTargetNodeId ?? '')} onChange={(event) => setConfig({ trueTargetNodeId: event.target.value })} />
-          </Form.Item>
-          <Form.Item label="False 目标节点">
-            <Input value={String(config.falseTargetNodeId ?? '')} onChange={(event) => setConfig({ falseTargetNodeId: event.target.value })} />
-          </Form.Item>
-        </Space>
-      </>
-    );
-  }
-
-  if (node.type === 'TEXT_TRANSFORM') {
-    return (
-      <>
-        <Form.Item label="转换类型">
+      <Form layout="vertical" size="small">
+        <Form.Item label="已保存 Prompt">
           <Select
-            value={stringValue(config.transformType, 'TEMPLATE')}
-            options={[
-              { value: 'TEMPLATE', label: '模板渲染' },
-              { value: 'JSON_EXTRACT', label: 'JSON 提取' },
-              { value: 'REGEX_EXTRACT', label: '正则提取' }
-            ]}
-            onChange={(transformType) => setConfig({ transformType })}
+            allowClear
+            aria-label="选择已保存 Prompt"
+            value={stringValue(config.promptTemplateId, undefined)}
+            options={promptTemplates.map((prompt) => ({ value: prompt.id, label: prompt.name }))}
+            onChange={(promptTemplateId) => {
+              const prompt = promptTemplates.find((item) => item.id === promptTemplateId);
+              setConfig({ promptTemplateId, template: prompt?.template ?? String(config.template ?? '') });
+            }}
           />
         </Form.Item>
-        <Form.Item label="文本模板">
-          <Input.TextArea
-            autoSize={{ minRows: 6, maxRows: 12 }}
-            placeholder="客户问题：{{question}}\n知识片段：{{contexts}}"
-            value={String(config.template ?? '')}
-            onChange={(event) => setConfig({ template: event.target.value })}
-          />
+        <Form.Item label="Prompt 模板">
+          <Input.TextArea autoSize={{ minRows: 8, maxRows: 14 }} value={String(config.template ?? '')} onChange={(event) => setConfig({ template: event.target.value })} />
         </Form.Item>
         <Form.Item label="输出变量">
-          <Input value={String(config.outputKey ?? 'text')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
+          <Input value={String(config.outputKey ?? 'prompt')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
         </Form.Item>
-      </>
+      </Form>
+    );
+  }
+
+  if (node.type === 'START') {
+    const params = readParams(config.inputParams, [{ name: 'question', type: 'String' }]);
+    return (
+      <ParamSection
+        title="输入参数"
+        params={params}
+        onAdd={() => setConfig({ inputParams: [...params, { name: 'question', type: 'String' }] })}
+        onChange={(inputParams) => setConfig({ inputParams })}
+      />
     );
   }
 
   if (node.type === 'END') {
+    const params = readParams(config.outputParams, [{ name: 'output', type: 'String' }]);
     return (
-      <>
-        <Form.Item label="输出变量列表">
-          <Input
-            placeholder="answer,contexts"
-            value={arrayOrStringValue(config.outputKeys)}
-            onChange={(event) => setConfig({ outputKeys: splitCsv(event.target.value) })}
-          />
-        </Form.Item>
-        <Form.Item label="响应模板">
-          <Input.TextArea
-            autoSize={{ minRows: 4, maxRows: 10 }}
-            placeholder={'{\n  "answer": "{{answer}}"\n}'}
-            value={String(config.responseTemplate ?? '')}
-            onChange={(event) => setConfig({ responseTemplate: event.target.value })}
-          />
-        </Form.Item>
-        <Checkbox checked={Boolean(config.includeExecutionMeta)} onChange={(event) => setConfig({ includeExecutionMeta: event.target.checked })}>
-          返回执行元数据
-        </Checkbox>
-      </>
+      <OutputSection
+        params={params}
+        format={stringValue(config.outputFormat, 'JSON') ?? 'JSON'}
+        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
+        onChange={(patch, index) => {
+          const next = params.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
+          setConfig({ outputParams: next, outputKeys: next.map((param) => param.name) });
+        }}
+      />
     );
   }
 
-  return <Typography.Text type="secondary">该节点暂无额外配置。</Typography.Text>;
+  return (
+    <Form layout="vertical" size="small">
+      <Form.Item label="节点名称">
+        <Input value={node.name} readOnly />
+      </Form.Item>
+      <Form.Item label="配置 JSON">
+        <Input.TextArea autoSize={{ minRows: 8, maxRows: 16 }} value={JSON.stringify(config, null, 2)} readOnly />
+      </Form.Item>
+      <Typography.Text type="secondary">该节点后续会继续按业务场景细化。</Typography.Text>
+    </Form>
+  );
 }
 
-function stringValue(value: unknown, fallback: string) {
+function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div style={sectionTitleStyle}>
+      <Typography.Title level={5} style={{ margin: 0 }}>{title}</Typography.Title>
+      {action}
+    </div>
+  );
+}
+
+function SliderField({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (value: number) => void }) {
+  return (
+    <Form.Item label={`${label}: ${value}`}>
+      <Slider min={min} max={max} step={step} value={value} onChange={onChange} />
+    </Form.Item>
+  );
+}
+
+function readParams(value: unknown, fallback: ParamRow[] = []): ParamRow[] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item) => ({
+      name: String(item.name ?? ''),
+      value: item.value === undefined ? undefined : String(item.value),
+      type: String(item.type ?? 'String')
+    }));
+}
+
+function stringValue(value: unknown, fallback: string | undefined) {
   return typeof value === 'string' && value ? value : fallback;
 }
 
@@ -517,26 +467,101 @@ function numberValue(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function arrayOrStringValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.join(',');
-  }
-  return typeof value === 'string' ? value : '';
+function firstTemplateVar(value: string) {
+  return value.match(/\{\{\s*([A-Za-z0-9_.-]+)\s*}}/)?.[1] ?? '';
 }
 
-function splitCsv(value: string) {
-  return value.split(',').map((item) => item.trim()).filter(Boolean);
-}
+const paramTypeOptions = [
+  { value: 'String', label: 'String' },
+  { value: 'Number', label: 'Number' },
+  { value: 'Boolean', label: 'Boolean' },
+  { value: 'Object', label: 'Object' },
+  { value: 'Array', label: 'Array' }
+];
 
 const panelStyle: React.CSSProperties = {
   background: '#fff',
   borderLeft: '0',
   height: '100%',
   overflow: 'auto',
-  padding: 16,
+  padding: 0,
   width: '100%'
 };
 
-const titleStyle: React.CSSProperties = {
-  margin: 0
+const tinyHeaderStyle: React.CSSProperties = {
+  background: '#f5f6f8',
+  borderBottom: '1px solid #e5e7eb',
+  color: '#c1c7d0',
+  fontSize: 12,
+  lineHeight: '34px',
+  padding: '0 14px'
+};
+
+const nodeTitleStyle: React.CSSProperties = {
+  padding: '14px 16px 8px'
+};
+
+const nodeTitleMainStyle: React.CSSProperties = {
+  alignItems: 'center',
+  display: 'flex',
+  gap: 10,
+  marginBottom: 8
+};
+
+const nodeIconStyle: React.CSSProperties = {
+  alignItems: 'center',
+  background: '#eef3ff',
+  borderRadius: 8,
+  color: '#3b82f6',
+  display: 'flex',
+  fontSize: 22,
+  height: 32,
+  justifyContent: 'center',
+  width: 32
+};
+
+const nodeNameInputStyle: React.CSSProperties = {
+  border: 0,
+  boxShadow: 'none',
+  fontSize: 16,
+  fontWeight: 700,
+  paddingLeft: 0
+};
+
+const sectionStyle: React.CSSProperties = {
+  padding: '10px 16px'
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  alignItems: 'center',
+  display: 'flex',
+  justifyContent: 'space-between',
+  marginBottom: 10
+};
+
+const emptyParamStyle: React.CSSProperties = {
+  background: '#f7f7f8',
+  borderRadius: 6,
+  color: '#8c8c8c',
+  lineHeight: '44px',
+  textAlign: 'center'
+};
+
+const paramGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 6,
+  gridTemplateColumns: 'minmax(88px, 1fr) minmax(104px, 1.2fr) 96px'
+};
+
+const outputHeaderStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 6,
+  gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)',
+  marginBottom: 6
+};
+
+const outputGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 6,
+  gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)'
 };

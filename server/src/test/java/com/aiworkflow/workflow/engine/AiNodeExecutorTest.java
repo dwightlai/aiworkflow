@@ -7,6 +7,7 @@ import com.aiworkflow.workflow.domain.WorkflowNodeType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,6 +72,44 @@ class AiNodeExecutorTest {
     }
 
     @Test
+    void llmNodeRendersAiflowyStyleUserPromptAndOutputParam() {
+        RecordingChatModelClient chatModelClient = new RecordingChatModelClient();
+        ModelProviderService modelProviderService = new ModelProviderService();
+        String providerId = modelProviderService.create(
+                "DeepSeek",
+                "DeepSeek",
+                "CHAT",
+                null,
+                false,
+                BigDecimal.ONE,
+                "https://api.deepseek.com/v1",
+                "deepseek-chat",
+                "dev-key",
+                true
+        ).id();
+        LlmNodeExecutor executor = new LlmNodeExecutor(chatModelClient, modelProviderService);
+
+        NodeExecutionResult result = executor.execute(node(
+                "llm",
+                WorkflowNodeType.LLM,
+                Map.of(
+                        "providerId", providerId,
+                        "userPrompt", "请回答：{{question}}",
+                        "systemPrompt", "你是客服助手",
+                        "inputParams", List.of(Map.of("name", "question", "value", "userQuestion", "type", "String")),
+                        "outputParams", List.of(Map.of("name", "output", "type", "String")),
+                        "temperature", 0.5,
+                        "topP", 0.9,
+                        "topK", 50
+                )
+        ), new NodeExecutionContext(Map.of(), Map.of("userQuestion", "如何退款")));
+
+        assertThat(chatModelClient.prompt).isEqualTo("你是客服助手\n\n请回答：如何退款");
+        assertThat(chatModelClient.options).containsEntry("topK", 50);
+        assertThat(result.output()).containsExactlyEntriesOf(Map.of("output", "model response"));
+    }
+
+    @Test
     void llmNodeRejectsDisabledModelProviders() {
         RecordingChatModelClient chatModelClient = new RecordingChatModelClient();
         ModelProviderService modelProviderService = new ModelProviderService();
@@ -109,12 +148,14 @@ class AiNodeExecutorTest {
         private String providerId;
         private String model;
         private String prompt;
+        private Map<String, Object> options;
 
         @Override
         public String generate(String providerId, String model, String prompt, Map<String, Object> options) {
             this.providerId = providerId;
             this.model = model;
             this.prompt = prompt;
+            this.options = options;
             return "model response";
         }
     }
