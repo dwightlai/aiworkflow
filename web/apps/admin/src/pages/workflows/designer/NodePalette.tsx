@@ -26,13 +26,92 @@ export interface NodeTemplate {
 }
 
 const nodeTemplates: NodeTemplate[] = [
-  { type: 'KNOWLEDGE_RETRIEVAL', name: '知识库检索', description: '从知识库召回相关文档片段', icon: <DatabaseOutlined />, config: { knowledgeBaseId: '', queryKey: 'question', outputKey: 'contexts', topK: 3 } },
-  { type: 'START', name: '开始', description: '接收输入并初始化上下文', icon: <PlayCircleOutlined />, config: {} },
-  { type: 'PROMPT', name: 'Prompt 模板', description: '把变量渲染成模型提示词', icon: <CommentOutlined />, config: { template: 'Hello {{name}}', outputKey: 'prompt' } },
-  { type: 'LLM', name: '大模型调用', description: '调用模型并写入输出变量', icon: <RobotOutlined />, config: { providerId: 'default', model: 'mock', promptKey: 'prompt', outputKey: 'answer' } },
-  { type: 'CONDITION', name: '条件分支', description: '根据上下文选择后续节点', icon: <BranchesOutlined />, config: { contextKey: 'answer', operator: 'CONTAINS', compareValue: '', trueTargetNodeId: '', falseTargetNodeId: '' } },
-  { type: 'HTTP_TOOL', name: 'HTTP 工具', description: '调用外部业务系统接口', icon: <ToolOutlined />, config: { method: 'POST', url: '', outputKey: 'toolResult' } },
-  { type: 'END', name: '结束', description: '整理最终输出返回调用方', icon: <StopOutlined />, config: { outputKeys: ['answer'] } }
+  {
+    type: 'START',
+    name: '开始',
+    description: '接收 API、调试或会话输入，初始化流程上下文',
+    icon: <PlayCircleOutlined />,
+    config: { inputKeys: ['question'], inputMode: 'JSON', defaultInputJson: '{\n  "question": "请介绍退款政策"\n}' }
+  },
+  {
+    type: 'KNOWLEDGE_RETRIEVAL',
+    name: '知识库检索',
+    description: '从知识库召回相关文档片段，写入上下文',
+    icon: <DatabaseOutlined />,
+    config: { knowledgeBaseId: '', queryKey: 'question', outputKey: 'contexts', topK: 3, minScore: 0, rerank: false }
+  },
+  {
+    type: 'PROMPT',
+    name: 'Prompt 模板',
+    description: '把上下文变量渲染成模型提示词',
+    icon: <CommentOutlined />,
+    config: {
+      template: '请结合以下知识片段回答用户问题。\n\n知识片段：{{contexts}}\n\n用户问题：{{question}}',
+      outputKey: 'prompt',
+      missingVariablePolicy: 'EMPTY'
+    }
+  },
+  {
+    type: 'LLM',
+    name: '大模型调用',
+    description: '调用已保存模型并把响应写入变量',
+    icon: <RobotOutlined />,
+    config: {
+      providerId: '',
+      model: '',
+      promptKey: 'prompt',
+      outputKey: 'answer',
+      temperature: 0.7,
+      topP: 1,
+      maxTokens: 1024,
+      responseFormat: 'TEXT',
+      stream: false
+    }
+  },
+  {
+    type: 'CONDITION',
+    name: '条件分支',
+    description: '根据上下文变量或表达式选择后续节点',
+    icon: <BranchesOutlined />,
+    config: {
+      expression: '_state.answer && _state.answer.includes("通过")',
+      contextKey: 'answer',
+      operator: 'CONTAINS',
+      compareValue: '',
+      equals: '',
+      trueTargetNodeId: '',
+      falseTargetNodeId: ''
+    }
+  },
+  {
+    type: 'HTTP_TOOL',
+    name: 'HTTP 工具',
+    description: '调用外部业务系统接口并保存结果',
+    icon: <ToolOutlined />,
+    config: {
+      method: 'POST',
+      url: '',
+      headersJson: '{\n  "Content-Type": "application/json"\n}',
+      bodyTemplate: '{\n  "question": "{{question}}"\n}',
+      outputKey: 'toolResult',
+      authType: 'NONE',
+      timeoutMs: 30000
+    }
+  },
+  {
+    type: 'TEXT_TRANSFORM',
+    name: '文本处理',
+    description: '模板渲染、字段整理或轻量文本转换',
+    icon: <CommentOutlined />,
+    config: { transformType: 'TEMPLATE', template: '{{answer}}', outputKey: 'text' }
+  },
+  {
+    type: 'END',
+    name: '结束',
+    description: '整理最终输出返回调用方',
+    icon: <StopOutlined />,
+    config: { outputKeys: ['answer'], includeExecutionMeta: false }
+  }
 ];
 
 export function NodePalette({ onAddNode }: NodePaletteProps) {

@@ -38,6 +38,10 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
 
         Object promptValue = context.context().get(promptKey);
         String prompt = promptValue == null ? "" : String.valueOf(promptValue);
+        String systemPrompt = optionalStringConfig(node, "systemPrompt", "");
+        if (!systemPrompt.isBlank()) {
+            prompt = systemPrompt + "\n\n" + prompt;
+        }
         String response = chatModelClient.generate(providerId, model, prompt, modelOptions(node));
         return NodeExecutionResult.output(Map.of(outputKey, response));
     }
@@ -45,7 +49,10 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
     private Map<String, Object> modelOptions(WorkflowNode node) {
         Map<String, Object> options = new LinkedHashMap<>();
         copyOption(node, options, "temperature");
+        copyOption(node, options, "topP");
         copyOption(node, options, "maxTokens");
+        copyOption(node, options, "responseFormat");
+        copyOption(node, options, "stream");
         return options;
     }
 

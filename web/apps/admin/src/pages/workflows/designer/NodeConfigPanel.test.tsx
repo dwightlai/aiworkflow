@@ -108,11 +108,42 @@ describe('NodeConfigPanel', () => {
     );
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '选择已保存知识库' }));
-    await userEvent.click(await screen.findByText('产品知识库'));
+    await userEvent.click(await screen.findByText('产品知识库 (2 文档 / 8 切片)'));
 
     expect(onChange).toHaveBeenCalledWith('knowledge_1', {
       config: expect.objectContaining({
         knowledgeBaseId: 'kb_1'
+      })
+    });
+  });
+
+  it('updates enterprise HTTP tool node config', async () => {
+    const onChange = vi.fn();
+    render(<NodeConfigPanel node={httpNode} onChange={onChange} />);
+
+    fireEvent.change(screen.getByPlaceholderText('https://api.example.com/orders/{{orderId}}'), {
+      target: { value: 'https://api.example.com/search?q={{question}}' }
+    });
+
+    expect(onChange).toHaveBeenCalledWith('http_1', {
+      config: expect.objectContaining({
+        url: 'https://api.example.com/search?q={{question}}'
+      })
+    });
+  });
+
+  it('keeps condition compatibility fields aligned for backend execution', () => {
+    const onChange = vi.fn();
+    render(<NodeConfigPanel node={conditionNode} onChange={onChange} />);
+
+    fireEvent.change(screen.getByDisplayValue('通过'), {
+      target: { value: '审批通过' }
+    });
+
+    expect(onChange).toHaveBeenCalledWith('condition_1', {
+      config: expect.objectContaining({
+        compareValue: '审批通过',
+        equals: '审批通过'
       })
     });
   });
@@ -149,5 +180,32 @@ const knowledgeNode: WorkflowNode = {
     queryKey: 'question',
     outputKey: 'contexts',
     topK: 3
+  }
+};
+
+const httpNode: WorkflowNode = {
+  id: 'http_1',
+  type: 'HTTP_TOOL',
+  name: 'HTTP 工具',
+  config: {
+    method: 'POST',
+    url: '',
+    headersJson: '',
+    bodyTemplate: '',
+    outputKey: 'toolResult'
+  }
+};
+
+const conditionNode: WorkflowNode = {
+  id: 'condition_1',
+  type: 'CONDITION',
+  name: '条件分支',
+  config: {
+    contextKey: 'answer',
+    operator: 'CONTAINS',
+    compareValue: '通过',
+    equals: '通过',
+    trueTargetNodeId: 'approved',
+    falseTargetNodeId: 'rejected'
   }
 };
