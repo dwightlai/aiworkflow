@@ -1,0 +1,2 @@
+ALTER TABLE knowledge_base
+    ADD COLUMN IF NOT EXISTS vector_dimension INTEGER NOT NULL DEFAULT 1536;

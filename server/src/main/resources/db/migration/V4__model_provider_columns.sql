@@ -1,0 +1,14 @@
+ALTER TABLE model_provider
+    ADD COLUMN IF NOT EXISTS model_type VARCHAR(100) NOT NULL DEFAULT 'CUSTOM';
+
+ALTER TABLE model_provider
+    ADD COLUMN IF NOT EXISTS description TEXT;
+
+ALTER TABLE model_provider
+    ADD COLUMN IF NOT EXISTS vision_support BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE model_provider
+    ADD COLUMN IF NOT EXISTS price_per_million_tokens NUMERIC(18, 6) NOT NULL DEFAULT 0;
+
+ALTER TABLE model_provider
+    ADD COLUMN IF NOT EXISTS model VARCHAR(200) NOT NULL DEFAULT '';

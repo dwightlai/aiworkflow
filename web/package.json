@@ -1,0 +1,13 @@
+{
+  "name": "@aiworkflow/web-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @aiworkflow/admin dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

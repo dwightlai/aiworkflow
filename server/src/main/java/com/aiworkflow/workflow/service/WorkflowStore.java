@@ -1,0 +1,21 @@
+package com.aiworkflow.workflow.service;
+
+import com.aiworkflow.workflow.domain.Workflow;
+import com.aiworkflow.workflow.domain.WorkflowVersion;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface WorkflowStore {
+    Workflow saveWorkflow(Workflow workflow);
+
+    Optional<Workflow> findWorkflowById(String workflowId);
+
+    List<Workflow> listWorkflows();
+
+    WorkflowVersion saveVersion(WorkflowVersion version);
+
+    Optional<WorkflowVersion> findVersionById(String versionId);
+
+    List<WorkflowVersion> listVersions(String workflowId);
+}
