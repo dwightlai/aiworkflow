@@ -51,6 +51,12 @@ function WorkflowDesignerReact(props, ref) {
     currentX: number;
     currentY: number;
   } | null>(null);
+  const [panningCanvas, setPanningCanvas] = useState<{
+    startClientX: number;
+    startClientY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+  } | null>(null);
   const layout = useMemo(() => createWorkflowDesignerLayout(props.value), [props.value]);
   const effectiveSelectedNodeId = props.selectedNodeId === undefined ? selectedNodeId : props.selectedNodeId;
   const selectedEdge = layout.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
@@ -113,14 +119,14 @@ function WorkflowDesignerReact(props, ref) {
     function handleMouseMove(event: MouseEvent) {
       setDraggingNode((current) => current ? {
         ...current,
-        x: Math.max(current.startX + event.clientX - current.startClientX, 0),
-        y: Math.max(current.startY + event.clientY - current.startClientY, 0)
+        x: Math.max(current.startX + (event.clientX - current.startClientX) / zoom, 0),
+        y: Math.max(current.startY + (event.clientY - current.startClientY) / zoom, 0)
       } : null);
     }
 
     function handleMouseUp(event: MouseEvent) {
-      const nextX = Math.max(activeDrag.startX + event.clientX - activeDrag.startClientX, 0);
-      const nextY = Math.max(activeDrag.startY + event.clientY - activeDrag.startClientY, 0);
+      const nextX = Math.max(activeDrag.startX + (event.clientX - activeDrag.startClientX) / zoom, 0);
+      const nextY = Math.max(activeDrag.startY + (event.clientY - activeDrag.startClientY) / zoom, 0);
       designerRef.current?.moveNode(activeDrag.nodeId, nextX, nextY);
       setDraggingNode(null);
     }
@@ -131,7 +137,7 @@ function WorkflowDesignerReact(props, ref) {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingNode]);
+  }, [draggingNode, zoom]);
 
   useEffect(() => {
     if (!draggingEdge) {
@@ -158,6 +164,32 @@ function WorkflowDesignerReact(props, ref) {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [draggingEdge, zoom]);
+
+  useEffect(() => {
+    if (!panningCanvas) {
+      return;
+    }
+    const activePan = panningCanvas;
+
+    function handleMouseMove(event: MouseEvent) {
+      if (!containerRef.current) {
+        return;
+      }
+      containerRef.current.scrollLeft = activePan.startScrollLeft - (event.clientX - activePan.startClientX);
+      containerRef.current.scrollTop = activePan.startScrollTop - (event.clientY - activePan.startClientY);
+    }
+
+    function handleMouseUp() {
+      setPanningCanvas(null);
+    }
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [panningCanvas]);
 
   function handleInputHandleClick(targetNodeId: string) {
     if (!connectingFromNodeId || connectingFromNodeId === targetNodeId || props.readonly) {
@@ -237,6 +269,23 @@ function WorkflowDesignerReact(props, ref) {
     };
   }
 
+  function handleCanvasPanMouseDown(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.button !== 0 || draggingEdge || draggingNode || isInteractiveCanvasTarget(event.target)) {
+      return;
+    }
+    if (!containerRef.current) {
+      return;
+    }
+    event.preventDefault();
+    setSelectedEdgeId(null);
+    setPanningCanvas({
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startScrollLeft: containerRef.current.scrollLeft,
+      startScrollTop: containerRef.current.scrollTop
+    });
+  }
+
   function handleRemoveSelectedNode() {
     const nodeId = effectiveSelectedNodeId;
     if (!nodeId) {
@@ -260,6 +309,14 @@ function WorkflowDesignerReact(props, ref) {
       return;
     }
     designerRef.current?.updateEdge(selectedEdgeId, { condition: value || null });
+  }
+
+  function selectEdge(edgeId: string) {
+    if (props.readonly) {
+      return;
+    }
+    setSelectedEdgeId(edgeId);
+    setSelectedNodeId(null);
   }
 
   return (
@@ -323,7 +380,13 @@ function WorkflowDesignerReact(props, ref) {
       <div
         aria-label="工作流画布视口"
         data-zoom={formatZoom(zoom)}
-        style={{ ...viewportStyle, minWidth: layout.bounds.width * zoom, minHeight: layout.bounds.height * zoom }}
+        onMouseDown={handleCanvasPanMouseDown}
+        style={{
+          ...viewportStyle,
+          cursor: panningCanvas ? 'grabbing' : 'grab',
+          minWidth: layout.bounds.width * zoom,
+          minHeight: layout.bounds.height * zoom
+        }}
       >
         <div
           style={{
@@ -346,23 +409,28 @@ function WorkflowDesignerReact(props, ref) {
               </marker>
             </defs>
             {layout.edges.map((edge) => (
-              <path
-                key={edge.id}
-                aria-label={`选择连线 ${edge.id}`}
-                role="button"
-                d={edge.path}
-                fill="none"
-                stroke={selectedEdgeId === edge.id ? '#1677ff' : '#7f90a8'}
-                strokeWidth={selectedEdgeId === edge.id ? 4 : 2.5}
-                markerEnd="url(#aiworkflow-arrow)"
-                style={{ cursor: props.readonly ? 'default' : 'pointer', pointerEvents: 'stroke' }}
-                onClick={() => {
-                  if (!props.readonly) {
-                    setSelectedEdgeId(edge.id);
-                    setSelectedNodeId(null);
-                  }
-                }}
-              />
+              <g key={edge.id}>
+                <path
+                  aria-label={`选择连线 ${edge.id}`}
+                  role="button"
+                  d={edge.path}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={22}
+                  style={{ cursor: props.readonly ? 'default' : 'pointer', pointerEvents: 'stroke' }}
+                  onClick={() => selectEdge(edge.id)}
+                  onMouseEnter={() => selectEdge(edge.id)}
+                />
+                <path
+                  aria-hidden="true"
+                  d={edge.path}
+                  fill="none"
+                  stroke={selectedEdgeId === edge.id ? '#1677ff' : '#7f90a8'}
+                  strokeWidth={selectedEdgeId === edge.id ? 4 : 2.5}
+                  markerEnd="url(#aiworkflow-arrow)"
+                  style={{ pointerEvents: 'none' }}
+                />
+              </g>
             ))}
             {draggingEdge ? (
               <path
@@ -663,6 +731,13 @@ function clampZoom(value: number) {
 
 function formatZoom(value: number) {
   return String(Number(value.toFixed(2)));
+}
+
+function isInteractiveCanvasTarget(target: EventTarget) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(target.closest('button, input, label, path, [role="button"]'));
 }
 
 function statusToneStyle(status: string): React.CSSProperties {

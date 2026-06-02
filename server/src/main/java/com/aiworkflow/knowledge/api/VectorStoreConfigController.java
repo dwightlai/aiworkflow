@@ -26,35 +26,47 @@ public class VectorStoreConfigController {
     }
 
     @GetMapping
-    public ApiResponse<PageResponse<VectorStoreConfig>> list() {
-        List<VectorStoreConfig> configs = vectorStoreConfigService.list();
+    public ApiResponse<PageResponse<VectorStoreConfigResponse>> list() {
+        List<VectorStoreConfigResponse> configs = vectorStoreConfigService.list().stream()
+                .map(VectorStoreConfigResponse::from)
+                .toList();
         return ApiResponse.success(new PageResponse<>(configs, configs.size()));
     }
 
     @PostMapping
-    public ApiResponse<VectorStoreConfig> create(@Valid @RequestBody SaveVectorStoreConfigRequest request) {
-        return ApiResponse.success(vectorStoreConfigService.create(
+    public ApiResponse<VectorStoreConfigResponse> create(@Valid @RequestBody SaveVectorStoreConfigRequest request) {
+        return ApiResponse.success(VectorStoreConfigResponse.from(vectorStoreConfigService.create(
                 request.name(),
                 request.storeType(),
                 request.endpoint(),
                 request.indexName(),
+                request.username(),
+                request.password(),
+                request.apiKey(),
+                request.connectTimeoutMs(),
+                request.readTimeoutMs(),
                 request.enabled()
-        ));
+        )));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<VectorStoreConfig> update(
+    public ApiResponse<VectorStoreConfigResponse> update(
             @PathVariable String id,
             @Valid @RequestBody SaveVectorStoreConfigRequest request
     ) {
-        return ApiResponse.success(vectorStoreConfigService.update(
+        return ApiResponse.success(VectorStoreConfigResponse.from(vectorStoreConfigService.update(
                 id,
                 request.name(),
                 request.storeType(),
                 request.endpoint(),
                 request.indexName(),
+                request.username(),
+                request.password(),
+                request.apiKey(),
+                request.connectTimeoutMs(),
+                request.readTimeoutMs(),
                 request.enabled()
-        ));
+        )));
     }
 
     @DeleteMapping("/{id}")
@@ -68,8 +80,47 @@ public class VectorStoreConfigController {
             @NotBlank String storeType,
             String endpoint,
             @NotBlank String indexName,
+            String username,
+            String password,
+            String apiKey,
+            Integer connectTimeoutMs,
+            Integer readTimeoutMs,
             boolean enabled
     ) {
+    }
+
+    public record VectorStoreConfigResponse(
+            String id,
+            String name,
+            String storeType,
+            String endpoint,
+            String indexName,
+            String username,
+            boolean passwordConfigured,
+            boolean apiKeyConfigured,
+            int connectTimeoutMs,
+            int readTimeoutMs,
+            boolean enabled,
+            java.time.Instant createdAt,
+            java.time.Instant updatedAt
+    ) {
+        static VectorStoreConfigResponse from(VectorStoreConfig config) {
+            return new VectorStoreConfigResponse(
+                    config.id(),
+                    config.name(),
+                    config.storeType(),
+                    config.endpoint(),
+                    config.indexName(),
+                    config.username(),
+                    config.password() != null && !config.password().isBlank(),
+                    config.apiKey() != null && !config.apiKey().isBlank(),
+                    config.connectTimeoutMs(),
+                    config.readTimeoutMs(),
+                    config.enabled(),
+                    config.createdAt(),
+                    config.updatedAt()
+            );
+        }
     }
 
     public record PageResponse<T>(List<T> items, long total) {

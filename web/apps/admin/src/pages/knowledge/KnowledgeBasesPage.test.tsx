@@ -65,6 +65,11 @@ const knowledgeApiMock = vi.hoisted(() => ({
         storeType: 'MEMORY',
         endpoint: '',
         indexName: 'aiworkflow_kb',
+        username: null,
+        passwordConfigured: false,
+        apiKeyConfigured: false,
+        connectTimeoutMs: 5000,
+        readTimeoutMs: 30000,
         enabled: true
       }
     ],
@@ -76,6 +81,11 @@ const knowledgeApiMock = vi.hoisted(() => ({
     storeType: 'ELASTICSEARCH',
     endpoint: 'http://localhost:9200',
     indexName: 'kb_dev',
+    username: 'elastic',
+    passwordConfigured: true,
+    apiKeyConfigured: false,
+    connectTimeoutMs: 7000,
+    readTimeoutMs: 45000,
     enabled: true
   })),
   updateVectorStoreConfig: vi.fn(async () => ({
@@ -84,6 +94,11 @@ const knowledgeApiMock = vi.hoisted(() => ({
     storeType: 'ELASTICSEARCH',
     endpoint: 'https://es.example.com',
     indexName: 'kb_prod',
+    username: 'elastic-prod',
+    passwordConfigured: true,
+    apiKeyConfigured: false,
+    connectTimeoutMs: 9000,
+    readTimeoutMs: 60000,
     enabled: false
   })),
   deleteVectorStoreConfig: vi.fn(async () => undefined),
@@ -343,14 +358,25 @@ describe('KnowledgeBasesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /向量库配置/ }));
     expect(await screen.findByText('本地内存向量库')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /新增向量库/ }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '向量库类型' }));
+    await userEvent.click(await screen.findByText('Elasticsearch'));
     fireEvent.change(await screen.findByLabelText('配置名称'), { target: { value: 'Elastic dev' } });
+    fireEvent.change(await screen.findByLabelText('用户名'), { target: { value: 'elastic' } });
+    fireEvent.change(await screen.findByLabelText('密码'), { target: { value: 'secret' } });
+    fireEvent.change(await screen.findByLabelText('连接超时(ms)'), { target: { value: 7000 } });
+    fireEvent.change(await screen.findByLabelText('读取超时(ms)'), { target: { value: 45000 } });
     fireEvent.change(screen.getByLabelText('索引名称'), { target: { value: 'kb_dev' } });
     await userEvent.click(screen.getByRole('button', { name: /保存配置/ }));
 
     await waitFor(() => {
       expect(knowledgeApiMock.createVectorStoreConfig).toHaveBeenCalledWith(expect.objectContaining({
         name: 'Elastic dev',
-        indexName: 'kb_dev'
+        storeType: 'ELASTICSEARCH',
+        indexName: 'kb_dev',
+        username: 'elastic',
+        password: 'secret',
+        connectTimeoutMs: 7000,
+        readTimeoutMs: 45000
       }));
     });
 

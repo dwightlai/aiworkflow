@@ -72,6 +72,11 @@ export interface VectorStoreConfig {
   storeType: string;
   endpoint: string | null;
   indexName: string;
+  username?: string | null;
+  passwordConfigured?: boolean;
+  apiKeyConfigured?: boolean;
+  connectTimeoutMs?: number;
+  readTimeoutMs?: number;
   enabled: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -82,6 +87,11 @@ export interface SaveVectorStoreConfigRequest {
   storeType: string;
   endpoint: string | null;
   indexName: string;
+  username?: string | null;
+  password?: string | null;
+  apiKey?: string | null;
+  connectTimeoutMs?: number;
+  readTimeoutMs?: number;
   enabled: boolean;
 }
 

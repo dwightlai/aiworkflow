@@ -156,14 +156,16 @@ describe('WorkflowDesignerPage', () => {
     expect(await screen.findByText('客服意图识别')).toBeInTheDocument();
     expect(screen.getByText('节点库')).toBeInTheDocument();
     expect(screen.getByText('PROMPT')).toBeInTheDocument();
-    expect(screen.getByText('工作流-测试')).toBeInTheDocument();
+    expect(screen.queryByText('工作流-测试')).not.toBeInTheDocument();
     expect(screen.getByText('编排')).toBeInTheDocument();
-    expect(screen.queryByText('节点配置')).not.toBeInTheDocument();
+    expect(screen.queryByText('节点属性：结束')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '节点 结束' }));
-    expect(await screen.findByText('节点配置')).toBeInTheDocument();
+    expect(await screen.findByText('节点属性：结束')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('工作流画布投放区'));
+    expect(screen.getByText('节点属性：结束')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /调试/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'bug 调试' }));
     expect(await screen.findByText('运行调试')).toBeInTheDocument();
   }, 15000);
 
@@ -174,7 +176,7 @@ describe('WorkflowDesignerPage', () => {
       </QueryClientProvider>
     );
 
-    expect(await screen.findByText('工作流-测试')).toBeInTheDocument();
+    expect(screen.queryByText('工作流-测试')).not.toBeInTheDocument();
     expect(screen.getByText('节点编排')).toBeInTheDocument();
     expect(screen.getByText('拖拽节点')).toBeInTheDocument();
     expect(screen.getByText('端口连线')).toBeInTheDocument();
@@ -329,9 +331,9 @@ describe('WorkflowDesignerPage', () => {
     );
 
     await screen.findByText('客服意图识别');
-    await userEvent.click(screen.getByRole('button', { name: /大模型调用/ }));
+    await userEvent.click(screen.getByRole('button', { name: /大模型/ }));
 
-    expect(await screen.findByText('已保存模型')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('大模型')).toBeInTheDocument();
     expect(modelApiMock.listModelProviders).toHaveBeenCalled();
   });
 

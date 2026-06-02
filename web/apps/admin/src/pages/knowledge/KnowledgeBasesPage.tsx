@@ -91,6 +91,11 @@ const initialVectorValues: SaveVectorStoreConfigRequest = {
   storeType: 'MEMORY',
   endpoint: '',
   indexName: 'aiworkflow_kb',
+  username: null,
+  password: null,
+  apiKey: null,
+  connectTimeoutMs: 5000,
+  readTimeoutMs: 30000,
   enabled: true
 };
 
@@ -101,6 +106,7 @@ export function KnowledgeBasesPage() {
   const [documentForm] = Form.useForm<AddKnowledgeDocumentRequest>();
   const [searchForm] = Form.useForm<{ query: string; topK: number }>();
   const [vectorForm] = Form.useForm<SaveVectorStoreConfigRequest>();
+  const vectorStoreType = Form.useWatch('storeType', vectorForm);
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [documentOpen, setDocumentOpen] = useState(false);
@@ -217,7 +223,15 @@ export function KnowledgeBasesPage() {
 
   const vectorMutation = useMutation({
     mutationFn: (values: SaveVectorStoreConfigRequest) => {
-      const request = { ...values, endpoint: values.endpoint || '' };
+      const request = {
+        ...values,
+        endpoint: values.endpoint || '',
+        username: values.username || null,
+        password: values.password || null,
+        apiKey: values.apiKey || null,
+        connectTimeoutMs: values.connectTimeoutMs || 5000,
+        readTimeoutMs: values.readTimeoutMs || 30000
+      };
       return editingVectorStore
         ? updateVectorStoreConfig(editingVectorStore.id, request)
         : createVectorStoreConfig(request);
@@ -368,9 +382,16 @@ export function KnowledgeBasesPage() {
       storeType: store.storeType,
       endpoint: store.endpoint || '',
       indexName: store.indexName,
+      username: store.username || null,
+      password: null,
+      apiKey: null,
+      connectTimeoutMs: store.connectTimeoutMs || 5000,
+      readTimeoutMs: store.readTimeoutMs || 30000,
       enabled: store.enabled
     });
   }
+
+  const isElasticsearchVectorStore = vectorStoreType === 'ELASTICSEARCH';
 
   const vectorStoreOptions = vectorStores.map((store) => ({
     value: store.id,
@@ -557,6 +578,33 @@ export function KnowledgeBasesPage() {
             <Form.Item name="endpoint" label="连接地址">
               <Input placeholder="http://localhost:9200" />
             </Form.Item>
+            {isElasticsearchVectorStore ? (
+              <>
+                <Form.Item name="username" label="用户名">
+                  <Input placeholder="elastic" autoComplete="username" />
+                </Form.Item>
+                <Form.Item name="password" label="密码">
+                  <Input.Password
+                    placeholder={editingVectorStore?.passwordConfigured ? '已配置，留空则保持不变' : '请输入密码'}
+                    autoComplete="new-password"
+                  />
+                </Form.Item>
+                <Form.Item name="apiKey" label="API Key">
+                  <Input.Password
+                    placeholder={editingVectorStore?.apiKeyConfigured ? '已配置，留空则保持不变' : '可选，填写后优先使用 API Key'}
+                    autoComplete="new-password"
+                  />
+                </Form.Item>
+                <Space align="start" style={{ width: '100%' }}>
+                  <Form.Item name="connectTimeoutMs" label="连接超时(ms)" rules={[{ required: true, message: '请输入连接超时' }]}>
+                    <InputNumber min={100} max={120000} style={{ width: 180 }} />
+                  </Form.Item>
+                  <Form.Item name="readTimeoutMs" label="读取超时(ms)" rules={[{ required: true, message: '请输入读取超时' }]}>
+                    <InputNumber min={100} max={300000} style={{ width: 180 }} />
+                  </Form.Item>
+                </Space>
+              </>
+            ) : null}
             <Form.Item name="indexName" label="索引名称" rules={[{ required: true, message: '请输入索引名称' }]}>
               <Input placeholder="aiworkflow_kb" />
             </Form.Item>

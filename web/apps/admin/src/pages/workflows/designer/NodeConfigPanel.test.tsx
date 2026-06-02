@@ -129,6 +129,24 @@ describe('NodeConfigPanel', () => {
         queryKey: 'question'
       })
     });
+
+    await userEvent.click(screen.getByRole('button', { name: '删除输入参数 1' }));
+    expect(onChange).toHaveBeenCalledWith('knowledge_1', {
+      config: expect.objectContaining({
+        inputParams: []
+      })
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '删除输出参数 2' }));
+    expect(onChange).toHaveBeenCalledWith('knowledge_1', {
+      config: expect.objectContaining({
+        outputParams: expect.arrayContaining([
+          expect.objectContaining({ name: 'documents' }),
+          expect.objectContaining({ name: 'content' })
+        ]),
+        outputKey: 'documents'
+      })
+    });
   });
 
   it('applies a saved prompt template to PROMPT node config', async () => {

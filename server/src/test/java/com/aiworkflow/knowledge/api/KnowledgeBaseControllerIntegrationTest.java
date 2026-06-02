@@ -280,9 +280,13 @@ class KnowledgeBaseControllerIntegrationTest {
         String response = mockMvc.perform(post("/api/vector-store-configs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Elastic dev","storeType":"ELASTICSEARCH","endpoint":"http://localhost:9200","indexName":"kb_dev","enabled":true}
+                                {"name":"Elastic dev","storeType":"ELASTICSEARCH","endpoint":"http://localhost:9200","indexName":"kb_dev","username":"elastic","password":"secret","connectTimeoutMs":7000,"readTimeoutMs":45000,"enabled":true}
                                 """))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("elastic"))
+                .andExpect(jsonPath("$.data.passwordConfigured").value(true))
+                .andExpect(jsonPath("$.data.password").doesNotExist())
+                .andExpect(jsonPath("$.data.connectTimeoutMs").value(7000))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -291,11 +295,14 @@ class KnowledgeBaseControllerIntegrationTest {
         mockMvc.perform(put("/api/vector-store-configs/{id}", vectorStoreId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Elastic prod","storeType":"ELASTICSEARCH","endpoint":"https://es.example.com","indexName":"kb_prod","enabled":false}
+                                {"name":"Elastic prod","storeType":"ELASTICSEARCH","endpoint":"https://es.example.com","indexName":"kb_prod","username":"elastic-prod","connectTimeoutMs":9000,"readTimeoutMs":60000,"enabled":false}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("Elastic prod"))
                 .andExpect(jsonPath("$.data.endpoint").value("https://es.example.com"))
+                .andExpect(jsonPath("$.data.username").value("elastic-prod"))
+                .andExpect(jsonPath("$.data.passwordConfigured").value(true))
+                .andExpect(jsonPath("$.data.readTimeoutMs").value(60000))
                 .andExpect(jsonPath("$.data.enabled").value(false));
     }
 

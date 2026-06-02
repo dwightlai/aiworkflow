@@ -6,6 +6,8 @@ import com.aiworkflow.knowledge.domain.KnowledgeChunkPreview;
 import com.aiworkflow.knowledge.domain.KnowledgeChunkVector;
 import com.aiworkflow.knowledge.domain.KnowledgeDocument;
 import com.aiworkflow.knowledge.domain.KnowledgeSearchResult;
+import com.aiworkflow.knowledge.domain.VectorStoreConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +18,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -26,17 +29,42 @@ public class KnowledgeBaseService {
     private final KnowledgeStore store;
     private final EmbeddingClient embeddingClient;
     private final DocumentTextExtractor documentTextExtractor;
+    private final VectorStoreConfigStore vectorStoreConfigStore;
+    private final ElasticsearchVectorStoreClient elasticsearchVectorStoreClient;
 
     public KnowledgeBaseService() {
-        this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient(), new DocumentTextExtractor());
+        this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient());
     }
 
     public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store) {
-        this(splitter, store, new LocalEmbeddingClient(), new DocumentTextExtractor());
+        this(splitter, store, new LocalEmbeddingClient());
     }
 
     public KnowledgeBaseService(KnowledgeSplitter splitter, KnowledgeStore store, EmbeddingClient embeddingClient) {
-        this(splitter, store, embeddingClient, new DocumentTextExtractor());
+        this(
+                splitter,
+                store,
+                embeddingClient,
+                new DocumentTextExtractor(),
+                new InMemoryVectorStoreConfigStore(),
+                new ElasticsearchVectorStoreClient(new ObjectMapper())
+        );
+    }
+
+    public KnowledgeBaseService(
+            KnowledgeSplitter splitter,
+            KnowledgeStore store,
+            EmbeddingClient embeddingClient,
+            DocumentTextExtractor documentTextExtractor
+    ) {
+        this(
+                splitter,
+                store,
+                embeddingClient,
+                documentTextExtractor,
+                new InMemoryVectorStoreConfigStore(),
+                new ElasticsearchVectorStoreClient(new ObjectMapper())
+        );
     }
 
     @Autowired
@@ -44,12 +72,16 @@ public class KnowledgeBaseService {
             KnowledgeSplitter splitter,
             KnowledgeStore store,
             EmbeddingClient embeddingClient,
-            DocumentTextExtractor documentTextExtractor
+            DocumentTextExtractor documentTextExtractor,
+            VectorStoreConfigStore vectorStoreConfigStore,
+            ElasticsearchVectorStoreClient elasticsearchVectorStoreClient
     ) {
         this.splitter = splitter;
         this.store = store;
         this.embeddingClient = embeddingClient;
         this.documentTextExtractor = documentTextExtractor;
+        this.vectorStoreConfigStore = vectorStoreConfigStore;
+        this.elasticsearchVectorStoreClient = elasticsearchVectorStoreClient;
     }
 
     public KnowledgeBase create(
@@ -155,7 +187,9 @@ public class KnowledgeBaseService {
     }
 
     public void delete(String id) {
-        ensureKnowledgeBaseExists(id);
+        KnowledgeBase knowledgeBase = getKnowledgeBase(id);
+        externalVectorStore(knowledgeBase)
+                .ifPresent(config -> elasticsearchVectorStoreClient.deleteKnowledgeBase(config, id));
         store.deleteKnowledgeBase(id);
     }
 
@@ -264,7 +298,9 @@ public class KnowledgeBaseService {
     }
 
     public void deleteDocument(String knowledgeBaseId, String documentId) {
-        ensureKnowledgeBaseExists(knowledgeBaseId);
+        KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
+        externalVectorStore(knowledgeBase)
+                .ifPresent(config -> elasticsearchVectorStoreClient.deleteDocument(config, knowledgeBaseId, documentId));
         store.deleteChunkVectors(knowledgeBaseId, documentId);
         store.deleteChunks(knowledgeBaseId, documentId);
         store.deleteDocument(knowledgeBaseId, documentId);
@@ -275,6 +311,23 @@ public class KnowledgeBaseService {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
         Set<String> terms = tokenize(query);
         int limit = topK <= 0 ? knowledgeBase.topK() : topK;
+        Optional<VectorStoreConfig> externalStore = shouldUseVector(knowledgeBase)
+                ? externalVectorStore(knowledgeBase)
+                : Optional.empty();
+        if (externalStore.isPresent()) {
+            List<Double> queryEmbedding = embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), query);
+            return elasticsearchVectorStoreClient.search(externalStore.get(), knowledgeBaseId, queryEmbedding, limit)
+                    .stream()
+                    .map(hit -> new KnowledgeSearchResult(
+                            hit.chunkId(),
+                            hit.documentName(),
+                            hit.content(),
+                            (int) Math.round(hit.score() * 1000)
+                    ))
+                    .filter(result -> result.score() > 0)
+                    .limit(limit)
+                    .toList();
+        }
         Map<String, KnowledgeChunkVector> vectorsByChunkId = vectorsByChunkId(knowledgeBaseId);
         List<Double> queryEmbedding = shouldUseVector(knowledgeBase)
                 ? embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), query)
@@ -326,11 +379,11 @@ public class KnowledgeBaseService {
         ));
     }
 
-    private void saveEmbeddingIfConfigured(KnowledgeBase knowledgeBase, KnowledgeChunk chunk) {
+    private KnowledgeChunkVector saveEmbeddingIfConfigured(KnowledgeBase knowledgeBase, KnowledgeChunk chunk) {
         if (!shouldUseVector(knowledgeBase)) {
-            return;
+            return null;
         }
-        store.saveChunkVector(new KnowledgeChunkVector(
+        KnowledgeChunkVector vector = store.saveChunkVector(new KnowledgeChunkVector(
                 chunk.id(),
                 chunk.knowledgeBaseId(),
                 chunk.documentId(),
@@ -338,6 +391,19 @@ public class KnowledgeBaseService {
                 embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), chunk.content()),
                 Instant.now()
         ));
+        externalVectorStore(knowledgeBase)
+                .ifPresent(config -> elasticsearchVectorStoreClient.upsertChunk(config, chunk, vector));
+        return vector;
+    }
+
+    private Optional<VectorStoreConfig> externalVectorStore(KnowledgeBase knowledgeBase) {
+        if (knowledgeBase.vectorStoreConfigId() == null || knowledgeBase.vectorStoreConfigId().isBlank()) {
+            return Optional.empty();
+        }
+        return vectorStoreConfigStore.findById(knowledgeBase.vectorStoreConfigId())
+                .filter(VectorStoreConfig::enabled)
+                .filter(config -> "ELASTICSEARCH".equalsIgnoreCase(config.storeType()))
+                .filter(config -> config.endpoint() != null && !config.endpoint().isBlank());
     }
 
     private boolean shouldUseVector(KnowledgeBase knowledgeBase) {

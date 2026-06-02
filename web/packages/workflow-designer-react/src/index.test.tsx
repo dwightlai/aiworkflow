@@ -136,6 +136,27 @@ describe('WorkflowDesignerReact', () => {
     fireEvent.click(screen.getByRole('button', { name: '适配视图' }));
     expect(screen.getByLabelText('工作流画布视口').getAttribute('data-zoom')).toBe('0.85');
   });
+
+  it('pans the whole canvas by dragging blank space', () => {
+    render(<WorkflowDesignerReact value={createDefinition({
+      nodes: [
+        { id: 'start', type: 'START', name: '开始', config: { ui: { position: { x: 32, y: 32 } } } },
+        { id: 'end', type: 'END', name: '结束', config: { ui: { position: { x: 1200, y: 900 } } } }
+      ]
+    })} />);
+
+    const viewport = screen.getByLabelText('工作流画布视口');
+    const container = viewport.parentElement as HTMLDivElement;
+    container.scrollLeft = 300;
+    container.scrollTop = 200;
+
+    fireEvent.mouseDown(viewport, { clientX: 200, clientY: 160 });
+    fireEvent.mouseMove(window, { clientX: 150, clientY: 110 });
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 110 });
+
+    expect(container.scrollLeft).toBe(350);
+    expect(container.scrollTop).toBe(250);
+  });
 });
 
 function createDefinition(patch: Partial<WorkflowDefinition> = {}): WorkflowDefinition {

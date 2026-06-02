@@ -24,6 +24,7 @@ class JdbcKnowledgePersistenceTest {
                 .addScript("db/migration/V3__knowledge_schema.sql")
                 .addScript("db/migration/V7__knowledge_base_vector_dimension.sql")
                 .addScript("db/migration/V6__knowledge_chunk_vectors.sql")
+                .addScript("db/migration/V10__vector_store_es_connection.sql")
                 .build();
         jdbcTemplate = new JdbcTemplate(database);
     }
@@ -92,6 +93,11 @@ class JdbcKnowledgePersistenceTest {
                 "ELASTICSEARCH",
                 "http://localhost:9200",
                 "kb_dev",
+                "elastic",
+                "secret",
+                null,
+                7000,
+                45000,
                 true
         );
 
@@ -103,5 +109,8 @@ class JdbcKnowledgePersistenceTest {
                 .extracting(VectorStoreConfig::id)
                 .containsExactly(config.id());
         assertThat(restoredService.list().getFirst().endpoint()).isEqualTo("http://localhost:9200");
+        assertThat(restoredService.list().getFirst().username()).isEqualTo("elastic");
+        assertThat(restoredService.list().getFirst().password()).isEqualTo("secret");
+        assertThat(restoredService.list().getFirst().connectTimeoutMs()).isEqualTo(7000);
     }
 }

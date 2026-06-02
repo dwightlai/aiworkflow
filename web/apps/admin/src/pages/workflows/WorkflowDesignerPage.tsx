@@ -189,13 +189,6 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
 
   return (
     <section style={pageStyle}>
-      <div style={moduleTabsStyle}>
-        {['首页', '大模型配置', '知识库中心', '向量库配置', 'MCP工具箱', '提示词配置', '术语集配置', '数据库配置', '智能体函数', '机器人助手', '机器人应用'].map((item) => (
-          <Button key={item} size="small" style={moduleTabStyle}>{item}</Button>
-        ))}
-        <Button size="small" type="primary" ghost style={activeModuleTabStyle}>工作流-测试</Button>
-        <Button size="small" type="primary" style={{ marginLeft: 'auto' }}>更多</Button>
-      </div>
 
       <div style={toolbarStyle}>
         <Space size={10} align="center">
@@ -208,10 +201,6 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           <div style={modeTabsStyle}>
             <Button type="primary" ghost icon={<SettingOutlined />}>编排</Button>
             <Button type="text">API</Button>
-            <Button type="text">密钥</Button>
-            <Button type="text">日志</Button>
-            <Button type="text">会话</Button>
-            <Button type="text">探索</Button>
           </div>
         </Space>
         <Space size={8}>
@@ -320,6 +309,9 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
         title={selectedNode ? `节点属性：${selectedNode.name}` : '节点属性'}
         open={configOpen}
         onClose={() => setConfigOpen(false)}
+        keyboard={false}
+        mask={false}
+        maskClosable={false}
         width={380}
         styles={{ body: { padding: 0 } }}
       >
@@ -408,27 +400,6 @@ const pageStyle: React.CSSProperties = {
   margin: '-16px -24px',
   minHeight: 720,
   overflow: 'hidden'
-};
-
-const moduleTabsStyle: React.CSSProperties = {
-  alignItems: 'center',
-  background: '#fff',
-  borderBottom: '1px solid #e7ecf3',
-  display: 'flex',
-  flex: '0 0 50px',
-  gap: 6,
-  overflowX: 'auto',
-  padding: '8px 12px'
-};
-
-const moduleTabStyle: React.CSSProperties = {
-  borderRadius: 4,
-  minWidth: 110
-};
-
-const activeModuleTabStyle: React.CSSProperties = {
-  borderRadius: 4,
-  minWidth: 128
 };
 
 const toolbarStyle: React.CSSProperties = {

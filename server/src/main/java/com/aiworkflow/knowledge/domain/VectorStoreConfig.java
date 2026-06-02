@@ -8,6 +8,11 @@ public record VectorStoreConfig(
         String storeType,
         String endpoint,
         String indexName,
+        String username,
+        String password,
+        String apiKey,
+        int connectTimeoutMs,
+        int readTimeoutMs,
         boolean enabled,
         Instant createdAt,
         Instant updatedAt

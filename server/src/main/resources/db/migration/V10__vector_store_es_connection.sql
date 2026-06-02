@@ -1,0 +1,5 @@
+ALTER TABLE vector_store_config ADD COLUMN IF NOT EXISTS username VARCHAR(200);
+ALTER TABLE vector_store_config ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE vector_store_config ADD COLUMN IF NOT EXISTS api_key TEXT;
+ALTER TABLE vector_store_config ADD COLUMN IF NOT EXISTS connect_timeout_ms INTEGER NOT NULL DEFAULT 5000;
+ALTER TABLE vector_store_config ADD COLUMN IF NOT EXISTS read_timeout_ms INTEGER NOT NULL DEFAULT 30000;

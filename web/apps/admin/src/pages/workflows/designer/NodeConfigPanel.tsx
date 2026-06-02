@@ -1,4 +1,4 @@
-import { CommentOutlined, PlusOutlined, RedoOutlined, RobotOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
+import { CommentOutlined, DeleteOutlined, PlusOutlined, RedoOutlined, RobotOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
 import type { WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Button, Empty, Form, Input, InputNumber, Select, Slider, Space, Typography } from 'antd';
 import type React from 'react';
@@ -203,7 +203,13 @@ function LlmConfig({ node, setConfig, modelProviders }: { node: WorkflowNode; se
           <Input.TextArea placeholder="请输入用户提示词，如：{{question}}" autoSize={{ minRows: 5, maxRows: 10 }} value={String(config.userPrompt ?? config.promptTemplate ?? '{{question}}')} onChange={(event) => setConfig({ userPrompt: event.target.value })} />
         </Form.Item>
       </Form>
-      <OutputSection params={outputParams} format={stringValue(config.outputFormat, 'TEXT') ?? 'TEXT'} onFormatChange={(outputFormat) => setConfig({ outputFormat })} onChange={(patch) => updateOutputParam(patch)} />
+      <OutputSection
+        params={outputParams}
+        format={stringValue(config.outputFormat, 'TEXT') ?? 'TEXT'}
+        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
+        onChange={(patch) => updateOutputParam(patch)}
+        onRemove={() => setConfig({ outputParams: [], outputKey: '' })}
+      />
     </>
   );
 }
@@ -246,6 +252,10 @@ function KnowledgeConfig({ node, setConfig, knowledgeBases }: { node: WorkflowNo
           const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
           setConfig({ outputParams: next, outputKey: next[0]?.name || 'documents' });
         }}
+        onRemove={(index) => {
+          const next = outputParams.filter((_, itemIndex) => itemIndex !== index);
+          setConfig({ outputParams: next, outputKey: next[0]?.name || 'documents' });
+        }}
       />
     </>
   );
@@ -271,6 +281,10 @@ function ContentTemplateConfig({ node, setConfig }: { node: WorkflowNode; setCon
         onFormatChange={(outputFormat) => setConfig({ outputFormat })}
         onChange={(patch, index) => {
           const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
+          setConfig({ outputParams: next, outputKey: next[0]?.name || 'content' });
+        }}
+        onRemove={(index) => {
+          const next = outputParams.filter((_, itemIndex) => itemIndex !== index);
           setConfig({ outputParams: next, outputKey: next[0]?.name || 'content' });
         }}
       />
@@ -324,7 +338,13 @@ function HttpConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch
           <Input value={String(config.outputKey ?? 'httpResult')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
         </Form.Item>
       </Form>
-      <OutputSection params={outputParams} format="OBJECT" onFormatChange={() => undefined} onChange={(patch, index) => setConfig({ outputParams: outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param) })} />
+      <OutputSection
+        params={outputParams}
+        format="OBJECT"
+        onFormatChange={() => undefined}
+        onChange={(patch, index) => setConfig({ outputParams: outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param) })}
+        onRemove={(index) => setConfig({ outputParams: outputParams.filter((_, itemIndex) => itemIndex !== index) })}
+      />
     </>
   );
 }
@@ -379,6 +399,10 @@ function LoopConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch
           const next = outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
           setConfig({ outputParams: next, outputKey: next[0]?.name || 'loopResults' });
         }}
+        onRemove={(index) => {
+          const next = outputParams.filter((_, itemIndex) => itemIndex !== index);
+          setConfig({ outputParams: next, outputKey: next[0]?.name || 'loopResults' });
+        }}
       />
     </>
   );
@@ -397,6 +421,14 @@ function ParamSection({ title, params, emptyText = '无输入参数', onAdd, onC
               <Input aria-label={`参数名称 ${index + 1}`} placeholder="参数名称" value={param.name} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
               <Input aria-label={`参数值 ${index + 1}`} placeholder="参数值" value={param.value} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} />
               <Select aria-label={`参数类型 ${index + 1}`} value={param.type} options={paramTypeOptions} onChange={(type) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, type } : item))} />
+              <Button
+                aria-label={`删除输入参数 ${index + 1}`}
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+                type="text"
+                onClick={() => onChange(params.filter((_, itemIndex) => itemIndex !== index))}
+              />
             </div>
           ))}
         </Space>
@@ -421,7 +453,7 @@ function KeyValueSection({ title, rows, onAdd, onChange }: { title: string; rows
   );
 }
 
-function OutputSection({ params, format, onFormatChange, onChange }: { params: ParamRow[]; format: string; onFormatChange: (format: string) => void; onChange: (patch: Partial<ParamRow>, index: number) => void }) {
+function OutputSection({ params, format, onFormatChange, onChange, onRemove }: { params: ParamRow[]; format: string; onFormatChange: (format: string) => void; onChange: (patch: Partial<ParamRow>, index: number) => void; onRemove?: (index: number) => void }) {
   return (
     <section style={sectionStyle}>
       <SectionTitle
@@ -431,12 +463,21 @@ function OutputSection({ params, format, onFormatChange, onChange }: { params: P
       <div style={outputHeaderStyle}>
         <Typography.Text type="secondary">参数名称</Typography.Text>
         <Typography.Text type="secondary">参数类型</Typography.Text>
+        <span />
       </div>
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
         {params.map((param, index) => (
           <div key={`${param.name}-${index}`} style={outputGridStyle}>
             <Input aria-label={`输出参数名称 ${index + 1}`} value={param.name} onChange={(event) => onChange({ name: event.target.value }, index)} />
             <Select aria-label={`输出参数类型 ${index + 1}`} value={param.type} options={paramTypeOptions} onChange={(type) => onChange({ type }, index)} />
+            <Button
+              aria-label={`删除输出参数 ${index + 1}`}
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              type="text"
+              onClick={() => onRemove?.(index)}
+            />
           </div>
         ))}
       </Space>
@@ -485,6 +526,10 @@ function GenericConfig({ node, setConfig, promptTemplates }: { node: WorkflowNod
         onFormatChange={(outputFormat) => setConfig({ outputFormat })}
         onChange={(patch, index) => {
           const next = params.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
+          setConfig({ outputParams: next, outputKeys: next.map((param) => param.name) });
+        }}
+        onRemove={(index) => {
+          const next = params.filter((_, itemIndex) => itemIndex !== index);
           setConfig({ outputParams: next, outputKeys: next.map((param) => param.name) });
         }}
       />
@@ -614,8 +659,8 @@ const nodeNameInputStyle: React.CSSProperties = { border: 0, boxShadow: 'none', 
 const sectionStyle: React.CSSProperties = { padding: '10px 16px' };
 const sectionTitleStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', marginBottom: 10 };
 const emptyParamStyle: React.CSSProperties = { background: '#f7f7f8', borderRadius: 6, color: '#8c8c8c', lineHeight: '44px', textAlign: 'center' };
-const paramGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(88px, 1fr) minmax(104px, 1.2fr) 96px' };
+const paramGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(78px, 1fr) minmax(96px, 1.15fr) 90px 30px' };
 const keyValueGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(140px, 1.4fr)' };
-const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)', marginBottom: 6 };
-const outputGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(110px, 1fr) minmax(110px, 1fr)' };
+const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px', marginBottom: 6 };
+const outputGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px' };
 const stepCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: 8, display: 'grid', gap: 8, padding: 10 };

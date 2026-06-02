@@ -23,13 +23,19 @@ public class JdbcVectorStoreConfigStore implements VectorStoreConfigStore {
         if (exists(config.id())) {
             jdbcTemplate.update("""
                             UPDATE vector_store_config
-                            SET name = ?, store_type = ?, endpoint = ?, index_name = ?, enabled = ?, created_at = ?, updated_at = ?
+                            SET name = ?, store_type = ?, endpoint = ?, index_name = ?, username = ?, password = ?,
+                                api_key = ?, connect_timeout_ms = ?, read_timeout_ms = ?, enabled = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
                             """,
                     config.name(),
                     config.storeType(),
                     config.endpoint(),
                     config.indexName(),
+                    config.username(),
+                    config.password(),
+                    config.apiKey(),
+                    config.connectTimeoutMs(),
+                    config.readTimeoutMs(),
                     config.enabled(),
                     Timestamp.from(config.createdAt()),
                     Timestamp.from(config.updatedAt()),
@@ -38,14 +44,20 @@ public class JdbcVectorStoreConfigStore implements VectorStoreConfigStore {
         } else {
             jdbcTemplate.update("""
                             INSERT INTO vector_store_config
-                                (id, name, store_type, endpoint, index_name, enabled, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                (id, name, store_type, endpoint, index_name, username, password, api_key,
+                                 connect_timeout_ms, read_timeout_ms, enabled, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                     config.id(),
                     config.name(),
                     config.storeType(),
                     config.endpoint(),
                     config.indexName(),
+                    config.username(),
+                    config.password(),
+                    config.apiKey(),
+                    config.connectTimeoutMs(),
+                    config.readTimeoutMs(),
                     config.enabled(),
                     Timestamp.from(config.createdAt()),
                     Timestamp.from(config.updatedAt())
@@ -83,6 +95,11 @@ public class JdbcVectorStoreConfigStore implements VectorStoreConfigStore {
                 rs.getString("store_type"),
                 rs.getString("endpoint"),
                 rs.getString("index_name"),
+                rs.getString("username"),
+                rs.getString("password"),
+                rs.getString("api_key"),
+                rs.getInt("connect_timeout_ms"),
+                rs.getInt("read_timeout_ms"),
                 rs.getBoolean("enabled"),
                 instant(rs, "created_at"),
                 instant(rs, "updated_at")
