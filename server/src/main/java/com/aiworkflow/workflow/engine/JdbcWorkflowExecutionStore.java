@@ -29,9 +29,9 @@ public class JdbcWorkflowExecutionStore implements WorkflowExecutionStore {
 
     @Override
     public WorkflowExecution saveWorkflowExecution(WorkflowExecution execution) {
-        if (exists("workflow_execution", execution.id())) {
+        if (exists("agi_workflow_execution", execution.id())) {
             jdbcTemplate.update("""
-                            UPDATE workflow_execution
+                            UPDATE agi_workflow_execution
                             SET workflow_id = ?, workflow_version_id = ?, status = ?, input_json = ?, context_json = ?,
                                 output_json = ?, error_message = ?, started_at = ?, finished_at = ?
                             WHERE id = ?
@@ -49,7 +49,7 @@ public class JdbcWorkflowExecutionStore implements WorkflowExecutionStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO workflow_execution
+                            INSERT INTO agi_workflow_execution
                                 (id, workflow_id, workflow_version_id, tenant_id, status, input_json, context_json,
                                  output_json, error_code, error_message, started_at, finished_at, created_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -74,20 +74,20 @@ public class JdbcWorkflowExecutionStore implements WorkflowExecutionStore {
 
     @Override
     public Optional<WorkflowExecution> findWorkflowExecutionById(String executionId) {
-        return jdbcTemplate.query("SELECT * FROM workflow_execution WHERE id = ?", workflowExecutionMapper(), executionId)
+        return jdbcTemplate.query("SELECT * FROM agi_workflow_execution WHERE id = ?", workflowExecutionMapper(), executionId)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public List<WorkflowExecution> listWorkflowExecutions() {
-        return jdbcTemplate.query("SELECT * FROM workflow_execution ORDER BY started_at DESC", workflowExecutionMapper());
+        return jdbcTemplate.query("SELECT * FROM agi_workflow_execution ORDER BY started_at DESC", workflowExecutionMapper());
     }
 
     @Override
     public NodeExecution saveNodeExecution(NodeExecution nodeExecution) {
         jdbcTemplate.update("""
-                        INSERT INTO workflow_node_execution
+                        INSERT INTO agi_workflow_node_execution
                             (id, workflow_execution_id, node_id, node_type, status, input_json, output_json,
                              error_code, error_message, started_at, finished_at, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -111,7 +111,7 @@ public class JdbcWorkflowExecutionStore implements WorkflowExecutionStore {
     @Override
     public List<NodeExecution> listNodeExecutions(String workflowExecutionId) {
         return jdbcTemplate.query(
-                "SELECT * FROM workflow_node_execution WHERE workflow_execution_id = ? ORDER BY started_at",
+                "SELECT * FROM agi_workflow_node_execution WHERE workflow_execution_id = ? ORDER BY started_at",
                 nodeExecutionMapper(),
                 workflowExecutionId
         );

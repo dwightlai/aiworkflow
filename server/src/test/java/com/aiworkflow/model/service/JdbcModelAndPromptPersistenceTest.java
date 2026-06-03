@@ -27,6 +27,7 @@ class JdbcModelAndPromptPersistenceTest {
                 .addScript("db/migration/V2__ai_studio_schema.sql")
                 .addScript("db/migration/V4__model_provider_columns.sql")
                 .addScript("db/migration/V5__model_provider_usage.sql")
+                .addScript("db/migration/V12__agi_table_prefix.sql")
                 .build();
         jdbcTemplate = new JdbcTemplate(database);
     }

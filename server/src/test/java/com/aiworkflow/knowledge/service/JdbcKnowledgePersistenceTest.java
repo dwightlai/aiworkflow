@@ -25,6 +25,7 @@ class JdbcKnowledgePersistenceTest {
                 .addScript("db/migration/V7__knowledge_base_vector_dimension.sql")
                 .addScript("db/migration/V6__knowledge_chunk_vectors.sql")
                 .addScript("db/migration/V10__vector_store_es_connection.sql")
+                .addScript("db/migration/V12__agi_table_prefix.sql")
                 .build();
         jdbcTemplate = new JdbcTemplate(database);
     }
@@ -41,8 +42,8 @@ class JdbcKnowledgePersistenceTest {
                 new JdbcKnowledgeStore(jdbcTemplate)
         );
         KnowledgeBase knowledgeBase = service.create(
-                "产品知识库",
-                "客服资料",
+                "Product knowledge base",
+                "Customer support material",
                 "embedding-model-1",
                 "vector-store-1",
                 "SIMPLE_TEXT",
@@ -54,7 +55,7 @@ class JdbcKnowledgePersistenceTest {
         KnowledgeDocument document = service.addDocument(
                 knowledgeBase.id(),
                 "faq.txt",
-                "发票可以在订单完成后七日内申请。退货需要保留包装。"
+                "Invoices can be requested within seven days after an order is completed. Returns require original packaging."
         );
 
         KnowledgeBaseService restoredService = new KnowledgeBaseService(
@@ -64,7 +65,7 @@ class JdbcKnowledgePersistenceTest {
 
         assertThat(restoredService.list())
                 .extracting(KnowledgeBase::name)
-                .containsExactly("产品知识库");
+                .containsExactly("Product knowledge base");
         assertThat(restoredService.list().get(0).documentCount()).isEqualTo(1);
         assertThat(restoredService.listDocuments(knowledgeBase.id()))
                 .extracting(KnowledgeDocument::id)
@@ -73,13 +74,13 @@ class JdbcKnowledgePersistenceTest {
                 .hasSize(1)
                 .first()
                 .extracting("content")
-                .isEqualTo("发票可以在订单完成后七日内申请。退货需要保留包装。");
-        assertThat(restoredService.search(knowledgeBase.id(), "发票申请", 3))
+                .isEqualTo("Invoices can be requested within seven days after an order is completed. Returns require original packaging.");
+        assertThat(restoredService.search(knowledgeBase.id(), "invoice request", 3))
                 .hasSize(1)
                 .first()
                 .extracting("documentName")
                 .isEqualTo("faq.txt");
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM knowledge_chunk_vector", Integer.class))
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agi_knowledge_chunk_vector", Integer.class))
                 .isEqualTo(1);
     }
 

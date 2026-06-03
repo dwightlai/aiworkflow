@@ -26,7 +26,7 @@ public class JdbcBotStore implements BotStore {
     public AiBot save(AiBot bot) {
         if (exists(bot.id())) {
             jdbcTemplate.update("""
-                            UPDATE ai_bot
+                            UPDATE agi_ai_bot
                             SET name = ?, description = ?, avatar = ?, workflow_id = ?, model_provider_id = ?,
                                 knowledge_base_id = ?, system_prompt = ?, opening_message = ?, status = ?,
                                 conversation_count = ?, published_at = ?, created_at = ?, updated_at = ?
@@ -49,7 +49,7 @@ public class JdbcBotStore implements BotStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO ai_bot
+                            INSERT INTO agi_ai_bot
                                 (id, name, description, avatar, workflow_id, model_provider_id, knowledge_base_id,
                                  system_prompt, opening_message, status, conversation_count, published_at, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -75,26 +75,26 @@ public class JdbcBotStore implements BotStore {
 
     @Override
     public List<AiBot> list() {
-        return jdbcTemplate.query("SELECT * FROM ai_bot ORDER BY created_at", mapper());
+        return jdbcTemplate.query("SELECT * FROM agi_ai_bot ORDER BY created_at", mapper());
     }
 
     @Override
     public Optional<AiBot> findById(String id) {
-        return jdbcTemplate.query("SELECT * FROM ai_bot WHERE id = ?", mapper(), id)
+        return jdbcTemplate.query("SELECT * FROM agi_ai_bot WHERE id = ?", mapper(), id)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public void delete(String id) {
-        jdbcTemplate.update("DELETE FROM ai_bot WHERE id = ?", id);
+        jdbcTemplate.update("DELETE FROM agi_ai_bot WHERE id = ?", id);
     }
 
     @Override
     public BotSession saveSession(BotSession session) {
-        if (exists("bot_session", session.id())) {
+        if (exists("agi_bot_session", session.id())) {
             jdbcTemplate.update("""
-                            UPDATE bot_session
+                            UPDATE agi_bot_session
                             SET bot_id = ?, title = ?, message_count = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
                             """,
@@ -107,7 +107,7 @@ public class JdbcBotStore implements BotStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO bot_session (id, bot_id, title, message_count, created_at, updated_at)
+                            INSERT INTO agi_bot_session (id, bot_id, title, message_count, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, ?)
                             """,
                     session.id(),
@@ -124,7 +124,7 @@ public class JdbcBotStore implements BotStore {
     @Override
     public List<BotSession> listSessions(String botId) {
         return jdbcTemplate.query(
-                "SELECT * FROM bot_session WHERE bot_id = ? ORDER BY updated_at DESC",
+                "SELECT * FROM agi_bot_session WHERE bot_id = ? ORDER BY updated_at DESC",
                 sessionMapper(),
                 botId
         );
@@ -133,7 +133,7 @@ public class JdbcBotStore implements BotStore {
     @Override
     public Optional<BotSession> findSessionById(String botId, String sessionId) {
         return jdbcTemplate.query(
-                        "SELECT * FROM bot_session WHERE bot_id = ? AND id = ?",
+                        "SELECT * FROM agi_bot_session WHERE bot_id = ? AND id = ?",
                         sessionMapper(),
                         botId,
                         sessionId
@@ -145,7 +145,7 @@ public class JdbcBotStore implements BotStore {
     @Override
     public BotMessage saveMessage(BotMessage message) {
         jdbcTemplate.update("""
-                        INSERT INTO bot_message (id, session_id, bot_id, role, content, created_at)
+                        INSERT INTO agi_bot_message (id, session_id, bot_id, role, content, created_at)
                         VALUES (?, ?, ?, ?, ?, ?)
                         """,
                 message.id(),
@@ -161,7 +161,7 @@ public class JdbcBotStore implements BotStore {
     @Override
     public List<BotMessage> listMessages(String botId, String sessionId) {
         return jdbcTemplate.query(
-                "SELECT * FROM bot_message WHERE bot_id = ? AND session_id = ? ORDER BY created_at",
+                "SELECT * FROM agi_bot_message WHERE bot_id = ? AND session_id = ? ORDER BY created_at",
                 messageMapper(),
                 botId,
                 sessionId
@@ -169,7 +169,7 @@ public class JdbcBotStore implements BotStore {
     }
 
     private boolean exists(String id) {
-        return exists("ai_bot", id);
+        return exists("agi_ai_bot", id);
     }
 
     private boolean exists(String tableName, String id) {

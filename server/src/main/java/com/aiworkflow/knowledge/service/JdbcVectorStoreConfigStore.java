@@ -22,7 +22,7 @@ public class JdbcVectorStoreConfigStore implements VectorStoreConfigStore {
     public VectorStoreConfig save(VectorStoreConfig config) {
         if (exists(config.id())) {
             jdbcTemplate.update("""
-                            UPDATE vector_store_config
+                            UPDATE agi_vector_store_config
                             SET name = ?, store_type = ?, endpoint = ?, index_name = ?, username = ?, password = ?,
                                 api_key = ?, connect_timeout_ms = ?, read_timeout_ms = ?, enabled = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
@@ -43,7 +43,7 @@ public class JdbcVectorStoreConfigStore implements VectorStoreConfigStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO vector_store_config
+                            INSERT INTO agi_vector_store_config
                                 (id, name, store_type, endpoint, index_name, username, password, api_key,
                                  connect_timeout_ms, read_timeout_ms, enabled, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -68,23 +68,23 @@ public class JdbcVectorStoreConfigStore implements VectorStoreConfigStore {
 
     @Override
     public Optional<VectorStoreConfig> findById(String id) {
-        return jdbcTemplate.query("SELECT * FROM vector_store_config WHERE id = ?", mapper(), id)
+        return jdbcTemplate.query("SELECT * FROM agi_vector_store_config WHERE id = ?", mapper(), id)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public List<VectorStoreConfig> list() {
-        return jdbcTemplate.query("SELECT * FROM vector_store_config ORDER BY created_at", mapper());
+        return jdbcTemplate.query("SELECT * FROM agi_vector_store_config ORDER BY created_at", mapper());
     }
 
     @Override
     public void delete(String id) {
-        jdbcTemplate.update("DELETE FROM vector_store_config WHERE id = ?", id);
+        jdbcTemplate.update("DELETE FROM agi_vector_store_config WHERE id = ?", id);
     }
 
     private boolean exists(String id) {
-        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM vector_store_config WHERE id = ?", Integer.class, id);
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agi_vector_store_config WHERE id = ?", Integer.class, id);
         return count != null && count > 0;
     }
 

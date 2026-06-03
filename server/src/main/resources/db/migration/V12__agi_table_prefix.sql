@@ -1,0 +1,16 @@
+ALTER TABLE IF EXISTS workflow RENAME TO agi_workflow;
+ALTER TABLE IF EXISTS workflow_version RENAME TO agi_workflow_version;
+ALTER TABLE IF EXISTS workflow_execution RENAME TO agi_workflow_execution;
+ALTER TABLE IF EXISTS workflow_node_execution RENAME TO agi_workflow_node_execution;
+ALTER TABLE IF EXISTS integration_app RENAME TO agi_integration_app;
+ALTER TABLE IF EXISTS webhook_subscription RENAME TO agi_webhook_subscription;
+ALTER TABLE IF EXISTS prompt_template RENAME TO agi_prompt_template;
+ALTER TABLE IF EXISTS model_provider RENAME TO agi_model_provider;
+ALTER TABLE IF EXISTS vector_store_config RENAME TO agi_vector_store_config;
+ALTER TABLE IF EXISTS knowledge_base RENAME TO agi_knowledge_base;
+ALTER TABLE IF EXISTS knowledge_document RENAME TO agi_knowledge_document;
+ALTER TABLE IF EXISTS knowledge_chunk RENAME TO agi_knowledge_chunk;
+ALTER TABLE IF EXISTS knowledge_chunk_vector RENAME TO agi_knowledge_chunk_vector;
+ALTER TABLE IF EXISTS ai_bot RENAME TO agi_ai_bot;
+ALTER TABLE IF EXISTS bot_session RENAME TO agi_bot_session;
+ALTER TABLE IF EXISTS bot_message RENAME TO agi_bot_message;

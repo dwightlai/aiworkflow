@@ -29,9 +29,9 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
 
     @Override
     public KnowledgeBase saveKnowledgeBase(KnowledgeBase knowledgeBase) {
-        if (exists("knowledge_base", knowledgeBase.id())) {
+        if (exists("agi_knowledge_base", knowledgeBase.id())) {
             jdbcTemplate.update("""
-                            UPDATE knowledge_base
+                            UPDATE agi_knowledge_base
                             SET name = ?, description = ?, embedding_model_id = ?, vector_store_config_id = ?,
                                 vector_dimension = ?, splitter_type = ?, chunk_size = ?, chunk_overlap = ?, retrieval_mode = ?, top_k = ?,
                                 status = ?, document_count = ?, chunk_count = ?, created_at = ?, updated_at = ?
@@ -56,7 +56,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO knowledge_base
+                            INSERT INTO agi_knowledge_base
                                 (id, name, description, embedding_model_id, vector_store_config_id, vector_dimension, splitter_type,
                                  chunk_size, chunk_overlap, retrieval_mode, top_k, status, document_count, chunk_count,
                                  created_at, updated_at)
@@ -85,14 +85,14 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
 
     @Override
     public Optional<KnowledgeBase> findKnowledgeBaseById(String id) {
-        return jdbcTemplate.query("SELECT * FROM knowledge_base WHERE id = ?", knowledgeBaseMapper(), id)
+        return jdbcTemplate.query("SELECT * FROM agi_knowledge_base WHERE id = ?", knowledgeBaseMapper(), id)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public List<KnowledgeBase> listKnowledgeBases() {
-        return jdbcTemplate.query("SELECT * FROM knowledge_base ORDER BY created_at", knowledgeBaseMapper());
+        return jdbcTemplate.query("SELECT * FROM agi_knowledge_base ORDER BY created_at", knowledgeBaseMapper());
     }
 
     @Override
@@ -100,14 +100,14 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
         deleteChunkVectors(id);
         deleteChunks(id);
         deleteDocuments(id);
-        jdbcTemplate.update("DELETE FROM knowledge_base WHERE id = ?", id);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_base WHERE id = ?", id);
     }
 
     @Override
     public KnowledgeDocument saveDocument(KnowledgeDocument document) {
-        if (exists("knowledge_document", document.id())) {
+        if (exists("agi_knowledge_document", document.id())) {
             jdbcTemplate.update("""
-                            UPDATE knowledge_document
+                            UPDATE agi_knowledge_document
                             SET knowledge_base_id = ?, name = ?, chunk_count = ?, created_at = ?
                             WHERE id = ?
                             """,
@@ -119,7 +119,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO knowledge_document (id, knowledge_base_id, name, chunk_count, created_at)
+                            INSERT INTO agi_knowledge_document (id, knowledge_base_id, name, chunk_count, created_at)
                             VALUES (?, ?, ?, ?, ?)
                             """,
                     document.id(),
@@ -135,7 +135,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
     @Override
     public List<KnowledgeDocument> listDocuments(String knowledgeBaseId) {
         return jdbcTemplate.query(
-                "SELECT * FROM knowledge_document WHERE knowledge_base_id = ? ORDER BY created_at",
+                "SELECT * FROM agi_knowledge_document WHERE knowledge_base_id = ? ORDER BY created_at",
                 documentMapper(),
                 knowledgeBaseId
         );
@@ -143,19 +143,19 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
 
     @Override
     public void deleteDocuments(String knowledgeBaseId) {
-        jdbcTemplate.update("DELETE FROM knowledge_document WHERE knowledge_base_id = ?", knowledgeBaseId);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_document WHERE knowledge_base_id = ?", knowledgeBaseId);
     }
 
     @Override
     public void deleteDocument(String knowledgeBaseId, String documentId) {
-        jdbcTemplate.update("DELETE FROM knowledge_document WHERE knowledge_base_id = ? AND id = ?", knowledgeBaseId, documentId);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_document WHERE knowledge_base_id = ? AND id = ?", knowledgeBaseId, documentId);
     }
 
     @Override
     public KnowledgeChunk saveChunk(KnowledgeChunk chunk) {
-        if (exists("knowledge_chunk", chunk.id())) {
+        if (exists("agi_knowledge_chunk", chunk.id())) {
             jdbcTemplate.update("""
-                            UPDATE knowledge_chunk
+                            UPDATE agi_knowledge_chunk
                             SET knowledge_base_id = ?, document_id = ?, document_name = ?, content = ?,
                                 chunk_index = ?, enabled = ?, token_estimate = ?
                             WHERE id = ?
@@ -171,7 +171,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO knowledge_chunk
+                            INSERT INTO agi_knowledge_chunk
                                 (id, knowledge_base_id, document_id, document_name, content, chunk_index, enabled, token_estimate)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             """,
@@ -191,7 +191,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
     @Override
     public List<KnowledgeChunk> listChunks(String knowledgeBaseId, String documentId) {
         return jdbcTemplate.query(
-                "SELECT * FROM knowledge_chunk WHERE knowledge_base_id = ? AND document_id = ? ORDER BY chunk_index",
+                "SELECT * FROM agi_knowledge_chunk WHERE knowledge_base_id = ? AND document_id = ? ORDER BY chunk_index",
                 chunkMapper(),
                 knowledgeBaseId,
                 documentId
@@ -201,7 +201,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
     @Override
     public List<KnowledgeChunk> listChunks(String knowledgeBaseId) {
         return jdbcTemplate.query(
-                "SELECT * FROM knowledge_chunk WHERE knowledge_base_id = ? ORDER BY document_name, chunk_index",
+                "SELECT * FROM agi_knowledge_chunk WHERE knowledge_base_id = ? ORDER BY document_name, chunk_index",
                 chunkMapper(),
                 knowledgeBaseId
         );
@@ -210,20 +210,20 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
     @Override
     public void deleteChunks(String knowledgeBaseId) {
         deleteChunkVectors(knowledgeBaseId);
-        jdbcTemplate.update("DELETE FROM knowledge_chunk WHERE knowledge_base_id = ?", knowledgeBaseId);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_chunk WHERE knowledge_base_id = ?", knowledgeBaseId);
     }
 
     @Override
     public void deleteChunks(String knowledgeBaseId, String documentId) {
         deleteChunkVectors(knowledgeBaseId, documentId);
-        jdbcTemplate.update("DELETE FROM knowledge_chunk WHERE knowledge_base_id = ? AND document_id = ?", knowledgeBaseId, documentId);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_chunk WHERE knowledge_base_id = ? AND document_id = ?", knowledgeBaseId, documentId);
     }
 
     @Override
     public KnowledgeChunkVector saveChunkVector(KnowledgeChunkVector vector) {
-        if (exists("knowledge_chunk_vector", vector.chunkId(), "chunk_id")) {
+        if (exists("agi_knowledge_chunk_vector", vector.chunkId(), "chunk_id")) {
             jdbcTemplate.update("""
-                            UPDATE knowledge_chunk_vector
+                            UPDATE agi_knowledge_chunk_vector
                             SET knowledge_base_id = ?, document_id = ?, embedding_model_id = ?, embedding = ?, created_at = ?
                             WHERE chunk_id = ?
                             """,
@@ -236,7 +236,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO knowledge_chunk_vector
+                            INSERT INTO agi_knowledge_chunk_vector
                                 (chunk_id, knowledge_base_id, document_id, embedding_model_id, embedding, created_at)
                             VALUES (?, ?, ?, ?, ?, ?)
                             """,
@@ -254,7 +254,7 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
     @Override
     public List<KnowledgeChunkVector> listChunkVectors(String knowledgeBaseId) {
         return jdbcTemplate.query(
-                "SELECT * FROM knowledge_chunk_vector WHERE knowledge_base_id = ?",
+                "SELECT * FROM agi_knowledge_chunk_vector WHERE knowledge_base_id = ?",
                 chunkVectorMapper(),
                 knowledgeBaseId
         );
@@ -262,12 +262,12 @@ public class JdbcKnowledgeStore implements KnowledgeStore {
 
     @Override
     public void deleteChunkVectors(String knowledgeBaseId) {
-        jdbcTemplate.update("DELETE FROM knowledge_chunk_vector WHERE knowledge_base_id = ?", knowledgeBaseId);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_chunk_vector WHERE knowledge_base_id = ?", knowledgeBaseId);
     }
 
     @Override
     public void deleteChunkVectors(String knowledgeBaseId, String documentId) {
-        jdbcTemplate.update("DELETE FROM knowledge_chunk_vector WHERE knowledge_base_id = ? AND document_id = ?", knowledgeBaseId, documentId);
+        jdbcTemplate.update("DELETE FROM agi_knowledge_chunk_vector WHERE knowledge_base_id = ? AND document_id = ?", knowledgeBaseId, documentId);
     }
 
     private boolean exists(String tableName, String id) {

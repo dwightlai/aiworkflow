@@ -32,7 +32,7 @@ class JdbcWorkflowStoreTest {
     void setUp() {
         store = new JdbcWorkflowStore(jdbcTemplate, new ObjectMapper().findAndRegisterModules());
         jdbcTemplate.execute("""
-                CREATE TABLE workflow (
+                CREATE TABLE agi_workflow (
                     id VARCHAR(64) PRIMARY KEY,
                     tenant_id VARCHAR(64) NOT NULL,
                     name VARCHAR(200) NOT NULL,
@@ -45,7 +45,7 @@ class JdbcWorkflowStoreTest {
                 )
                 """);
         jdbcTemplate.execute("""
-                CREATE TABLE workflow_version (
+                CREATE TABLE agi_workflow_version (
                     id VARCHAR(64) PRIMARY KEY,
                     workflow_id VARCHAR(64) NOT NULL,
                     version INTEGER NOT NULL,

@@ -24,7 +24,7 @@ public class JdbcModelProviderStore implements ModelProviderStore {
     public ModelProvider save(ModelProvider provider) {
         if (exists(provider.id())) {
             jdbcTemplate.update("""
-                            UPDATE model_provider
+                            UPDATE agi_model_provider
                             SET tenant_id = ?, name = ?, model_type = ?, model_usage = ?, description = ?, vision_support = ?,
                                 price_per_million_tokens = ?, base_url = ?, model = ?, api_key_ref = ?,
                                 enabled = ?, created_at = ?, updated_at = ?
@@ -47,7 +47,7 @@ public class JdbcModelProviderStore implements ModelProviderStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO model_provider
+                            INSERT INTO agi_model_provider
                                 (id, tenant_id, name, model_type, model_usage, description, vision_support, price_per_million_tokens,
                                  base_url, model, api_key_ref, enabled, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -73,23 +73,23 @@ public class JdbcModelProviderStore implements ModelProviderStore {
 
     @Override
     public Optional<ModelProvider> findById(String id) {
-        return jdbcTemplate.query("SELECT * FROM model_provider WHERE id = ?", mapper(), id)
+        return jdbcTemplate.query("SELECT * FROM agi_model_provider WHERE id = ?", mapper(), id)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public List<ModelProvider> list() {
-        return jdbcTemplate.query("SELECT * FROM model_provider ORDER BY created_at", mapper());
+        return jdbcTemplate.query("SELECT * FROM agi_model_provider ORDER BY created_at", mapper());
     }
 
     @Override
     public void delete(String id) {
-        jdbcTemplate.update("DELETE FROM model_provider WHERE id = ?", id);
+        jdbcTemplate.update("DELETE FROM agi_model_provider WHERE id = ?", id);
     }
 
     private boolean exists(String id) {
-        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM model_provider WHERE id = ?", Integer.class, id);
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agi_model_provider WHERE id = ?", Integer.class, id);
         return count != null && count > 0;
     }
 

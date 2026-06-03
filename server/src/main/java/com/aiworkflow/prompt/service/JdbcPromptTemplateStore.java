@@ -24,7 +24,7 @@ public class JdbcPromptTemplateStore implements PromptTemplateStore {
     public PromptTemplate save(PromptTemplate template) {
         if (exists(template.id())) {
             jdbcTemplate.update("""
-                            UPDATE prompt_template
+                            UPDATE agi_prompt_template
                             SET tenant_id = ?, name = ?, template = ?, description = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
                             """,
@@ -38,7 +38,7 @@ public class JdbcPromptTemplateStore implements PromptTemplateStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO prompt_template
+                            INSERT INTO agi_prompt_template
                                 (id, tenant_id, name, template, description, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                             """,
@@ -56,23 +56,23 @@ public class JdbcPromptTemplateStore implements PromptTemplateStore {
 
     @Override
     public Optional<PromptTemplate> findById(String id) {
-        return jdbcTemplate.query("SELECT * FROM prompt_template WHERE id = ?", mapper(), id)
+        return jdbcTemplate.query("SELECT * FROM agi_prompt_template WHERE id = ?", mapper(), id)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public List<PromptTemplate> list() {
-        return jdbcTemplate.query("SELECT * FROM prompt_template ORDER BY created_at", mapper());
+        return jdbcTemplate.query("SELECT * FROM agi_prompt_template ORDER BY created_at", mapper());
     }
 
     @Override
     public void delete(String id) {
-        jdbcTemplate.update("DELETE FROM prompt_template WHERE id = ?", id);
+        jdbcTemplate.update("DELETE FROM agi_prompt_template WHERE id = ?", id);
     }
 
     private boolean exists(String id) {
-        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM prompt_template WHERE id = ?", Integer.class, id);
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agi_prompt_template WHERE id = ?", Integer.class, id);
         return count != null && count > 0;
     }
 

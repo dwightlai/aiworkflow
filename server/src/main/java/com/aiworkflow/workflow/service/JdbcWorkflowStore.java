@@ -28,9 +28,9 @@ public class JdbcWorkflowStore implements WorkflowStore {
 
     @Override
     public Workflow saveWorkflow(Workflow workflow) {
-        if (exists("workflow", workflow.id())) {
+        if (exists("agi_workflow", workflow.id())) {
             jdbcTemplate.update("""
-                            UPDATE workflow
+                            UPDATE agi_workflow
                             SET tenant_id = ?, name = ?, description = ?, status = ?, current_version_id = ?,
                                 created_by = ?, created_at = ?, updated_at = ?
                             WHERE id = ?
@@ -47,7 +47,7 @@ public class JdbcWorkflowStore implements WorkflowStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO workflow
+                            INSERT INTO agi_workflow
                                 (id, tenant_id, name, description, status, current_version_id, created_by, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
@@ -67,22 +67,22 @@ public class JdbcWorkflowStore implements WorkflowStore {
 
     @Override
     public Optional<Workflow> findWorkflowById(String workflowId) {
-        return jdbcTemplate.query("SELECT * FROM workflow WHERE id = ?", workflowMapper(), workflowId)
+        return jdbcTemplate.query("SELECT * FROM agi_workflow WHERE id = ?", workflowMapper(), workflowId)
                 .stream()
                 .findFirst();
     }
 
     @Override
     public List<Workflow> listWorkflows() {
-        return jdbcTemplate.query("SELECT * FROM workflow ORDER BY created_at", workflowMapper());
+        return jdbcTemplate.query("SELECT * FROM agi_workflow ORDER BY created_at", workflowMapper());
     }
 
     @Override
     public WorkflowVersion saveVersion(WorkflowVersion version) {
         String definitionJson = writeJson(version.definition());
-        if (exists("workflow_version", version.id())) {
+        if (exists("agi_workflow_version", version.id())) {
             jdbcTemplate.update("""
-                            UPDATE workflow_version
+                            UPDATE agi_workflow_version
                             SET workflow_id = ?, version = ?, definition_json = ?, status = ?,
                                 published_by = ?, published_at = ?, created_at = ?
                             WHERE id = ?
@@ -98,7 +98,7 @@ public class JdbcWorkflowStore implements WorkflowStore {
             );
         } else {
             jdbcTemplate.update("""
-                            INSERT INTO workflow_version
+                            INSERT INTO agi_workflow_version
                                 (id, workflow_id, version, definition_json, status, published_by, published_at, created_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             """,
@@ -117,7 +117,7 @@ public class JdbcWorkflowStore implements WorkflowStore {
 
     @Override
     public Optional<WorkflowVersion> findVersionById(String versionId) {
-        return jdbcTemplate.query("SELECT * FROM workflow_version WHERE id = ?", versionMapper(), versionId)
+        return jdbcTemplate.query("SELECT * FROM agi_workflow_version WHERE id = ?", versionMapper(), versionId)
                 .stream()
                 .findFirst();
     }
@@ -125,7 +125,7 @@ public class JdbcWorkflowStore implements WorkflowStore {
     @Override
     public List<WorkflowVersion> listVersions(String workflowId) {
         return jdbcTemplate.query(
-                "SELECT * FROM workflow_version WHERE workflow_id = ? ORDER BY version",
+                "SELECT * FROM agi_workflow_version WHERE workflow_id = ? ORDER BY version",
                 versionMapper(),
                 workflowId
         );
