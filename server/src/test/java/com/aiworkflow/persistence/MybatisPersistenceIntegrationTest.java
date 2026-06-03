@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
+        "spring.flyway.locations=classpath:db/migration/postgresql",
         "spring.cloud.nacos.discovery.enabled=false"
 })
 class MybatisPersistenceIntegrationTest {

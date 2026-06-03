@@ -30,7 +30,7 @@ class FlywaySchemaMigrationTest {
                 .build();
         Flyway.configure()
                 .dataSource(database)
-                .locations("classpath:db/migration")
+                .locations("classpath:db/migration/postgresql")
                 .load()
                 .migrate();
         JdbcTemplate jdbcTemplate = new JdbcTemplate(database);
