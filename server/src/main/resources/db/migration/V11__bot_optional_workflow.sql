@@ -1,0 +1,1 @@
+ALTER TABLE ai_bot ALTER COLUMN workflow_id DROP NOT NULL;

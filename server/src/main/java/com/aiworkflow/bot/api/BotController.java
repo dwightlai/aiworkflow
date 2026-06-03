@@ -110,7 +110,7 @@ public class BotController {
             @NotBlank String name,
             String description,
             String avatar,
-            @NotBlank String workflowId,
+            String workflowId,
             String modelProviderId,
             String knowledgeBaseId,
             String systemPrompt,

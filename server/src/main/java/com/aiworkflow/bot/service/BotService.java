@@ -7,13 +7,21 @@ import com.aiworkflow.bot.domain.BotMessageRole;
 import com.aiworkflow.bot.domain.BotRunResult;
 import com.aiworkflow.bot.domain.BotSession;
 import com.aiworkflow.bot.domain.BotStatus;
+import com.aiworkflow.knowledge.domain.KnowledgeSearchResult;
+import com.aiworkflow.knowledge.service.KnowledgeBaseService;
+import com.aiworkflow.model.domain.ModelProvider;
+import com.aiworkflow.model.service.ChatModelClient;
+import com.aiworkflow.model.service.ModelProviderService;
+import com.aiworkflow.workflow.engine.WorkflowExecution;
 import com.aiworkflow.workflow.engine.WorkflowExecutionRequest;
 import com.aiworkflow.workflow.engine.WorkflowExecutionResult;
 import com.aiworkflow.workflow.engine.WorkflowExecutionService;
+import com.aiworkflow.workflow.engine.WorkflowExecutionStatus;
 import com.aiworkflow.workflow.service.WorkflowApplicationService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,15 +32,24 @@ public class BotService {
     private final BotStore store;
     private final WorkflowApplicationService workflowService;
     private final WorkflowExecutionService executionService;
+    private final ModelProviderService modelProviderService;
+    private final ChatModelClient chatModelClient;
+    private final KnowledgeBaseService knowledgeBaseService;
 
     public BotService(
             BotStore store,
             WorkflowApplicationService workflowService,
-            WorkflowExecutionService executionService
+            WorkflowExecutionService executionService,
+            ModelProviderService modelProviderService,
+            ChatModelClient chatModelClient,
+            KnowledgeBaseService knowledgeBaseService
     ) {
         this.store = store;
         this.workflowService = workflowService;
         this.executionService = executionService;
+        this.modelProviderService = modelProviderService;
+        this.chatModelClient = chatModelClient;
+        this.knowledgeBaseService = knowledgeBaseService;
     }
 
     public List<AiBot> list() {
@@ -50,7 +67,7 @@ public class BotService {
             String openingMessage,
             BotStatus status
     ) {
-        workflowService.getWorkflow(workflowId);
+        ensureRunnable(workflowId, modelProviderId, knowledgeBaseId);
         Instant now = Instant.now();
         BotStatus effectiveStatus = status == null ? BotStatus.ENABLED : status;
         return store.save(new AiBot(
@@ -58,7 +75,7 @@ public class BotService {
                 name,
                 description,
                 defaultString(avatar, "robot"),
-                workflowId,
+                blankToNull(workflowId),
                 blankToNull(modelProviderId),
                 blankToNull(knowledgeBaseId),
                 defaultString(systemPrompt, ""),
@@ -84,7 +101,7 @@ public class BotService {
             BotStatus status
     ) {
         AiBot current = get(id);
-        workflowService.getWorkflow(workflowId);
+        ensureRunnable(workflowId, modelProviderId, knowledgeBaseId);
         BotStatus effectiveStatus = status == null ? current.status() : status;
         Instant now = Instant.now();
         return store.save(new AiBot(
@@ -92,7 +109,7 @@ public class BotService {
                 defaultString(name, current.name()),
                 description,
                 defaultString(avatar, current.avatar()),
-                workflowId,
+                blankToNull(workflowId),
                 blankToNull(modelProviderId),
                 blankToNull(knowledgeBaseId),
                 defaultString(systemPrompt, ""),
@@ -116,7 +133,7 @@ public class BotService {
             throw new IllegalStateException("Bot is disabled: " + id);
         }
         Map<String, Object> executionInput = executionInput(bot, defaultString(message, ""), input, List.of());
-        WorkflowExecutionResult execution = executionService.runWorkflow(new WorkflowExecutionRequest(bot.workflowId(), executionInput));
+        WorkflowExecutionResult execution = runBotLogic(bot, executionInput, defaultString(message, ""), List.of());
         AiBot updated = store.save(new AiBot(
                 bot.id(),
                 bot.name(),
@@ -175,7 +192,7 @@ public class BotService {
                 userMessageCreatedAt
         ));
         Map<String, Object> executionInput = executionInput(bot, userMessage.content(), input, history);
-        WorkflowExecutionResult execution = executionService.runWorkflow(new WorkflowExecutionRequest(bot.workflowId(), executionInput));
+        WorkflowExecutionResult execution = runBotLogic(bot, executionInput, userMessage.content(), history);
         BotMessage assistantMessage = store.saveMessage(new BotMessage(
                 "msg_" + UUID.randomUUID(),
                 session.id(),
@@ -216,6 +233,79 @@ public class BotService {
         return store.findById(id).orElseThrow(() -> new BotNotFoundException(id));
     }
 
+    private void ensureRunnable(String workflowId, String modelProviderId, String knowledgeBaseId) {
+        if (!isBlank(workflowId)) {
+            workflowService.getWorkflow(workflowId);
+            return;
+        }
+        if (isBlank(modelProviderId) && isBlank(knowledgeBaseId)) {
+            throw new IllegalArgumentException("Bot requires a workflow, model provider, or knowledge base");
+        }
+        if (!isBlank(modelProviderId)) {
+            ModelProvider provider = modelProviderService.get(modelProviderId);
+            if (!provider.enabled()) {
+                throw new IllegalArgumentException("Model provider is disabled: " + modelProviderId);
+            }
+        }
+        if (!isBlank(knowledgeBaseId)) {
+            knowledgeBaseService.search(knowledgeBaseId, "__health_check__", 1);
+        }
+    }
+
+    private WorkflowExecutionResult runBotLogic(
+            AiBot bot,
+            Map<String, Object> executionInput,
+            String message,
+            List<BotMessage> history
+    ) {
+        if (!isBlank(bot.workflowId())) {
+            return executionService.runWorkflow(new WorkflowExecutionRequest(bot.workflowId(), executionInput));
+        }
+        return runDirectBot(bot, executionInput, message, history);
+    }
+
+    private WorkflowExecutionResult runDirectBot(
+            AiBot bot,
+            Map<String, Object> executionInput,
+            String message,
+            List<BotMessage> history
+    ) {
+        Instant startedAt = Instant.now();
+        List<KnowledgeSearchResult> documents = isBlank(bot.knowledgeBaseId())
+                ? List.of()
+                : knowledgeBaseService.search(bot.knowledgeBaseId(), message, 5);
+        String answer;
+        if (!isBlank(bot.modelProviderId())) {
+            ModelProvider provider = modelProviderService.get(bot.modelProviderId());
+            if (!provider.enabled()) {
+                throw new IllegalArgumentException("Model provider is disabled: " + bot.modelProviderId());
+            }
+            answer = chatModelClient.generate(provider.id(), provider.model(), directPrompt(bot, message, history, documents), Map.of(
+                    "botId", bot.id(),
+                    "knowledgeBaseId", bot.knowledgeBaseId() == null ? "" : bot.knowledgeBaseId()
+            ));
+        } else {
+            answer = documents.isEmpty()
+                    ? "未检索到可用知识库内容。"
+                    : formatKnowledgeAnswer(documents);
+        }
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("answer", answer);
+        output.put("documents", documents);
+        output.put("mode", "DIRECT_BOT");
+        return new WorkflowExecutionResult(new WorkflowExecution(
+                "bot_run_" + UUID.randomUUID(),
+                "bot:" + bot.id(),
+                null,
+                WorkflowExecutionStatus.SUCCEEDED,
+                executionInput,
+                output,
+                null,
+                startedAt,
+                Instant.now()
+        ), List.of());
+    }
+
     private BotSession ensureSession(String botId, String sessionId) {
         return store.findSessionById(botId, sessionId)
                 .orElseThrow(() -> new BotNotFoundException(sessionId));
@@ -242,6 +332,36 @@ public class BotService {
         return executionInput;
     }
 
+    private String directPrompt(
+            AiBot bot,
+            String message,
+            List<BotMessage> history,
+            List<KnowledgeSearchResult> documents
+    ) {
+        List<String> sections = new ArrayList<>();
+        if (!isBlank(bot.systemPrompt())) {
+            sections.add("系统提示词:\n" + bot.systemPrompt());
+        }
+        if (!history.isEmpty()) {
+            sections.add("历史会话:\n" + history.stream()
+                    .map(item -> item.role().name() + ": " + item.content())
+                    .reduce((left, right) -> left + "\n" + right)
+                    .orElse(""));
+        }
+        if (!documents.isEmpty()) {
+            sections.add("知识库内容:\n" + formatKnowledgeAnswer(documents));
+        }
+        sections.add("用户问题:\n" + defaultString(message, ""));
+        return String.join("\n\n", sections);
+    }
+
+    private String formatKnowledgeAnswer(List<KnowledgeSearchResult> documents) {
+        return documents.stream()
+                .map(item -> "- " + item.documentName() + ": " + item.content())
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("");
+    }
+
     private String replyText(Map<String, Object> output) {
         Object answer = output.get("answer");
         if (answer != null) {
@@ -265,5 +385,9 @@ public class BotService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

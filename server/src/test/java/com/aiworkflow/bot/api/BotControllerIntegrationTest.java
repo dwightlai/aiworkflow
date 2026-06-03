@@ -167,6 +167,47 @@ class BotControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.items[3].content").value("Hello Grace"));
     }
 
+    @Test
+    void createsAndChatsWithDirectModelBotWithoutWorkflow() throws Exception {
+        String modelProviderId = createModelProvider();
+        String createResponse = mockMvc.perform(post("/api/bots")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Direct Model Bot",
+                                  "description": "No workflow required",
+                                  "avatar": "robot",
+                                  "workflowId": null,
+                                  "modelProviderId": "%s",
+                                  "knowledgeBaseId": null,
+                                  "systemPrompt": "Be helpful.",
+                                  "openingMessage": "Hello.",
+                                  "status": "ENABLED"
+                                }
+                                """.formatted(modelProviderId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Direct Model Bot"))
+                .andExpect(jsonPath("$.data.modelProviderId").value(modelProviderId))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String botId = objectMapper.readTree(createResponse).path("data").path("id").asText();
+
+        mockMvc.perform(post("/api/bots/{botId}/chat", botId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "message": "Hello",
+                                  "input": {}
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reply.content").value("model response"))
+                .andExpect(jsonPath("$.data.execution.workflowId").value("bot:" + botId))
+                .andExpect(jsonPath("$.data.execution.output.answer").value("model response"))
+                .andExpect(jsonPath("$.data.execution.output.mode").value("DIRECT_BOT"));
+    }
+
     private String createBot(String workflowId) throws Exception {
         String createResponse = mockMvc.perform(post("/api/bots")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -234,5 +275,29 @@ class BotControllerIntegrationTest {
         mockMvc.perform(post("/api/workflows/{workflowId}/publish", workflowId))
                 .andExpect(status().isOk());
         return workflowId;
+    }
+
+    private String createModelProvider() throws Exception {
+        String createResponse = mockMvc.perform(post("/api/model-providers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Smoke Model",
+                                  "modelType": "DeepSeek",
+                                  "modelUsage": "CHAT",
+                                  "description": null,
+                                  "visionSupport": false,
+                                  "pricePerMillionTokens": 1,
+                                  "baseUrl": "https://api.example.com/v1",
+                                  "model": "deepseek-chat",
+                                  "apiKeyRef": "dev-key",
+                                  "enabled": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(createResponse).path("data").path("id").asText();
     }
 }

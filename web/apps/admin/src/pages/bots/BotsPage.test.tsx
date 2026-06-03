@@ -251,6 +251,25 @@ describe('BotsPage', () => {
       expect(botsApiMock.deleteBot).toHaveBeenCalledWith('bot_1');
     });
   });
+
+  it('creates a direct bot with model provider and without workflow binding', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /新增智能体/ }));
+    fireEvent.change(await screen.findByLabelText('智能体名称'), { target: { value: '直连模型助手' } });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '默认模型' }));
+    await userEvent.click((await screen.findAllByText('DeepSeek Chat / deepseek-chat')).at(-1)!);
+    await userEvent.click(screen.getByRole('button', { name: /保存/ }));
+
+    await waitFor(() => {
+      expect(botsApiMock.createBot).toHaveBeenCalledWith(expect.objectContaining({
+        name: '直连模型助手',
+        workflowId: null,
+        modelProviderId: 'model_chat',
+        status: 'ENABLED'
+      }));
+    });
+  });
 });
 
 function renderPage() {

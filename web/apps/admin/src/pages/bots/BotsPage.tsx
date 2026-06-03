@@ -35,7 +35,7 @@ const initialBotValues: SaveBotRequest = {
   name: '',
   description: null,
   avatar: 'robot',
-  workflowId: '',
+  workflowId: null,
   modelProviderId: null,
   knowledgeBaseId: null,
   systemPrompt: '',
@@ -95,6 +95,7 @@ export function BotsPage() {
         ...initialBotValues,
         ...values,
         description: values.description || null,
+        workflowId: values.workflowId || null,
         modelProviderId: values.modelProviderId || null,
         knowledgeBaseId: values.knowledgeBaseId || null
       };
@@ -158,14 +159,16 @@ export function BotsPage() {
       )
     },
     {
-      title: '绑定工作流',
+      title: '应用方式',
       width: 180,
-      render: (_, bot) => <Tag color="blue">{workflowNameById.get(bot.workflowId) ?? bot.workflowId}</Tag>
+      render: (_, bot) => bot.workflowId
+        ? <Tag color="blue">{workflowNameById.get(bot.workflowId) ?? bot.workflowId}</Tag>
+        : <Tag color="green">直连智能体</Tag>
     },
     {
       title: '模型',
       width: 190,
-      render: (_, bot) => <Tag color={bot.modelProviderId ? 'geekblue' : 'default'}>{bot.modelProviderId ? modelNameById.get(bot.modelProviderId) ?? bot.modelProviderId : '跟随工作流'}</Tag>
+      render: (_, bot) => <Tag color={bot.modelProviderId ? 'geekblue' : 'default'}>{bot.modelProviderId ? modelNameById.get(bot.modelProviderId) ?? bot.modelProviderId : bot.workflowId ? '跟随工作流' : '未配置'}</Tag>
     },
     {
       title: '知识库',
@@ -222,9 +225,9 @@ export function BotsPage() {
 
       {botsQuery.isError ? <Alert type="error" showIcon message="智能体加载失败" description={(botsQuery.error as Error).message} style={{ marginBottom: 16 }} /> : null}
 
-      <Card variant="borderless" title={<Space><RobotOutlined />智能体清单</Space>} extra={<Tag color="geekblue">工作流可投放</Tag>}>
+      <Card variant="borderless" title={<Space><RobotOutlined />智能体清单</Space>} extra={<Tag color="geekblue">工作流 / 直连智能体</Tag>}>
         <Table rowKey="id" loading={botsQuery.isLoading} columns={columns} dataSource={visibleBots} pagination={{ pageSize: 8, showSizeChanger: false }} />
-        {!botsQuery.isLoading && bots.length === 0 ? <Empty description="暂无智能体，先新增一个绑定已发布工作流" /> : null}
+        {!botsQuery.isLoading && bots.length === 0 ? <Empty description="暂无智能体，先新增一个智能应用" /> : null}
       </Card>
 
       <Drawer
@@ -241,18 +244,19 @@ export function BotsPage() {
           </Space>
         )}
       >
-        <Form form={botForm} layout="vertical" initialValues={initialBotValues} onFinish={(values) => saveMutation.mutate(values)}>
+        <Form form={botForm} layout="vertical" initialValues={initialBotValues} onFinish={handleBotSubmit}>
           <Form.Item name="name" label="智能体名称" rules={[{ required: true, message: '请输入智能体名称' }]}>
             <Input placeholder="客服助手" />
           </Form.Item>
           <Form.Item name="description" label="智能体描述">
             <Input placeholder="适用场景、服务范围或内部说明" />
           </Form.Item>
-          <Form.Item name="workflowId" label="绑定工作流" rules={[{ required: true, message: '请选择已发布工作流' }]}>
+          <Form.Item name="workflowId" label="绑定工作流（可选）">
             <Select
+              allowClear
               aria-label="绑定工作流"
               loading={workflowsQuery.isLoading}
-              placeholder="选择已发布工作流"
+              placeholder="不绑定则使用默认模型 / 知识库作为智能应用"
               options={publishedWorkflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))}
             />
           </Form.Item>
@@ -360,13 +364,21 @@ export function BotsPage() {
     setDrawerOpen(true);
   }
 
+  function handleBotSubmit(values: SaveBotRequest) {
+    if (!values.workflowId && !values.modelProviderId && !values.knowledgeBaseId) {
+      message.error('请至少绑定工作流、默认模型或默认知识库中的一项');
+      return;
+    }
+    saveMutation.mutate(values);
+  }
+
   function openEditDrawer(bot: Bot) {
     setEditingBot(bot);
     botForm.setFieldsValue({
       name: bot.name,
       description: bot.description || null,
       avatar: bot.avatar || 'robot',
-      workflowId: bot.workflowId,
+      workflowId: bot.workflowId || null,
       modelProviderId: bot.modelProviderId || null,
       knowledgeBaseId: bot.knowledgeBaseId || null,
       systemPrompt: bot.systemPrompt || '',

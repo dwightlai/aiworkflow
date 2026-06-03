@@ -18,7 +18,7 @@ export interface Bot {
   name: string;
   description: string | null;
   avatar: string;
-  workflowId: string;
+  workflowId: string | null;
   modelProviderId: string | null;
   knowledgeBaseId: string | null;
   systemPrompt: string;
@@ -54,7 +54,7 @@ export interface SaveBotRequest {
   name: string;
   description: string | null;
   avatar: string;
-  workflowId: string;
+  workflowId: string | null;
   modelProviderId: string | null;
   knowledgeBaseId: string | null;
   systemPrompt: string;
