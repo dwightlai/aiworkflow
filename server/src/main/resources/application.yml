@@ -27,6 +27,13 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
 
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      update-strategy: always
+
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -37,3 +44,6 @@ third-party:
   organization:
     service-name: ${ORGANIZATION_SERVICE_NAME:organization-service}
     base-url: ${ORGANIZATION_SERVICE_BASE_URL:}
+  auth:
+    service-name: ${AUTH_SERVICE_NAME:auth-service}
+    base-url: ${AUTH_SERVICE_BASE_URL:}
