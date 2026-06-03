@@ -44,7 +44,7 @@ class WorkflowApplicationServiceTest {
 
         List<WorkflowVersion> versions = service.listVersions(workflow.id());
         assertThat(versions).hasSize(1);
-        WorkflowVersion draft = versions.getFirst();
+        WorkflowVersion draft = versions.get(0);
         assertThat(draft.workflowId()).isEqualTo(workflow.id());
         assertThat(draft.version()).isEqualTo(1);
         assertThat(draft.definition()).isEqualTo(validDefinition());
@@ -64,7 +64,7 @@ class WorkflowApplicationServiceTest {
                 definitionWithCycle()
         );
 
-        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(definitionWithCycle());
+        assertThat(service.listVersions(workflow.id()).get(0).definition()).isEqualTo(definitionWithCycle());
     }
 
     @Test
@@ -115,7 +115,7 @@ class WorkflowApplicationServiceTest {
                 .isInstanceOf(DagValidationException.class)
                 .hasMessage("Workflow definition must be acyclic.");
 
-        assertThat(service.listVersions(workflow.id()).getFirst().definition()).isEqualTo(validDefinition());
+        assertThat(service.listVersions(workflow.id()).get(0).definition()).isEqualTo(validDefinition());
     }
 
     @Test

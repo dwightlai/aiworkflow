@@ -65,7 +65,7 @@ class JdbcKnowledgePersistenceTest {
         assertThat(restoredService.list())
                 .extracting(KnowledgeBase::name)
                 .containsExactly("产品知识库");
-        assertThat(restoredService.list().getFirst().documentCount()).isEqualTo(1);
+        assertThat(restoredService.list().get(0).documentCount()).isEqualTo(1);
         assertThat(restoredService.listDocuments(knowledgeBase.id()))
                 .extracting(KnowledgeDocument::id)
                 .containsExactly(document.id());
@@ -108,9 +108,9 @@ class JdbcKnowledgePersistenceTest {
         assertThat(restoredService.list())
                 .extracting(VectorStoreConfig::id)
                 .containsExactly(config.id());
-        assertThat(restoredService.list().getFirst().endpoint()).isEqualTo("http://localhost:9200");
-        assertThat(restoredService.list().getFirst().username()).isEqualTo("elastic");
-        assertThat(restoredService.list().getFirst().password()).isEqualTo("secret");
-        assertThat(restoredService.list().getFirst().connectTimeoutMs()).isEqualTo(7000);
+        assertThat(restoredService.list().get(0).endpoint()).isEqualTo("http://localhost:9200");
+        assertThat(restoredService.list().get(0).username()).isEqualTo("elastic");
+        assertThat(restoredService.list().get(0).password()).isEqualTo("secret");
+        assertThat(restoredService.list().get(0).connectTimeoutMs()).isEqualTo(7000);
     }
 }

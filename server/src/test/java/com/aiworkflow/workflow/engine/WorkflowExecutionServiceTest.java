@@ -102,8 +102,9 @@ class WorkflowExecutionServiceTest {
         assertThat(result.nodeExecutions())
                 .extracting(NodeExecution::nodeId)
                 .containsExactly("start", "transform");
-        assertThat(result.nodeExecutions().getLast().status()).isEqualTo(NodeExecutionStatus.FAILED);
-        assertThat(result.nodeExecutions().getLast().errorMessage())
+        NodeExecution failedNode = result.nodeExecutions().get(result.nodeExecutions().size() - 1);
+        assertThat(failedNode.status()).isEqualTo(NodeExecutionStatus.FAILED);
+        assertThat(failedNode.errorMessage())
                 .isEqualTo("Workflow node transform requires config: outputKey");
     }
 

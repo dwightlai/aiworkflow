@@ -76,6 +76,6 @@ class JdbcModelAndPromptPersistenceTest {
         assertThat(restoredService.list())
                 .extracting(PromptTemplate::id)
                 .containsExactly(template.id());
-        assertThat(restoredService.list().getFirst().template()).contains("{{input}}");
+        assertThat(restoredService.list().get(0).template()).contains("{{input}}");
     }
 }
