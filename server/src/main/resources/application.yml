@@ -4,6 +4,17 @@ server:
 spring:
   application:
     name: aiworkflow-server
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_DISCOVERY_ENABLED:false}
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        service: ${NACOS_SERVICE_NAME:${spring.application.name}}
+        metadata:
+          app: aiworkflow
+          role: admin-api
   datasource:
     url: jdbc:postgresql://localhost:5432/aiworkflow
     username: aiworkflow
@@ -21,3 +32,8 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+third-party:
+  organization:
+    service-name: ${ORGANIZATION_SERVICE_NAME:organization-service}
+    base-url: ${ORGANIZATION_SERVICE_BASE_URL:}

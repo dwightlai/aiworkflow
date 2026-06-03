@@ -11,5 +11,21 @@ services:
     volumes:
       - aiworkflow-postgres-data:/var/lib/postgresql/data
 
+  nacos:
+    image: nacos/nacos-server:v2.4.3
+    container_name: aiworkflow-nacos
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    volumes:
+      - aiworkflow-nacos-data:/home/nacos/data
+      - aiworkflow-nacos-logs:/home/nacos/logs
+
 volumes:
   aiworkflow-postgres-data:
+  aiworkflow-nacos-data:
+  aiworkflow-nacos-logs:
