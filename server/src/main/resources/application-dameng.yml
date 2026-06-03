@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: ${DAMENG_JDBC_URL:jdbc:dm://localhost:5236/AIWORKFLOW}
+    username: ${DAMENG_USERNAME:SYSDBA}
+    password: ${DAMENG_PASSWORD:SYSDBA}
+    driver-class-name: ${DAMENG_DRIVER_CLASS_NAME:dm.jdbc.driver.DmDriver}
+  flyway:
+    locations: classpath:db/migration/dameng

@@ -16,12 +16,12 @@ spring:
           app: aiworkflow
           role: admin-api
   datasource:
-    url: jdbc:postgresql://localhost:5432/aiworkflow
-    username: aiworkflow
-    password: aiworkflow
+    url: ${POSTGRES_JDBC_URL:jdbc:postgresql://localhost:5432/aiworkflow}
+    username: ${POSTGRES_USERNAME:aiworkflow}
+    password: ${POSTGRES_PASSWORD:aiworkflow}
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: ${FLYWAY_LOCATIONS:classpath:db/migration/postgresql}
   servlet:
     multipart:
       max-file-size: 100MB
