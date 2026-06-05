@@ -24,6 +24,24 @@
 - 支持外部主题库、附件、业务记录等动态资料源接入。
 - 支持通用生成模板，覆盖数字档案馆智能编研、OA 公文报告、业务系统分析报告等场景。
 - 支持完整审计，能够还原每次调用使用了哪些智能体、知识库、外部资料、模板和来源片段。
+- 所有新增或调整的业务表统一使用 `agi_` 前缀。
+
+## 2.1 表命名约束
+
+所有表名统一使用 `agi_` 前缀。例如：
+
+```text
+agi_knowledge_base
+agi_ai_bot
+agi_asset_grant
+agi_bot_knowledge_binding
+agi_generation_template
+agi_generation_job
+agi_generation_output
+agi_integration_app_scope
+```
+
+文档中涉及的业务表都按该规则落地。
 
 ## 3. 核心概念
 
@@ -49,7 +67,7 @@
 知识库有归属单位：
 
 ```text
-knowledge_base.owner_unit_id
+agi_knowledge_base.owner_unit_id
 ```
 
 归属单位负责维护知识库，不代表只有归属单位可以使用。共享使用由授权规则控制。
@@ -61,7 +79,7 @@ knowledge_base.owner_unit_id
 智能体有归属单位：
 
 ```text
-ai_bot.owner_unit_id
+agi_ai_bot.owner_unit_id
 ```
 
 归属单位负责维护智能体，不代表只有归属单位可以使用。
@@ -91,7 +109,7 @@ ai_bot.owner_unit_id
 知识库和智能体使用统一授权表：
 
 ```text
-asset_grant
+agi_asset_grant
 - id
 - asset_type              KNOWLEDGE_BASE / BOT / GENERATION_TEMPLATE / EXTERNAL_CORPUS_SOURCE
 - asset_id
@@ -155,7 +173,7 @@ role_ids 为空
 智能体固定绑定一批默认知识库：
 
 ```text
-bot_knowledge_binding
+agi_bot_knowledge_binding
 - id
 - bot_id
 - knowledge_base_id
@@ -240,7 +258,7 @@ POST /openapi/v1/bots/{botId}/runs
 第三方应用需要配置访问范围：
 
 ```text
-integration_app_scope
+agi_integration_app_scope
 - id
 - app_id
 - scope_type              UNIT / BOT / KNOWLEDGE_BASE / TEMPLATE / EXTERNAL_CORPUS_SOURCE
@@ -361,7 +379,7 @@ OA 系统可以把流程单据、正文、审批意见和附件作为外部资�
 ### 8.2 模板字段
 
 ```text
-generation_template
+agi_generation_template
 - id
 - name
 - code
@@ -438,7 +456,7 @@ API_RESULT
 一次智能体内容生成创建一个生成任务：
 
 ```text
-generation_job
+agi_generation_job
 - id
 - bot_id
 - template_id
@@ -461,7 +479,7 @@ generation_job
 生成成果保存最终内容、引用来源和资料快照：
 
 ```text
-generation_output
+agi_generation_output
 - id
 - job_id
 - title
@@ -598,20 +616,20 @@ generation_output
 ### 阶段一：资产归属与授权
 
 - 知识库和智能体增加 `owner_unit_id`。
-- 新增 `asset_grant`。
+- 新增 `agi_asset_grant`。
 - 管理端支持知识库和智能体授权到单位、部门、角色。
 - 运行智能体和检索知识库时加入权限校验。
 
 ### 阶段二：智能体动态知识库选择
 
-- 新增 `bot_knowledge_binding`。
+- 新增 `agi_bot_knowledge_binding`。
 - 新增 `knowledge_selection_mode`。
 - 第三方调用智能体支持 `knowledgeBaseIds`。
 - 传入 `knowledgeBaseIds` 时替换默认知识库。
 
 ### 阶段三：第三方应用范围
 
-- 新增 `integration_app_scope`。
+- 新增 `agi_integration_app_scope`。
 - 开放 API 接收单位、部门、角色、用户上下文。
 - 按应用范围和用户上下文双重校验。
 
