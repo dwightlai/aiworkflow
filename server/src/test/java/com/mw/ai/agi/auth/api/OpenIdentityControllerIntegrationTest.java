@@ -28,10 +28,10 @@ class OpenIdentityControllerIntegrationTest {
 
     @Test
     void resolvesRuntimeIdentityFromApiKeyHeadersAndBodyContext() throws Exception {
-        mockMvc.perform(post("/api/auth/admin/units")
+        mockMvc.perform(post("/api/auth/admin/organizations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"open_unit","name":"Open Unit","unitType":"BUSINESS_ORG"}
+                                {"code":"open_unit","name":"Open Unit","orgType":"UNIT"}
                                 """))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/auth/admin/integration-apps")
@@ -52,7 +52,7 @@ class OpenIdentityControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/admin/integration-apps/app_open_system/scopes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"scopeType":"UNIT","scopeId":"unit_open_unit","permission":"USE"}
+                                {"scopeType":"ORGANIZATION","scopeId":"org_open_unit","permission":"USE"}
                                 """))
                 .andExpect(status().isOk());
 
@@ -61,14 +61,14 @@ class OpenIdentityControllerIntegrationTest {
                         .header("X-AGI-Api-Key", apiKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"unitId":"unit_open_unit","departmentIds":["dept_external"],"roleIds":["open_user"],"userId":"external-42"}
+                                {"unitId":"org_open_unit","departmentIds":["org_external"],"roleIds":["open_user"],"userId":"external-42"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tenantId").value("tenant_default"))
                 .andExpect(jsonPath("$.data.appId").value("app_open_system"))
                 .andExpect(jsonPath("$.data.userId").value("external-42"))
-                .andExpect(jsonPath("$.data.activeUnitId").value("unit_open_unit"))
-                .andExpect(jsonPath("$.data.departmentIds[0]").value("dept_external"))
+                .andExpect(jsonPath("$.data.activeUnitId").value("org_open_unit"))
+                .andExpect(jsonPath("$.data.departmentIds[0]").value("org_external"))
                 .andExpect(jsonPath("$.data.roleIds[0]").value("open_user"))
                 .andExpect(jsonPath("$.data.authType").value("API_KEY"));
     }

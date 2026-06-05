@@ -1,11 +1,11 @@
 package com.mw.ai.agi.auth.api;
 
-import com.mw.ai.agi.auth.persistence.DepartmentEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppScopeEntity;
+import com.mw.ai.agi.auth.persistence.OrganizationEntity;
 import com.mw.ai.agi.auth.persistence.RoleEntity;
 import com.mw.ai.agi.auth.persistence.TenantEntity;
-import com.mw.ai.agi.auth.persistence.UnitEntity;
+import com.mw.ai.agi.auth.persistence.UserEntity;
 import com.mw.ai.agi.auth.service.AuthAdminService;
 import com.mw.ai.agi.auth.service.AuthUserPrincipal;
 import com.mw.ai.agi.common.api.ApiResponse;
@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,37 +36,37 @@ public class AuthAdminController {
         return ApiResponse.success(new PageResponse<>(tenants, tenants.size()));
     }
 
-    @GetMapping("/units")
-    public ApiResponse<PageResponse<UnitEntity>> listUnits() {
-        List<UnitEntity> units = authAdminService.listUnits();
-        return ApiResponse.success(new PageResponse<>(units, units.size()));
+    @GetMapping("/organizations")
+    public ApiResponse<PageResponse<OrganizationEntity>> listOrganizations() {
+        List<OrganizationEntity> organizations = authAdminService.listOrganizations();
+        return ApiResponse.success(new PageResponse<>(organizations, organizations.size()));
     }
 
-    @PostMapping("/units")
-    public ApiResponse<UnitEntity> createUnit(@Valid @RequestBody SaveUnitRequest request) {
-        return ApiResponse.success(authAdminService.createUnit(
+    @PostMapping("/organizations")
+    public ApiResponse<OrganizationEntity> createOrganization(@Valid @RequestBody SaveOrganizationRequest request) {
+        return ApiResponse.success(authAdminService.createOrganization(
+                request.parentId(),
                 request.code(),
-                request.externalUnitId(),
+                request.externalOrgId(),
                 request.name(),
-                request.unitType()
+                request.orgType(),
+                request.sortOrder()
         ));
     }
 
-    @GetMapping("/departments")
-    public ApiResponse<PageResponse<DepartmentEntity>> listDepartments() {
-        List<DepartmentEntity> departments = authAdminService.listDepartments();
-        return ApiResponse.success(new PageResponse<>(departments, departments.size()));
-    }
-
-    @PostMapping("/departments")
-    public ApiResponse<DepartmentEntity> createDepartment(@Valid @RequestBody SaveDepartmentRequest request) {
-        return ApiResponse.success(authAdminService.createDepartment(
-                request.unitId(),
-                request.code(),
-                request.externalDepartmentId(),
+    @PutMapping("/organizations/{organizationId}")
+    public ApiResponse<OrganizationEntity> updateOrganization(
+            @PathVariable String organizationId,
+            @Valid @RequestBody UpdateOrganizationRequest request
+    ) {
+        return ApiResponse.success(authAdminService.updateOrganization(
+                organizationId,
                 request.parentId(),
+                request.externalOrgId(),
                 request.name(),
-                request.sortOrder()
+                request.orgType(),
+                request.sortOrder(),
+                request.status()
         ));
     }
 
@@ -78,11 +79,23 @@ public class AuthAdminController {
     @PostMapping("/roles")
     public ApiResponse<RoleEntity> createRole(@Valid @RequestBody SaveRoleRequest request) {
         return ApiResponse.success(authAdminService.createRole(
-                request.unitId(),
+                request.organizationId(),
                 request.code(),
                 request.name(),
                 request.roleType(),
                 request.externalRoleId()
+        ));
+    }
+
+    @PutMapping("/roles/{roleId}")
+    public ApiResponse<RoleEntity> updateRole(@PathVariable String roleId, @Valid @RequestBody UpdateRoleRequest request) {
+        return ApiResponse.success(authAdminService.updateRole(
+                roleId,
+                request.organizationId(),
+                request.name(),
+                request.roleType(),
+                request.externalRoleId(),
+                request.status()
         ));
     }
 
@@ -100,10 +113,40 @@ public class AuthAdminController {
                 request.displayName(),
                 request.mobile(),
                 request.email(),
-                request.unitIds(),
-                request.departmentIds(),
+                request.organizationIds(),
                 request.roleCodes()
         ));
+    }
+
+    @PutMapping("/users/{userId}")
+    public ApiResponse<AuthUserPrincipal> updateUser(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateUserRequest request
+    ) {
+        return ApiResponse.success(authAdminService.updateLocalUser(
+                userId,
+                request.displayName(),
+                request.mobile(),
+                request.email(),
+                request.organizationIds(),
+                request.roleCodes()
+        ));
+    }
+
+    @PostMapping("/users/{userId}/status")
+    public ApiResponse<UserEntity> updateUserStatus(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateStatusRequest request
+    ) {
+        return ApiResponse.success(authAdminService.updateUserStatus(userId, request.status()));
+    }
+
+    @PostMapping("/users/{userId}/reset-password")
+    public ApiResponse<AuthUserPrincipal> resetUserPassword(
+            @PathVariable String userId,
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        return ApiResponse.success(authAdminService.resetLocalUserPassword(userId, request.password()));
     }
 
     @GetMapping("/integration-apps")
@@ -151,25 +194,41 @@ public class AuthAdminController {
         ));
     }
 
-    public record SaveUnitRequest(@NotBlank String code, String externalUnitId, @NotBlank String name, String unitType) {
-    }
-
-    public record SaveDepartmentRequest(
-            @NotBlank String unitId,
-            @NotBlank String code,
-            String externalDepartmentId,
+    public record SaveOrganizationRequest(
             String parentId,
+            @NotBlank String code,
+            String externalOrgId,
             @NotBlank String name,
+            String orgType,
             Integer sortOrder
     ) {
     }
 
+    public record UpdateOrganizationRequest(
+            String parentId,
+            String externalOrgId,
+            @NotBlank String name,
+            String orgType,
+            Integer sortOrder,
+            String status
+    ) {
+    }
+
     public record SaveRoleRequest(
-            String unitId,
+            String organizationId,
             @NotBlank String code,
             @NotBlank String name,
             String roleType,
             String externalRoleId
+    ) {
+    }
+
+    public record UpdateRoleRequest(
+            String organizationId,
+            @NotBlank String name,
+            String roleType,
+            String externalRoleId,
+            String status
     ) {
     }
 
@@ -179,8 +238,16 @@ public class AuthAdminController {
             @NotBlank String displayName,
             String mobile,
             String email,
-            List<String> unitIds,
-            List<String> departmentIds,
+            List<String> organizationIds,
+            List<String> roleCodes
+    ) {
+    }
+
+    public record UpdateUserRequest(
+            @NotBlank String displayName,
+            String mobile,
+            String email,
+            List<String> organizationIds,
             List<String> roleCodes
     ) {
     }
@@ -200,6 +267,9 @@ public class AuthAdminController {
     }
 
     public record UpdateStatusRequest(@NotBlank String status) {
+    }
+
+    public record ResetPasswordRequest(@NotBlank String password) {
     }
 
     public record PageResponse<T>(List<T> items, long total) {

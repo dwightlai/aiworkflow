@@ -39,8 +39,7 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.user.id").value("user_admin"))
                 .andExpect(jsonPath("$.data.user.tenantId").value("tenant_default"))
-                .andExpect(jsonPath("$.data.user.unitIds[0]").value("unit_default"))
-                .andExpect(jsonPath("$.data.user.departmentIds[0]").value("dept_default"))
+                .andExpect(jsonPath("$.data.user.organizationIds[0]").value("org_default_unit"))
                 .andExpect(jsonPath("$.data.user.roleIds[0]").value("platform_admin"))
                 .andExpect(jsonPath("$.data.accessToken", containsString(".")))
                 .andExpect(jsonPath("$.data.refreshToken", containsString(".")))
@@ -55,7 +54,7 @@ class AuthControllerIntegrationTest {
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("admin"))
-                .andExpect(jsonPath("$.data.activeUnitId").value("unit_default"));
+                .andExpect(jsonPath("$.data.activeOrganizationId").value("org_default_unit"));
 
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)

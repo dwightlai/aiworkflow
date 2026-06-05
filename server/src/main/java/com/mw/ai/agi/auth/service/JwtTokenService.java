@@ -47,6 +47,8 @@ public class JwtTokenService {
         claims.put("sub", user.id());
         claims.put("username", user.username());
         claims.put("tenantId", user.tenantId());
+        claims.put("organizationIds", user.organizationIds());
+        claims.put("activeOrganizationId", user.activeOrganizationId());
         claims.put("unitIds", user.unitIds());
         claims.put("activeUnitId", user.activeUnitId());
         claims.put("departmentIds", user.departmentIds());
@@ -79,6 +81,8 @@ public class JwtTokenService {
                 string(claims.get("sid")),
                 string(claims.get("username")),
                 string(claims.get("tenantId")),
+                string(claims.get("activeOrganizationId")),
+                list(claims.get("organizationIds")),
                 string(claims.get("activeUnitId")),
                 list(claims.get("unitIds")),
                 list(claims.get("departmentIds")),
@@ -165,6 +169,8 @@ public class JwtTokenService {
             String sessionId,
             String username,
             String tenantId,
+            String activeOrganizationId,
+            List<String> organizationIds,
             String activeUnitId,
             List<String> unitIds,
             List<String> departmentIds,

@@ -44,27 +44,27 @@ class AuthAdminControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].code").value("default"));
 
-        mockMvc.perform(post("/api/auth/admin/units")
+        mockMvc.perform(post("/api/auth/admin/organizations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"archive_unit","externalUnitId":"ARCHIVE-001","name":"Archive Unit","unitType":"ARCHIVE_ORG"}
+                                {"code":"archive_unit","externalOrgId":"ARCHIVE-001","name":"Archive Unit","orgType":"UNIT"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value("unit_archive_unit"))
+                .andExpect(jsonPath("$.data.id").value("org_archive_unit"))
                 .andExpect(jsonPath("$.data.code").value("archive_unit"));
 
-        mockMvc.perform(post("/api/auth/admin/departments")
+        mockMvc.perform(post("/api/auth/admin/organizations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"unitId":"unit_archive_unit","code":"archive_dept","externalDepartmentId":"D-001","name":"Archive Department","sortOrder":10}
+                                {"parentId":"org_archive_unit","code":"archive_dept","externalOrgId":"D-001","name":"Archive Department","orgType":"DEPARTMENT","sortOrder":10}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value("dept_archive_dept"));
+                .andExpect(jsonPath("$.data.id").value("org_archive_dept"));
 
         mockMvc.perform(post("/api/auth/admin/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"unitId":"unit_archive_unit","code":"archive_user","name":"Archive User","roleType":"BUSINESS","externalRoleId":"R-001"}
+                                {"organizationId":"org_archive_unit","code":"archive_user","name":"Archive User","roleType":"BUSINESS","externalRoleId":"R-001"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.code").value("archive_user"));
@@ -72,12 +72,12 @@ class AuthAdminControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/admin/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"username":"archive-admin","password":"pass123456","displayName":"Archive Admin","unitIds":["unit_archive_unit"],"departmentIds":["dept_archive_dept"],"roleCodes":["archive_user"]}
+                                {"username":"archive-admin","password":"pass123456","displayName":"Archive Admin","organizationIds":["org_archive_unit","org_archive_dept"],"roleCodes":["archive_user"]}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("archive-admin"))
-                .andExpect(jsonPath("$.data.unitIds[0]").value("unit_archive_unit"))
-                .andExpect(jsonPath("$.data.departmentIds[0]").value("dept_archive_dept"))
+                .andExpect(jsonPath("$.data.organizationIds[0]").value("org_archive_unit"))
+                .andExpect(jsonPath("$.data.organizationIds[1]").value("org_archive_dept"))
                 .andExpect(jsonPath("$.data.roleIds[0]").value("archive_user"));
 
         mockMvc.perform(post("/api/auth/login")
@@ -86,7 +86,7 @@ class AuthAdminControllerIntegrationTest {
                                 {"username":"archive-admin","password":"pass123456"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.user.activeUnitId").value("unit_archive_unit"))
+                .andExpect(jsonPath("$.data.user.activeOrganizationId").value("org_archive_unit"))
                 .andExpect(jsonPath("$.data.user.roleIds[0]").value("archive_user"));
 
         mockMvc.perform(post("/api/auth/admin/integration-apps")
@@ -112,19 +112,19 @@ class AuthAdminControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/admin/integration-apps/app_archive_system/scopes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"scopeType":"UNIT","scopeId":"unit_archive_unit","permission":"USE"}
+                                {"scopeType":"ORGANIZATION","scopeId":"org_archive_unit","permission":"USE"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.scopeId").value("unit_archive_unit"));
+                .andExpect(jsonPath("$.data.scopeId").value("org_archive_unit"));
 
         RuntimeIdentityContext context = authenticator.authenticateApiKey(
                 "archive-system",
                 apiKey,
-                new ExternalCallerContext("unit_archive_unit", List.of("dept_archive_dept"), List.of("archive_user"), "external-1"),
+                new ExternalCallerContext("org_archive_unit", List.of("org_archive_dept"), List.of("archive_user"), "external-1"),
                 new RequestAuditContext("127.0.0.1", "JUnit")
         );
         assertThat(context.appId()).isEqualTo("app_archive_system");
-        assertThat(context.activeUnitId()).isEqualTo("unit_archive_unit");
+        assertThat(context.activeUnitId()).isEqualTo("org_archive_unit");
     }
 
     private String extract(String json, String name) {

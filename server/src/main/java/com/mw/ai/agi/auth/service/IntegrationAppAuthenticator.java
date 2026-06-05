@@ -57,7 +57,7 @@ public class IntegrationAppAuthenticator {
             auditDenied(app, callerContext, auditContext, "IDENTITY_CONTEXT_MISSING");
             throw new AuthException("IDENTITY_CONTEXT_MISSING", HttpStatus.BAD_REQUEST, "Unit context is required.");
         }
-        if (!hasUnitScope(app.getId(), app.getTenantId(), callerContext.unitId())) {
+        if (!hasOrganizationScope(app.getId(), app.getTenantId(), callerContext.unitId())) {
             auditDenied(app, callerContext, auditContext, "APP_UNIT_SCOPE_DENIED");
             throw new AuthException("APP_UNIT_SCOPE_DENIED", HttpStatus.FORBIDDEN, "App cannot represent this unit.");
         }
@@ -96,14 +96,14 @@ public class IntegrationAppAuthenticator {
                 .anyMatch(secret -> secretHasher.matches(apiKey, secret.getSecretHash()));
     }
 
-    private boolean hasUnitScope(String appId, String tenantId, String unitId) {
+    private boolean hasOrganizationScope(String appId, String tenantId, String organizationId) {
         return integrationAppScopeMapper().selectList(new LambdaQueryWrapper<IntegrationAppScopeEntity>()
                         .eq(IntegrationAppScopeEntity::getAppId, appId)
                         .eq(IntegrationAppScopeEntity::getEnabled, true)
                         .in(IntegrationAppScopeEntity::getPermission, List.of("USE", "MANAGE"))
                         .and(wrapper -> wrapper
-                                .eq(IntegrationAppScopeEntity::getScopeType, "UNIT")
-                                .eq(IntegrationAppScopeEntity::getScopeId, unitId)
+                                .in(IntegrationAppScopeEntity::getScopeType, List.of("ORGANIZATION", "UNIT"))
+                                .eq(IntegrationAppScopeEntity::getScopeId, organizationId)
                                 .or(nested -> nested
                                         .eq(IntegrationAppScopeEntity::getScopeType, "TENANT")
                                         .eq(IntegrationAppScopeEntity::getScopeId, tenantId))))

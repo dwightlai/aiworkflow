@@ -8,6 +8,7 @@ import { KnowledgeDocumentsPage } from './pages/knowledge/KnowledgeDocumentsPage
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
+import { IdentityOrganizationPage } from './pages/system/IdentityOrganizationPage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
 import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
@@ -94,6 +95,46 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     };
   }
 
+  if (pathname === '/system/users') {
+    return {
+      title: '组织用户',
+      breadcrumb: ['首页', '系统管理', '组织用户'],
+      element: <IdentityOrganizationPage defaultTab="users" />
+    };
+  }
+
+  if (pathname === '/system/roles') {
+    return {
+      title: '组织用户',
+      breadcrumb: ['首页', '系统管理', '组织用户'],
+      element: <IdentityOrganizationPage defaultTab="roles" />
+    };
+  }
+
+  if (pathname === '/system/departments') {
+    return {
+      title: '组织用户',
+      breadcrumb: ['首页', '系统管理', '组织用户'],
+      element: <IdentityOrganizationPage defaultTab="organizations" />
+    };
+  }
+
+  if (pathname === '/system/units' || pathname === '/system/identity') {
+    return {
+      title: '组织用户',
+      breadcrumb: ['首页', '系统管理', '组织用户'],
+      element: <IdentityOrganizationPage defaultTab="organizations" />
+    };
+  }
+
+  if (pathname === '/system/integration-apps') {
+    return {
+      title: '组织用户',
+      breadcrumb: ['首页', '系统管理', '组织用户'],
+      element: <IdentityOrganizationPage defaultTab="apps" />
+    };
+  }
+
   if (pathname.startsWith('/knowledge/') && pathname.endsWith('/documents/new')) {
     const knowledgeBaseId = pathname.split('/')[2] ?? '';
     return {
@@ -136,10 +177,10 @@ const routeTitleByPath: Record<string, string> = {
   '/tools': '工具插件',
   '/models': '模型配置',
   '/model-market': '模型市场',
-  '/system/users': '用户管理',
-  '/system/roles': '角色管理',
+  '/system/users': '组织用户',
+  '/system/roles': '组织用户',
   '/system/menus': '菜单管理',
-  '/system/departments': '部门管理',
+  '/system/departments': '组织用户',
   '/system/dictionary': '数据字典',
   '/system/jobs': '定时任务',
   '/system/logs': '日志管理'

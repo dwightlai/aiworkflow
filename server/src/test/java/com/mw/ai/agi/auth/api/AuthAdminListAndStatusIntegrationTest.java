@@ -37,16 +37,16 @@ class AuthAdminListAndStatusIntegrationTest {
 
     @Test
     void listsManagedResourcesAndDisablesIntegrationApp() throws Exception {
-        mockMvc.perform(post("/api/auth/admin/units")
+        mockMvc.perform(post("/api/auth/admin/organizations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"scope_unit","name":"Scope Unit","unitType":"BUSINESS_ORG"}
+                                {"code":"scope_unit","name":"Scope Unit","orgType":"UNIT"}
                                 """))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/auth/admin/departments")
+        mockMvc.perform(post("/api/auth/admin/organizations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"unitId":"unit_scope_unit","code":"scope_dept","name":"Scope Department"}
+                                {"parentId":"org_scope_unit","code":"scope_dept","name":"Scope Department","orgType":"DEPARTMENT"}
                                 """))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/auth/admin/roles")
@@ -58,7 +58,7 @@ class AuthAdminListAndStatusIntegrationTest {
         mockMvc.perform(post("/api/auth/admin/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"username":"scope-user","password":"pass123456","displayName":"Scope User","unitIds":["unit_scope_unit"],"departmentIds":["dept_scope_dept"],"roleCodes":["scope_user"]}
+                                {"username":"scope-user","password":"pass123456","displayName":"Scope User","organizationIds":["org_scope_unit","org_scope_dept"],"roleCodes":["scope_user"]}
                                 """))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/auth/admin/integration-apps")
@@ -78,17 +78,14 @@ class AuthAdminListAndStatusIntegrationTest {
         mockMvc.perform(post("/api/auth/admin/integration-apps/app_scope_system/scopes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"scopeType":"UNIT","scopeId":"unit_scope_unit","permission":"USE"}
+                                {"scopeType":"ORGANIZATION","scopeId":"org_scope_unit","permission":"USE"}
                                 """))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/auth/admin/units"))
+        mockMvc.perform(get("/api/auth/admin/organizations"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].code").value("default_unit"))
-                .andExpect(jsonPath("$.data.total").value(2));
-        mockMvc.perform(get("/api/auth/admin/departments"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(2));
+                .andExpect(jsonPath("$.data.total").value(4));
         mockMvc.perform(get("/api/auth/admin/roles"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].code").value("app_user"));
@@ -110,7 +107,7 @@ class AuthAdminListAndStatusIntegrationTest {
         assertThatThrownBy(() -> authenticator.authenticateApiKey(
                 "scope-system",
                 apiKey,
-                new ExternalCallerContext("unit_scope_unit", List.of("dept_scope_dept"), List.of("scope_user"), "external-user"),
+                new ExternalCallerContext("org_scope_unit", List.of("org_scope_dept"), List.of("scope_user"), "external-user"),
                 new RequestAuditContext("127.0.0.1", "JUnit")
         ))
                 .hasMessageContaining("APP_DISABLED");

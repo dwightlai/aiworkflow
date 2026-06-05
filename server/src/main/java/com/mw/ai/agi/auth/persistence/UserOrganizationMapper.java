@@ -4,5 +4,5 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
-public interface UserUnitMapper extends BaseMapper<UserUnitEntity> {
+public interface UserOrganizationMapper extends BaseMapper<UserOrganizationEntity> {
 }

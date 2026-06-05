@@ -62,12 +62,10 @@ class FlywaySchemaMigrationTest {
                 "agi_bot_session",
                 "agi_bot_message",
                 "agi_tenant",
-                "agi_unit",
-                "agi_department",
+                "agi_organization",
                 "agi_role",
                 "agi_user",
-                "agi_user_unit",
-                "agi_user_department",
+                "agi_user_organization",
                 "agi_user_role",
                 "agi_integration_app_secret",
                 "agi_integration_app_scope",
@@ -76,24 +74,20 @@ class FlywaySchemaMigrationTest {
         );
         assertThat(tableNames).allMatch(tableName -> tableName.startsWith("agi_"));
 
-        List<String> unitColumns = jdbcTemplate.queryForList("""
+        List<String> organizationColumns = jdbcTemplate.queryForList("""
                 SELECT column_name
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name = 'agi_unit'
+                  AND table_name = 'agi_organization'
                 """, String.class);
-        assertThat(unitColumns).contains("code", "external_unit_id");
-
-        List<String> departmentColumns = jdbcTemplate.queryForList("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = 'agi_department'
-                """, String.class);
-        assertThat(departmentColumns).contains("code", "external_department_id");
+        assertThat(organizationColumns).contains("code", "external_org_id", "org_type", "parent_id", "path", "level");
 
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM agi_user WHERE username = 'admin'",
+                Integer.class
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agi_organization WHERE id = 'org_default_unit'",
                 Integer.class
         )).isEqualTo(1);
     }

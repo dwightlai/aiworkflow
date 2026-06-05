@@ -5,14 +5,12 @@ import com.mw.ai.agi.auth.persistence.IntegrationAppEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppScopeEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppSecretEntity;
 import com.mw.ai.agi.auth.persistence.LoginSessionEntity;
+import com.mw.ai.agi.auth.persistence.OrganizationEntity;
 import com.mw.ai.agi.auth.persistence.RoleEntity;
-import com.mw.ai.agi.auth.persistence.DepartmentEntity;
 import com.mw.ai.agi.auth.persistence.TenantEntity;
-import com.mw.ai.agi.auth.persistence.UnitEntity;
-import com.mw.ai.agi.auth.persistence.UserDepartmentEntity;
 import com.mw.ai.agi.auth.persistence.UserEntity;
+import com.mw.ai.agi.auth.persistence.UserOrganizationEntity;
 import com.mw.ai.agi.auth.persistence.UserRoleEntity;
-import com.mw.ai.agi.auth.persistence.UserUnitEntity;
 import com.mw.ai.agi.bot.persistence.AiBotEntity;
 import com.mw.ai.agi.bot.persistence.BotMessageEntity;
 import com.mw.ai.agi.bot.persistence.BotSessionEntity;
@@ -59,14 +57,12 @@ class DamengSchemaMigrationContractTest {
             IntegrationAppScopeEntity.class,
             IntegrationAppSecretEntity.class,
             LoginSessionEntity.class,
+            OrganizationEntity.class,
             RoleEntity.class,
-            DepartmentEntity.class,
             TenantEntity.class,
-            UnitEntity.class,
-            UserDepartmentEntity.class,
             UserEntity.class,
-            UserRoleEntity.class,
-            UserUnitEntity.class
+            UserOrganizationEntity.class,
+            UserRoleEntity.class
     );
 
     private static final List<String> POSTGRES_ONLY_PATTERNS = List.of(
@@ -91,20 +87,18 @@ class DamengSchemaMigrationContractTest {
 
         assertThat(sql).contains(
                 "create table agi_tenant",
-                "create table agi_unit",
-                "create table agi_department",
+                "create table agi_organization",
                 "create table agi_role",
                 "create table agi_user",
-                "create table agi_user_unit",
-                "create table agi_user_department",
+                "create table agi_user_organization",
                 "create table agi_user_role",
                 "create table agi_integration_app_secret",
                 "create table agi_integration_app_scope",
                 "create table agi_login_session",
                 "create table agi_auth_audit_log",
                 "code varchar(100) not null",
-                "external_unit_id varchar(200)",
-                "external_department_id varchar(200)"
+                "external_org_id varchar(200)",
+                "org_type varchar(64) not null"
         );
     }
 

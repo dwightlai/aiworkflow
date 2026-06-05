@@ -10,7 +10,7 @@ public class RoleEntity {
     @TableId
     private String id;
     private String tenantId;
-    private String unitId;
+    private String organizationId;
     private String externalRoleId;
     private String code;
     private String name;
@@ -23,8 +23,8 @@ public class RoleEntity {
     public void setId(String id) { this.id = id; }
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
-    public String getUnitId() { return unitId; }
-    public void setUnitId(String unitId) { this.unitId = unitId; }
+    public String getOrganizationId() { return organizationId; }
+    public void setOrganizationId(String organizationId) { this.organizationId = organizationId; }
     public String getExternalRoleId() { return externalRoleId; }
     public void setExternalRoleId(String externalRoleId) { this.externalRoleId = externalRoleId; }
     public String getCode() { return code; }

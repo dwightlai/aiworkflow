@@ -5,14 +5,14 @@ import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.time.Instant;
 
-@TableName("agi_user_unit")
-public class UserUnitEntity {
+@TableName("agi_user_organization")
+public class UserOrganizationEntity {
     @TableId
     private String id;
     private String tenantId;
     private String userId;
-    private String unitId;
-    private Boolean primaryUnit;
+    private String organizationId;
+    private Boolean primaryOrganization;
     private Instant createdAt;
 
     public String getId() { return id; }
@@ -21,10 +21,10 @@ public class UserUnitEntity {
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
-    public String getUnitId() { return unitId; }
-    public void setUnitId(String unitId) { this.unitId = unitId; }
-    public Boolean getPrimaryUnit() { return primaryUnit; }
-    public void setPrimaryUnit(Boolean primaryUnit) { this.primaryUnit = primaryUnit; }
+    public String getOrganizationId() { return organizationId; }
+    public void setOrganizationId(String organizationId) { this.organizationId = organizationId; }
+    public Boolean getPrimaryOrganization() { return primaryOrganization; }
+    public void setPrimaryOrganization(Boolean primaryOrganization) { this.primaryOrganization = primaryOrganization; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

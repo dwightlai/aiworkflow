@@ -27,10 +27,8 @@ export const menuGroups: AppMenuGroup[] = [
   {
     title: '系统管理',
     items: [
-      { key: 'users', label: '用户管理', path: '/system/users' },
-      { key: 'roles', label: '角色管理', path: '/system/roles' },
+      { key: 'identity', label: '组织用户', path: '/system/identity' },
       { key: 'menus', label: '菜单管理', path: '/system/menus' },
-      { key: 'departments', label: '部门管理', path: '/system/departments' },
       { key: 'dictionary', label: '数据字典', path: '/system/dictionary' },
       { key: 'jobs', label: '定时任务', path: '/system/jobs' },
       { key: 'logs', label: '日志管理', path: '/system/logs' }

@@ -2,28 +2,24 @@ package com.mw.ai.agi.auth.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.mw.ai.agi.auth.persistence.DepartmentEntity;
-import com.mw.ai.agi.auth.persistence.DepartmentMapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppMapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppScopeEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppScopeMapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppSecretEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppSecretMapper;
+import com.mw.ai.agi.auth.persistence.OrganizationEntity;
+import com.mw.ai.agi.auth.persistence.OrganizationMapper;
 import com.mw.ai.agi.auth.persistence.RoleEntity;
 import com.mw.ai.agi.auth.persistence.RoleMapper;
 import com.mw.ai.agi.auth.persistence.TenantEntity;
 import com.mw.ai.agi.auth.persistence.TenantMapper;
-import com.mw.ai.agi.auth.persistence.UnitEntity;
-import com.mw.ai.agi.auth.persistence.UnitMapper;
-import com.mw.ai.agi.auth.persistence.UserDepartmentEntity;
-import com.mw.ai.agi.auth.persistence.UserDepartmentMapper;
 import com.mw.ai.agi.auth.persistence.UserEntity;
 import com.mw.ai.agi.auth.persistence.UserMapper;
+import com.mw.ai.agi.auth.persistence.UserOrganizationEntity;
+import com.mw.ai.agi.auth.persistence.UserOrganizationMapper;
 import com.mw.ai.agi.auth.persistence.UserRoleEntity;
 import com.mw.ai.agi.auth.persistence.UserRoleMapper;
-import com.mw.ai.agi.auth.persistence.UserUnitEntity;
-import com.mw.ai.agi.auth.persistence.UserUnitMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,12 +35,10 @@ import java.util.Optional;
 @Service
 public class AuthAdminService {
     private final TenantMapper tenantMapper;
-    private final UnitMapper unitMapper;
-    private final DepartmentMapper departmentMapper;
+    private final OrganizationMapper organizationMapper;
     private final RoleMapper roleMapper;
     private final UserMapper userMapper;
-    private final UserUnitMapper userUnitMapper;
-    private final UserDepartmentMapper userDepartmentMapper;
+    private final UserOrganizationMapper userOrganizationMapper;
     private final UserRoleMapper userRoleMapper;
     private final IntegrationAppMapper integrationAppMapper;
     private final IntegrationAppSecretMapper integrationAppSecretMapper;
@@ -56,12 +50,10 @@ public class AuthAdminService {
 
     public AuthAdminService(
             TenantMapper tenantMapper,
-            UnitMapper unitMapper,
-            DepartmentMapper departmentMapper,
+            OrganizationMapper organizationMapper,
             RoleMapper roleMapper,
             UserMapper userMapper,
-            UserUnitMapper userUnitMapper,
-            UserDepartmentMapper userDepartmentMapper,
+            UserOrganizationMapper userOrganizationMapper,
             UserRoleMapper userRoleMapper,
             IntegrationAppMapper integrationAppMapper,
             IntegrationAppSecretMapper integrationAppSecretMapper,
@@ -71,12 +63,10 @@ public class AuthAdminService {
             @Value("${agi.auth.default-tenant-id:tenant_default}") String defaultTenantId
     ) {
         this.tenantMapper = tenantMapper;
-        this.unitMapper = unitMapper;
-        this.departmentMapper = departmentMapper;
+        this.organizationMapper = organizationMapper;
         this.roleMapper = roleMapper;
         this.userMapper = userMapper;
-        this.userUnitMapper = userUnitMapper;
-        this.userDepartmentMapper = userDepartmentMapper;
+        this.userOrganizationMapper = userOrganizationMapper;
         this.userRoleMapper = userRoleMapper;
         this.integrationAppMapper = integrationAppMapper;
         this.integrationAppSecretMapper = integrationAppSecretMapper;
@@ -90,15 +80,11 @@ public class AuthAdminService {
         return tenantMapper.selectList(new LambdaQueryWrapper<TenantEntity>().orderByAsc(TenantEntity::getCode));
     }
 
-    public List<UnitEntity> listUnits() {
-        return unitMapper.selectList(new LambdaQueryWrapper<UnitEntity>().orderByAsc(UnitEntity::getCode));
-    }
-
-    public List<DepartmentEntity> listDepartments() {
-        return departmentMapper.selectList(new LambdaQueryWrapper<DepartmentEntity>()
-                .orderByAsc(DepartmentEntity::getUnitId)
-                .orderByAsc(DepartmentEntity::getSortOrder)
-                .orderByAsc(DepartmentEntity::getCode));
+    public List<OrganizationEntity> listOrganizations() {
+        return organizationMapper.selectList(new LambdaQueryWrapper<OrganizationEntity>()
+                .orderByAsc(OrganizationEntity::getPath)
+                .orderByAsc(OrganizationEntity::getSortOrder)
+                .orderByAsc(OrganizationEntity::getCode));
     }
 
     public List<RoleEntity> listRoles() {
@@ -116,46 +102,60 @@ public class AuthAdminService {
         return integrationAppMapper.selectList(new LambdaQueryWrapper<IntegrationAppEntity>().orderByAsc(IntegrationAppEntity::getCode));
     }
 
-    public UnitEntity createUnit(String code, String externalUnitId, String name, String unitType) {
+    public OrganizationEntity createOrganization(String parentId, String code, String externalOrgId, String name, String orgType, Integer sortOrder) {
         Instant now = Instant.now();
-        UnitEntity entity = new UnitEntity();
-        entity.setId("unit_" + normalize(code));
+        OrganizationEntity parent = findParentOrganization(parentId);
+        OrganizationEntity entity = new OrganizationEntity();
+        entity.setId("org_" + normalize(code));
         entity.setTenantId(defaultTenantId);
         entity.setCode(code);
-        entity.setExternalUnitId(externalUnitId);
+        entity.setExternalOrgId(externalOrgId);
         entity.setName(name);
-        entity.setUnitType(unitType == null || unitType.isBlank() ? "BUSINESS_ORG" : unitType);
-        entity.setStatus("ACTIVE");
-        entity.setCreatedAt(now);
-        entity.setUpdatedAt(now);
-        unitMapper.insert(entity);
-        return entity;
-    }
-
-    public DepartmentEntity createDepartment(String unitId, String code, String externalDepartmentId, String parentId, String name, Integer sortOrder) {
-        Instant now = Instant.now();
-        DepartmentEntity entity = new DepartmentEntity();
-        entity.setId("dept_" + normalize(code));
-        entity.setTenantId(defaultTenantId);
-        entity.setUnitId(unitId);
-        entity.setCode(code);
-        entity.setExternalDepartmentId(externalDepartmentId);
-        entity.setParentId(parentId);
-        entity.setName(name);
+        entity.setOrgType(normalizeOrgType(orgType));
+        entity.setParentId(parentId == null || parentId.isBlank() ? null : parentId);
+        entity.setPath((parent == null ? "" : parent.getPath()) + "/" + entity.getId());
+        entity.setLevel(parent == null ? 1 : parent.getLevel() + 1);
         entity.setSortOrder(sortOrder == null ? 0 : sortOrder);
         entity.setStatus("ACTIVE");
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
-        departmentMapper.insert(entity);
+        organizationMapper.insert(entity);
         return entity;
     }
 
-    public RoleEntity createRole(String unitId, String code, String name, String roleType, String externalRoleId) {
+    public OrganizationEntity updateOrganization(
+            String organizationId,
+            String parentId,
+            String externalOrgId,
+            String name,
+            String orgType,
+            Integer sortOrder,
+            String status
+    ) {
+        OrganizationEntity organization = Optional.ofNullable(organizationMapper.selectById(organizationId))
+                .orElseThrow(() -> new AuthException("ORGANIZATION_NOT_FOUND", HttpStatus.NOT_FOUND, "Organization does not exist."));
+        OrganizationEntity parent = findParentOrganization(parentId);
+        String normalizedParentId = parentId == null || parentId.isBlank() ? null : parentId;
+        organizationMapper.update(null, new LambdaUpdateWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getId, organization.getId())
+                .set(OrganizationEntity::getParentId, normalizedParentId)
+                .set(OrganizationEntity::getExternalOrgId, externalOrgId)
+                .set(OrganizationEntity::getName, name)
+                .set(OrganizationEntity::getOrgType, normalizeOrgType(orgType == null || orgType.isBlank() ? organization.getOrgType() : orgType))
+                .set(OrganizationEntity::getPath, (parent == null ? "" : parent.getPath()) + "/" + organization.getId())
+                .set(OrganizationEntity::getLevel, parent == null ? 1 : parent.getLevel() + 1)
+                .set(OrganizationEntity::getSortOrder, sortOrder == null ? organization.getSortOrder() : sortOrder)
+                .set(OrganizationEntity::getStatus, normalizeActiveStatus(status, "INVALID_ORGANIZATION_STATUS"))
+                .set(OrganizationEntity::getUpdatedAt, Instant.now()));
+        return organizationMapper.selectById(organizationId);
+    }
+
+    public RoleEntity createRole(String organizationId, String code, String name, String roleType, String externalRoleId) {
         Instant now = Instant.now();
         RoleEntity entity = new RoleEntity();
         entity.setId("role_" + normalize(code));
         entity.setTenantId(defaultTenantId);
-        entity.setUnitId(unitId);
+        entity.setOrganizationId(organizationId);
         entity.setExternalRoleId(externalRoleId);
         entity.setCode(code);
         entity.setName(name);
@@ -167,14 +167,27 @@ public class AuthAdminService {
         return entity;
     }
 
+    public RoleEntity updateRole(String roleId, String organizationId, String name, String roleType, String externalRoleId, String status) {
+        RoleEntity role = Optional.ofNullable(roleMapper.selectById(roleId))
+                .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.NOT_FOUND, "Role does not exist."));
+        roleMapper.update(null, new LambdaUpdateWrapper<RoleEntity>()
+                .eq(RoleEntity::getId, role.getId())
+                .set(RoleEntity::getOrganizationId, organizationId)
+                .set(RoleEntity::getName, name)
+                .set(RoleEntity::getRoleType, roleType == null || roleType.isBlank() ? role.getRoleType() : roleType)
+                .set(RoleEntity::getExternalRoleId, externalRoleId)
+                .set(RoleEntity::getStatus, normalizeActiveStatus(status, "INVALID_ROLE_STATUS"))
+                .set(RoleEntity::getUpdatedAt, Instant.now()));
+        return roleMapper.selectById(roleId);
+    }
+
     public AuthUserPrincipal createLocalUser(
             String username,
             String password,
             String displayName,
             String mobile,
             String email,
-            List<String> unitIds,
-            List<String> departmentIds,
+            List<String> organizationIds,
             List<String> roleCodes
     ) {
         Instant now = Instant.now();
@@ -192,28 +205,16 @@ public class AuthAdminService {
         entity.setUpdatedAt(now);
         userMapper.insert(entity);
 
-        List<String> normalizedUnitIds = unitIds == null ? List.of() : unitIds;
-        for (int index = 0; index < normalizedUnitIds.size(); index++) {
-            UserUnitEntity relation = new UserUnitEntity();
-            relation.setId(entity.getId() + "_unit_" + normalize(normalizedUnitIds.get(index)));
+        List<String> normalizedOrganizationIds = organizationIds == null ? List.of() : organizationIds;
+        for (int index = 0; index < normalizedOrganizationIds.size(); index++) {
+            UserOrganizationEntity relation = new UserOrganizationEntity();
+            relation.setId(entity.getId() + "_org_" + normalize(normalizedOrganizationIds.get(index)));
             relation.setTenantId(defaultTenantId);
             relation.setUserId(entity.getId());
-            relation.setUnitId(normalizedUnitIds.get(index));
-            relation.setPrimaryUnit(index == 0);
+            relation.setOrganizationId(normalizedOrganizationIds.get(index));
+            relation.setPrimaryOrganization(index == 0);
             relation.setCreatedAt(now);
-            userUnitMapper.insert(relation);
-        }
-
-        List<String> normalizedDepartmentIds = departmentIds == null ? List.of() : departmentIds;
-        for (int index = 0; index < normalizedDepartmentIds.size(); index++) {
-            UserDepartmentEntity relation = new UserDepartmentEntity();
-            relation.setId(entity.getId() + "_dept_" + normalize(normalizedDepartmentIds.get(index)));
-            relation.setTenantId(defaultTenantId);
-            relation.setUserId(entity.getId());
-            relation.setDepartmentId(normalizedDepartmentIds.get(index));
-            relation.setPrimaryDepartment(index == 0);
-            relation.setCreatedAt(now);
-            userDepartmentMapper.insert(relation);
+            userOrganizationMapper.insert(relation);
         }
 
         for (String roleCode : roleCodes == null ? List.<String>of() : roleCodes) {
@@ -229,6 +230,84 @@ public class AuthAdminService {
         }
 
         return toPrincipal(entity);
+    }
+
+    public UserEntity updateUserStatus(String userId, String status) {
+        String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
+        if (!List.of("ACTIVE", "DISABLED", "LOCKED").contains(normalizedStatus)) {
+            throw new AuthException("INVALID_USER_STATUS", HttpStatus.BAD_REQUEST, "User status must be ACTIVE, DISABLED, or LOCKED.");
+        }
+        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                .eq(UserEntity::getId, user.getId())
+                .set(UserEntity::getStatus, normalizedStatus)
+                .set(UserEntity::getUpdatedAt, Instant.now()));
+        return userMapper.selectById(userId);
+    }
+
+    public AuthUserPrincipal updateLocalUser(
+            String userId,
+            String displayName,
+            String mobile,
+            String email,
+            List<String> organizationIds,
+            List<String> roleCodes
+    ) {
+        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                .eq(UserEntity::getId, user.getId())
+                .set(UserEntity::getDisplayName, displayName)
+                .set(UserEntity::getMobile, mobile)
+                .set(UserEntity::getEmail, email)
+                .set(UserEntity::getUpdatedAt, Instant.now()));
+
+        Instant now = Instant.now();
+        userOrganizationMapper.delete(new LambdaQueryWrapper<UserOrganizationEntity>()
+                .eq(UserOrganizationEntity::getUserId, user.getId()));
+        List<String> normalizedOrganizationIds = organizationIds == null ? List.of() : organizationIds;
+        for (int index = 0; index < normalizedOrganizationIds.size(); index++) {
+            UserOrganizationEntity relation = new UserOrganizationEntity();
+            relation.setId(user.getId() + "_org_" + normalize(normalizedOrganizationIds.get(index)));
+            relation.setTenantId(user.getTenantId());
+            relation.setUserId(user.getId());
+            relation.setOrganizationId(normalizedOrganizationIds.get(index));
+            relation.setPrimaryOrganization(index == 0);
+            relation.setCreatedAt(now);
+            userOrganizationMapper.insert(relation);
+        }
+
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRoleEntity>()
+                .eq(UserRoleEntity::getUserId, user.getId()));
+        for (String roleCode : roleCodes == null ? List.<String>of() : roleCodes) {
+            RoleEntity role = findRoleByCode(roleCode)
+                    .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.BAD_REQUEST, "Role does not exist."));
+            UserRoleEntity relation = new UserRoleEntity();
+            relation.setId(user.getId() + "_role_" + normalize(role.getCode()));
+            relation.setTenantId(user.getTenantId());
+            relation.setUserId(user.getId());
+            relation.setRoleId(role.getId());
+            relation.setCreatedAt(now);
+            userRoleMapper.insert(relation);
+        }
+        return toPrincipal(userMapper.selectById(userId));
+    }
+
+    public AuthUserPrincipal resetLocalUserPassword(String userId, String password) {
+        if (password == null || password.isBlank()) {
+            throw new AuthException("INVALID_PASSWORD", HttpStatus.BAD_REQUEST, "Password cannot be blank.");
+        }
+        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        if (!"LOCAL".equals(user.getUserType())) {
+            throw new AuthException("USER_PASSWORD_UNSUPPORTED", HttpStatus.BAD_REQUEST, "Only local users can reset password.");
+        }
+        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                .eq(UserEntity::getId, user.getId())
+                .set(UserEntity::getPasswordHash, passwordEncoder.encode(password))
+                .set(UserEntity::getUpdatedAt, Instant.now()));
+        return toPrincipal(userMapper.selectById(userId));
     }
 
     public IntegrationAppEntity createIntegrationApp(String code, String name, String appType, String authType) {
@@ -298,21 +377,13 @@ public class AuthAdminService {
     }
 
     private AuthUserPrincipal toPrincipal(UserEntity user) {
-        List<String> unitIds = userUnitMapper.selectList(new LambdaQueryWrapper<UserUnitEntity>()
-                        .eq(UserUnitEntity::getUserId, user.getId()))
+        List<String> organizationIds = userOrganizationMapper.selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
+                        .eq(UserOrganizationEntity::getUserId, user.getId()))
                 .stream()
                 .sorted(Comparator
-                        .comparing((UserUnitEntity entity) -> Boolean.TRUE.equals(entity.getPrimaryUnit())).reversed()
-                        .thenComparing(UserUnitEntity::getUnitId))
-                .map(UserUnitEntity::getUnitId)
-                .toList();
-        List<String> departmentIds = userDepartmentMapper.selectList(new LambdaQueryWrapper<UserDepartmentEntity>()
-                        .eq(UserDepartmentEntity::getUserId, user.getId()))
-                .stream()
-                .sorted(Comparator
-                        .comparing((UserDepartmentEntity entity) -> Boolean.TRUE.equals(entity.getPrimaryDepartment())).reversed()
-                        .thenComparing(UserDepartmentEntity::getDepartmentId))
-                .map(UserDepartmentEntity::getDepartmentId)
+                        .comparing((UserOrganizationEntity entity) -> Boolean.TRUE.equals(entity.getPrimaryOrganization())).reversed()
+                        .thenComparing(UserOrganizationEntity::getOrganizationId))
+                .map(UserOrganizationEntity::getOrganizationId)
                 .toList();
         List<String> roleCodes = roleMapper.selectRoleCodesByUserId(user.getId());
         return new AuthUserPrincipal(
@@ -321,9 +392,11 @@ public class AuthAdminService {
                 user.getTenantId(),
                 user.getDisplayName(),
                 user.getUserType(),
-                unitIds,
-                unitIds.isEmpty() ? null : unitIds.get(0),
-                departmentIds,
+                organizationIds,
+                organizationIds.isEmpty() ? null : organizationIds.get(0),
+                organizationIds,
+                organizationIds.isEmpty() ? null : organizationIds.get(0),
+                List.of(),
                 roleCodes
         );
     }
@@ -342,6 +415,30 @@ public class AuthAdminService {
 
     private String normalize(String value) {
         return value == null ? "default" : value.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
+    }
+
+    private OrganizationEntity findParentOrganization(String parentId) {
+        if (parentId == null || parentId.isBlank()) {
+            return null;
+        }
+        return Optional.ofNullable(organizationMapper.selectById(parentId))
+                .orElseThrow(() -> new AuthException("PARENT_ORGANIZATION_NOT_FOUND", HttpStatus.BAD_REQUEST, "Parent organization does not exist."));
+    }
+
+    private String normalizeOrgType(String orgType) {
+        String normalizedOrgType = orgType == null || orgType.isBlank() ? "DEPARTMENT" : orgType.trim().toUpperCase();
+        if (!List.of("UNIT", "DEPARTMENT", "GROUP", "OTHER").contains(normalizedOrgType)) {
+            throw new AuthException("INVALID_ORGANIZATION_TYPE", HttpStatus.BAD_REQUEST, "Organization type must be UNIT, DEPARTMENT, GROUP, or OTHER.");
+        }
+        return normalizedOrgType;
+    }
+
+    private String normalizeActiveStatus(String status, String errorCode) {
+        String normalizedStatus = status == null ? "ACTIVE" : status.trim().toUpperCase();
+        if (!List.of("ACTIVE", "DISABLED").contains(normalizedStatus)) {
+            throw new AuthException(errorCode, HttpStatus.BAD_REQUEST, "Status must be ACTIVE or DISABLED.");
+        }
+        return normalizedStatus;
     }
 
     public record GeneratedApiKey(String id, String secretPrefix, String apiKey) {

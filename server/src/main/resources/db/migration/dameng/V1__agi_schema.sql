@@ -235,40 +235,28 @@ CREATE TABLE agi_tenant (
     updated_at TIMESTAMP NOT NULL
 );
 
-CREATE TABLE agi_unit (
+CREATE TABLE agi_organization (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     code VARCHAR(100) NOT NULL,
-    external_unit_id VARCHAR(200),
+    external_org_id VARCHAR(200),
     name VARCHAR(200) NOT NULL,
-    unit_type VARCHAR(64) NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_agi_unit_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id)
-);
-
-CREATE TABLE agi_department (
-    id VARCHAR(64) PRIMARY KEY,
-    tenant_id VARCHAR(64) NOT NULL,
-    unit_id VARCHAR(64) NOT NULL,
-    code VARCHAR(100) NOT NULL,
-    external_department_id VARCHAR(200),
+    org_type VARCHAR(64) NOT NULL,
     parent_id VARCHAR(64),
-    name VARCHAR(200) NOT NULL,
+    path VARCHAR(1000) NOT NULL,
+    level INTEGER NOT NULL,
     sort_order INTEGER NOT NULL,
     status VARCHAR(32) NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_agi_department_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
-    CONSTRAINT fk_agi_department_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id),
-    CONSTRAINT fk_agi_department_parent FOREIGN KEY (parent_id) REFERENCES agi_department(id)
+    CONSTRAINT fk_agi_organization_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_organization_parent FOREIGN KEY (parent_id) REFERENCES agi_organization(id)
 );
 
 CREATE TABLE agi_role (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
-    unit_id VARCHAR(64),
+    organization_id VARCHAR(64),
     external_role_id VARCHAR(200),
     code VARCHAR(100) NOT NULL,
     name VARCHAR(200) NOT NULL,
@@ -277,7 +265,7 @@ CREATE TABLE agi_role (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_agi_role_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
-    CONSTRAINT fk_agi_role_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id)
+    CONSTRAINT fk_agi_role_organization FOREIGN KEY (organization_id) REFERENCES agi_organization(id)
 );
 
 CREATE TABLE agi_user (
@@ -299,28 +287,16 @@ CREATE TABLE agi_user (
     CONSTRAINT fk_agi_user_app FOREIGN KEY (source_app_id) REFERENCES agi_integration_app(id)
 );
 
-CREATE TABLE agi_user_unit (
+CREATE TABLE agi_user_organization (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
-    unit_id VARCHAR(64) NOT NULL,
-    primary_unit NUMBER(1) NOT NULL,
+    organization_id VARCHAR(64) NOT NULL,
+    primary_organization NUMBER(1) NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_agi_user_unit_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
-    CONSTRAINT fk_agi_user_unit_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
-    CONSTRAINT fk_agi_user_unit_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id)
-);
-
-CREATE TABLE agi_user_department (
-    id VARCHAR(64) PRIMARY KEY,
-    tenant_id VARCHAR(64) NOT NULL,
-    user_id VARCHAR(64) NOT NULL,
-    department_id VARCHAR(64) NOT NULL,
-    primary_department NUMBER(1) NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_agi_user_department_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
-    CONSTRAINT fk_agi_user_department_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
-    CONSTRAINT fk_agi_user_department_department FOREIGN KEY (department_id) REFERENCES agi_department(id)
+    CONSTRAINT fk_agi_user_organization_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_user_organization_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
+    CONSTRAINT fk_agi_user_organization_org FOREIGN KEY (organization_id) REFERENCES agi_organization(id)
 );
 
 CREATE TABLE agi_user_role (
@@ -328,14 +304,10 @@ CREATE TABLE agi_user_role (
     tenant_id VARCHAR(64) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
     role_id VARCHAR(64) NOT NULL,
-    unit_id VARCHAR(64),
-    department_id VARCHAR(64),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_agi_user_role_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
     CONSTRAINT fk_agi_user_role_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
-    CONSTRAINT fk_agi_user_role_role FOREIGN KEY (role_id) REFERENCES agi_role(id),
-    CONSTRAINT fk_agi_user_role_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id),
-    CONSTRAINT fk_agi_user_role_department FOREIGN KEY (department_id) REFERENCES agi_department(id)
+    CONSTRAINT fk_agi_user_role_role FOREIGN KEY (role_id) REFERENCES agi_role(id)
 );
 
 CREATE TABLE agi_integration_app_secret (
@@ -415,15 +387,13 @@ CREATE INDEX idx_agi_ai_bot_workflow ON agi_ai_bot(workflow_id);
 CREATE INDEX idx_agi_bot_session_bot ON agi_bot_session(bot_id, updated_at);
 CREATE INDEX idx_agi_bot_message_session ON agi_bot_message(bot_id, session_id, created_at);
 CREATE UNIQUE INDEX uk_agi_tenant_code ON agi_tenant(code);
-CREATE UNIQUE INDEX uk_agi_unit_tenant_code ON agi_unit(tenant_id, code);
-CREATE INDEX idx_agi_department_unit ON agi_department(tenant_id, unit_id, status);
-CREATE UNIQUE INDEX uk_agi_department_unit_code ON agi_department(unit_id, code);
-CREATE INDEX idx_agi_role_tenant ON agi_role(tenant_id, unit_id, status);
+CREATE UNIQUE INDEX uk_agi_organization_tenant_code ON agi_organization(tenant_id, code);
+CREATE INDEX idx_agi_organization_parent ON agi_organization(tenant_id, parent_id, sort_order);
+CREATE INDEX idx_agi_role_tenant ON agi_role(tenant_id, organization_id, status);
 CREATE UNIQUE INDEX uk_agi_role_tenant_code ON agi_role(tenant_id, code);
 CREATE UNIQUE INDEX uk_agi_user_tenant_username ON agi_user(tenant_id, username);
 CREATE INDEX idx_agi_user_external ON agi_user(source_app_id, external_user_id);
-CREATE INDEX idx_agi_user_unit_user ON agi_user_unit(user_id, unit_id);
-CREATE INDEX idx_agi_user_department_user ON agi_user_department(user_id, department_id);
+CREATE INDEX idx_agi_user_organization_user ON agi_user_organization(user_id, organization_id);
 CREATE INDEX idx_agi_user_role_user ON agi_user_role(user_id, role_id);
 CREATE INDEX idx_agi_app_secret_app ON agi_integration_app_secret(app_id, enabled);
 CREATE INDEX idx_agi_app_scope_app ON agi_integration_app_scope(app_id, scope_type, scope_id);

@@ -7,12 +7,10 @@ import com.mw.ai.agi.auth.persistence.AuthAuditLogMapper;
 import com.mw.ai.agi.auth.persistence.LoginSessionEntity;
 import com.mw.ai.agi.auth.persistence.LoginSessionMapper;
 import com.mw.ai.agi.auth.persistence.RoleMapper;
-import com.mw.ai.agi.auth.persistence.UserDepartmentEntity;
-import com.mw.ai.agi.auth.persistence.UserDepartmentMapper;
 import com.mw.ai.agi.auth.persistence.UserEntity;
 import com.mw.ai.agi.auth.persistence.UserMapper;
-import com.mw.ai.agi.auth.persistence.UserUnitEntity;
-import com.mw.ai.agi.auth.persistence.UserUnitMapper;
+import com.mw.ai.agi.auth.persistence.UserOrganizationEntity;
+import com.mw.ai.agi.auth.persistence.UserOrganizationMapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -28,8 +26,7 @@ import java.util.UUID;
 @Service
 public class AuthService {
     private final ObjectProvider<UserMapper> userMapperProvider;
-    private final ObjectProvider<UserUnitMapper> userUnitMapperProvider;
-    private final ObjectProvider<UserDepartmentMapper> userDepartmentMapperProvider;
+    private final ObjectProvider<UserOrganizationMapper> userOrganizationMapperProvider;
     private final ObjectProvider<RoleMapper> roleMapperProvider;
     private final ObjectProvider<LoginSessionMapper> loginSessionMapperProvider;
     private final ObjectProvider<AuthAuditLogMapper> authAuditLogMapperProvider;
@@ -41,8 +38,7 @@ public class AuthService {
 
     public AuthService(
             ObjectProvider<UserMapper> userMapperProvider,
-            ObjectProvider<UserUnitMapper> userUnitMapperProvider,
-            ObjectProvider<UserDepartmentMapper> userDepartmentMapperProvider,
+            ObjectProvider<UserOrganizationMapper> userOrganizationMapperProvider,
             ObjectProvider<RoleMapper> roleMapperProvider,
             ObjectProvider<LoginSessionMapper> loginSessionMapperProvider,
             ObjectProvider<AuthAuditLogMapper> authAuditLogMapperProvider,
@@ -53,8 +49,7 @@ public class AuthService {
             @Value("${agi.auth.refresh-token-seconds:1209600}") long refreshTokenSeconds
     ) {
         this.userMapperProvider = userMapperProvider;
-        this.userUnitMapperProvider = userUnitMapperProvider;
-        this.userDepartmentMapperProvider = userDepartmentMapperProvider;
+        this.userOrganizationMapperProvider = userOrganizationMapperProvider;
         this.roleMapperProvider = roleMapperProvider;
         this.loginSessionMapperProvider = loginSessionMapperProvider;
         this.authAuditLogMapperProvider = authAuditLogMapperProvider;
@@ -71,6 +66,10 @@ public class AuthService {
                 || !passwordEncoder.matches(password, user.get().getPasswordHash())) {
             auditLogin(null, null, auditContext, "FAILED", "AUTH_LOGIN_FAILED");
             throw new AuthException("AUTH_LOGIN_FAILED", HttpStatus.UNAUTHORIZED, "Username or password is incorrect.");
+        }
+        if ("LOCKED".equals(user.get().getStatus())) {
+            auditLogin(user.get().getTenantId(), user.get().getId(), auditContext, "FAILED", "AUTH_USER_LOCKED");
+            throw new AuthException("AUTH_USER_LOCKED", HttpStatus.FORBIDDEN, "User is locked.");
         }
         if (!"ACTIVE".equals(user.get().getStatus())) {
             auditLogin(user.get().getTenantId(), user.get().getId(), auditContext, "FAILED", "AUTH_USER_DISABLED");
@@ -133,6 +132,8 @@ public class AuthService {
                 claims.tenantId(),
                 claims.username(),
                 claims.userType(),
+                claims.organizationIds(),
+                claims.activeOrganizationId(),
                 claims.unitIds(),
                 claims.activeUnitId(),
                 claims.departmentIds(),
@@ -141,33 +142,27 @@ public class AuthService {
     }
 
     private AuthUserPrincipal loadPrincipal(UserEntity user) {
-        List<String> unitIds = userUnitMapper().selectList(new LambdaQueryWrapper<UserUnitEntity>()
-                        .eq(UserUnitEntity::getUserId, user.getId()))
+        List<String> organizationIds = userOrganizationMapper().selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
+                        .eq(UserOrganizationEntity::getUserId, user.getId()))
                 .stream()
                 .sorted(Comparator
-                        .comparing((UserUnitEntity entity) -> Boolean.TRUE.equals(entity.getPrimaryUnit())).reversed()
-                        .thenComparing(UserUnitEntity::getUnitId))
-                .map(UserUnitEntity::getUnitId)
-                .toList();
-        List<String> departmentIds = userDepartmentMapper().selectList(new LambdaQueryWrapper<UserDepartmentEntity>()
-                        .eq(UserDepartmentEntity::getUserId, user.getId()))
-                .stream()
-                .sorted(Comparator
-                        .comparing((UserDepartmentEntity entity) -> Boolean.TRUE.equals(entity.getPrimaryDepartment())).reversed()
-                        .thenComparing(UserDepartmentEntity::getDepartmentId))
-                .map(UserDepartmentEntity::getDepartmentId)
+                        .comparing((UserOrganizationEntity entity) -> Boolean.TRUE.equals(entity.getPrimaryOrganization())).reversed()
+                        .thenComparing(UserOrganizationEntity::getOrganizationId))
+                .map(UserOrganizationEntity::getOrganizationId)
                 .toList();
         List<String> roleIds = roleMapper().selectRoleCodesByUserId(user.getId());
-        String activeUnitId = unitIds.isEmpty() ? null : unitIds.get(0);
+        String activeOrganizationId = organizationIds.isEmpty() ? null : organizationIds.get(0);
         return new AuthUserPrincipal(
                 user.getId(),
                 user.getUsername(),
                 user.getTenantId(),
                 user.getDisplayName(),
                 user.getUserType(),
-                unitIds,
-                activeUnitId,
-                departmentIds,
+                organizationIds,
+                activeOrganizationId,
+                organizationIds,
+                activeOrganizationId,
+                List.of(),
                 roleIds
         );
     }
@@ -227,12 +222,8 @@ public class AuthService {
         return required(userMapperProvider, UserMapper.class);
     }
 
-    private UserUnitMapper userUnitMapper() {
-        return required(userUnitMapperProvider, UserUnitMapper.class);
-    }
-
-    private UserDepartmentMapper userDepartmentMapper() {
-        return required(userDepartmentMapperProvider, UserDepartmentMapper.class);
+    private UserOrganizationMapper userOrganizationMapper() {
+        return required(userOrganizationMapperProvider, UserOrganizationMapper.class);
     }
 
     private RoleMapper roleMapper() {
