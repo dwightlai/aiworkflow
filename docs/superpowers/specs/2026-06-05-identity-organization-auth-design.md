@@ -14,9 +14,10 @@
 - 支持平台管理后台本地登录。
 - 支持第三方系统通过 API Key、JWT 或 Token Introspection 接入。
 - 支持第三方调用时传入业务用户上下文。
-- 支持用户属于多个部门、拥有多个角色。
+- 支持一个用户属于多个单位、多个部门，并拥有多个角色。
 - 支持租户级逻辑隔离。
 - 支持单位、部门、角色用于知识库、智能体和模板授权。
+- 不通过同步第三方用户、组织、角色、单位数据的方式完成业务系统集成。
 - 所有新增业务表统一使用 `agi_` 前缀。
 
 ## 3. 命名约束
@@ -150,6 +151,7 @@ agi_tenant
 agi_unit
 - id
 - tenant_id
+- code
 - external_unit_id
 - name
 - unit_type           PLATFORM / ARCHIVE_ORG / OA_ORG / BUSINESS_ORG
@@ -158,7 +160,7 @@ agi_unit
 - updated_at
 ```
 
-`external_unit_id` 用于映射第三方平台传入的单位标识。
+`code` 是平台内部稳定编码，在同一租户内唯一。`external_unit_id` 用于记录第三方平台传入的单位标识或人工配置的外部映射值，但系统集成不依赖批量同步第三方单位数据。
 
 ### 5.3 agi_department
 
@@ -167,6 +169,7 @@ agi_department
 - id
 - tenant_id
 - unit_id
+- code
 - external_department_id
 - parent_id
 - name
@@ -177,6 +180,8 @@ agi_department
 ```
 
 `parent_id` 为空表示单位下的一级部门。
+
+`code` 是平台内部稳定编码，在同一单位内唯一。`external_department_id` 用于记录第三方平台传入的部门标识或人工配置的外部映射值，但系统集成不依赖批量同步第三方部门数据。
 
 ### 5.4 agi_role
 
@@ -230,7 +235,7 @@ agi_user_unit
 - created_at
 ```
 
-一个用户可以属于多个单位，第一阶段可以只使用一个主单位。
+一个用户可以属于多个单位。`primary_unit` 只用于管理后台默认展示和默认资产归属，不代表权限判断只能使用主单位。
 
 ### 5.7 agi_user_department
 
@@ -390,6 +395,7 @@ GET  /api/auth/me
   "sub": "user_admin",
   "tenantId": "tenant_default",
   "unitIds": ["unit_default"],
+  "activeUnitId": "unit_default",
   "departmentIds": ["dept_default"],
   "roleIds": ["platform_admin"],
   "userType": "LOCAL",
@@ -494,12 +500,15 @@ RuntimeIdentityContext
 - tenantId
 - appId
 - userId
-- unitId
+- unitIds
+- activeUnitId
 - departmentIds
 - roleIds
 - authType
 - source
 ```
+
+`unitIds` 表示用户可归属或可代表的单位集合。`activeUnitId` 表示本次管理后台操作或第三方调用的当前业务单位。资产创建、权限判断和审计默认使用 `activeUnitId`。第三方开放 API 请求体中的 `unitId` 会被解析为 `activeUnitId`。
 
 上下文来源：
 
@@ -510,9 +519,9 @@ RuntimeIdentityContext
 
 所有业务授权都只依赖 `RuntimeIdentityContext`，不直接依赖具体认证方式。
 
-## 8. 第三方用户映射策略
+## 8. 第三方用户上下文策略
 
-第三方调用时，平台可以有两种处理方式：
+第三方调用时，平台不通过同步第三方用户、组织、角色、单位数据来完成集成。第三方系统负责认证真实业务用户，并在调用 AI 平台时传入当前用户上下文。
 
 ### 8.1 仅使用运行上下文
 
@@ -528,22 +537,31 @@ RuntimeIdentityContext
 
 - 平台内无法完整管理外部用户档案。
 
-### 8.2 懒加载用户映射
+### 8.2 外部标识映射
 
-第三方用户第一次调用时，平台创建或更新 `agi_user`，并记录 `source_app_id` 和 `external_user_id`。
+平台可以人工配置或在接入配置中维护外部标识映射，例如：
+
+```text
+第三方 unitId -> agi_unit.code / agi_unit.id
+第三方 departmentId -> agi_department.code / agi_department.id
+第三方 roleId -> agi_role.code / agi_role.id
+```
+
+这类映射是接入配置，不是组织同步。平台不定时拉取第三方组织树，不批量同步第三方用户，也不依赖第三方组织数据落库后才能调用智能体。
 
 优点：
 
-- 审计和统计更完整。
-- 后续可以在平台内查看外部用户使用情况。
+- 平台授权可以继续使用本地 `agi_unit`、`agi_department`、`agi_role`。
+- 第三方仍然可以按自己的标识传入上下文。
+- 不需要维护组织同步任务。
 
 缺点：
 
-- 需要处理用户信息更新和失效。
+- 需要在第三方接入配置中维护必要映射。
 
 推荐：
 
-第一阶段开放 API 使用“仅运行上下文”，管理后台使用本地用户。后续如果需要精细统计，再启用懒加载用户映射。
+第一阶段开放 API 使用“运行上下文 + 可选外部标识映射”，管理后台使用本地用户。除非用户明确提出，不设计组织同步、用户同步或角色同步任务。
 
 ## 9. 逻辑隔离规则
 
@@ -589,10 +607,10 @@ agi_tenant:
 - tenant_default / default / 默认租户
 
 agi_unit:
-- unit_default / 默认单位
+- unit_default / default_unit / 默认单位
 
 agi_department:
-- dept_default / 默认部门
+- dept_default / default_dept / 默认部门
 
 agi_role:
 - platform_admin / 平台管理员
@@ -728,23 +746,26 @@ agi_user_role:
 - 支持第三方 JWT。
 - 支持 Token Introspection。
 - 预留 OAuth2 Client Credentials。
-- 可选支持外部用户懒加载映射。
+- 支持在审计中记录第三方原始用户标识，不创建或同步第三方用户。
 
-### 阶段五：组织同步
+### 阶段五：第三方标识映射增强
 
-- 支持从数字档案馆、OA 或组织系统同步单位、部门、角色和用户。
-- 支持定时同步和手动同步。
-- 支持外部组织禁用后平台侧联动禁用。
+- 支持为第三方应用配置外部单位、部门、角色标识映射。
+- 支持调用时根据外部标识解析为平台本地单位、部门和角色。
+- 支持映射缺失时按策略拒绝调用或仅记录原始外部标识。
+- 不提供组织树、用户、角色的定时同步或批量同步。
 
 ## 15. 验收标准
 
 - 系统初始化后存在默认租户、默认单位、默认部门、默认角色和 admin 用户。
 - 管理后台可以通过本地账号登录并获得 JWT。
 - JWT 中包含租户、单位、部门、角色和用户信息。
-- 一个用户可以属于多个部门并拥有多个角色。
+- 一个用户可以属于多个单位、多个部门并拥有多个角色。
 - 第三方应用可以通过 API Key 调用开放 API。
 - 第三方调用时可以传入单位、部门、角色和用户上下文。
 - 平台可以根据第三方应用范围判断是否允许代表某个单位调用。
+- 第三方业务系统集成不依赖同步用户、组织、角色或单位数据。
+- 单位和部门都包含平台内部 `code` 字段。
 - 所有新增表名都使用 `agi_` 前缀。
 - 所有核心资产后续都能通过 `tenant_id` 做逻辑隔离。
 - 认证失败、API Key 使用和应用拒绝都能进入审计日志。
