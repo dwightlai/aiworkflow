@@ -1,5 +1,6 @@
 package com.mw.ai.agi.common.exception;
 
+import com.mw.ai.agi.auth.service.AuthException;
 import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.common.api.ErrorResponse;
 import com.mw.ai.agi.workflow.engine.WorkflowRunNotFoundException;
@@ -67,6 +68,17 @@ public class GlobalExceptionHandler {
                 Map.of("fieldErrors", exception.getBindingResult().getFieldErrorCount())
         );
         return ApiResponse.failure(error);
+    }
+
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthException(AuthException exception, HttpServletRequest request) {
+        ErrorResponse error = new ErrorResponse(
+                exception.getCode(),
+                exception.getMessage(),
+                request.getRequestId(),
+                null
+        );
+        return ResponseEntity.status(exception.getStatus()).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

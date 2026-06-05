@@ -60,7 +60,10 @@ CREATE TABLE agi_workflow_node_execution (
 CREATE TABLE agi_integration_app (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
+    code VARCHAR(100) NOT NULL,
     name VARCHAR(200) NOT NULL,
+    app_type VARCHAR(64) NOT NULL DEFAULT 'OTHER',
+    auth_type VARCHAR(64) NOT NULL DEFAULT 'API_KEY',
     status VARCHAR(32) NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
@@ -223,6 +226,176 @@ CREATE TABLE agi_bot_message (
     CONSTRAINT fk_agi_bot_message_bot FOREIGN KEY (bot_id) REFERENCES agi_ai_bot(id) ON DELETE CASCADE
 );
 
+CREATE TABLE agi_tenant (
+    id VARCHAR(64) PRIMARY KEY,
+    code VARCHAR(100) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE agi_unit (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    code VARCHAR(100) NOT NULL,
+    external_unit_id VARCHAR(200),
+    name VARCHAR(200) NOT NULL,
+    unit_type VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_unit_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id)
+);
+
+CREATE TABLE agi_department (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    unit_id VARCHAR(64) NOT NULL,
+    code VARCHAR(100) NOT NULL,
+    external_department_id VARCHAR(200),
+    parent_id VARCHAR(64),
+    name VARCHAR(200) NOT NULL,
+    sort_order INTEGER NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_department_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_department_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id),
+    CONSTRAINT fk_agi_department_parent FOREIGN KEY (parent_id) REFERENCES agi_department(id)
+);
+
+CREATE TABLE agi_role (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    unit_id VARCHAR(64),
+    external_role_id VARCHAR(200),
+    code VARCHAR(100) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    role_type VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_role_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_role_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id)
+);
+
+CREATE TABLE agi_user (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(255),
+    display_name VARCHAR(200) NOT NULL,
+    mobile VARCHAR(50),
+    email VARCHAR(200),
+    user_type VARCHAR(64) NOT NULL,
+    source_app_id VARCHAR(64),
+    external_user_id VARCHAR(200),
+    status VARCHAR(32) NOT NULL,
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_user_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_user_app FOREIGN KEY (source_app_id) REFERENCES agi_integration_app(id)
+);
+
+CREATE TABLE agi_user_unit (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    unit_id VARCHAR(64) NOT NULL,
+    primary_unit NUMBER(1) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_user_unit_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_user_unit_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
+    CONSTRAINT fk_agi_user_unit_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id)
+);
+
+CREATE TABLE agi_user_department (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) NOT NULL,
+    primary_department NUMBER(1) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_user_department_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_user_department_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
+    CONSTRAINT fk_agi_user_department_department FOREIGN KEY (department_id) REFERENCES agi_department(id)
+);
+
+CREATE TABLE agi_user_role (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    role_id VARCHAR(64) NOT NULL,
+    unit_id VARCHAR(64),
+    department_id VARCHAR(64),
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_user_role_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_user_role_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE,
+    CONSTRAINT fk_agi_user_role_role FOREIGN KEY (role_id) REFERENCES agi_role(id),
+    CONSTRAINT fk_agi_user_role_unit FOREIGN KEY (unit_id) REFERENCES agi_unit(id),
+    CONSTRAINT fk_agi_user_role_department FOREIGN KEY (department_id) REFERENCES agi_department(id)
+);
+
+CREATE TABLE agi_integration_app_secret (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    app_id VARCHAR(64) NOT NULL,
+    secret_hash VARCHAR(255) NOT NULL,
+    secret_prefix VARCHAR(32) NOT NULL,
+    expires_at TIMESTAMP,
+    enabled NUMBER(1) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_app_secret_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_app_secret_app FOREIGN KEY (app_id) REFERENCES agi_integration_app(id) ON DELETE CASCADE
+);
+
+CREATE TABLE agi_integration_app_scope (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    app_id VARCHAR(64) NOT NULL,
+    scope_type VARCHAR(64) NOT NULL,
+    scope_id VARCHAR(100) NOT NULL,
+    permission VARCHAR(64) NOT NULL,
+    enabled NUMBER(1) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_app_scope_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_app_scope_app FOREIGN KEY (app_id) REFERENCES agi_integration_app(id) ON DELETE CASCADE
+);
+
+CREATE TABLE agi_login_session (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    refresh_token_hash VARCHAR(255) NOT NULL,
+    user_agent CLOB,
+    client_ip VARCHAR(100),
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agi_login_session_tenant FOREIGN KEY (tenant_id) REFERENCES agi_tenant(id),
+    CONSTRAINT fk_agi_login_session_user FOREIGN KEY (user_id) REFERENCES agi_user(id) ON DELETE CASCADE
+);
+
+CREATE TABLE agi_auth_audit_log (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    user_id VARCHAR(200),
+    app_id VARCHAR(64),
+    unit_id VARCHAR(200),
+    department_ids CLOB,
+    role_ids CLOB,
+    client_ip VARCHAR(100),
+    user_agent CLOB,
+    result VARCHAR(32) NOT NULL,
+    error_code VARCHAR(100),
+    occurred_at TIMESTAMP NOT NULL
+);
+
 ALTER TABLE agi_workflow ADD CONSTRAINT fk_agi_workflow_current_version FOREIGN KEY (current_version_id) REFERENCES agi_workflow_version(id);
 
 CREATE INDEX idx_agi_workflow_tenant_status ON agi_workflow(tenant_id, status);
@@ -241,3 +414,18 @@ CREATE INDEX idx_agi_ai_bot_status ON agi_ai_bot(status, updated_at);
 CREATE INDEX idx_agi_ai_bot_workflow ON agi_ai_bot(workflow_id);
 CREATE INDEX idx_agi_bot_session_bot ON agi_bot_session(bot_id, updated_at);
 CREATE INDEX idx_agi_bot_message_session ON agi_bot_message(bot_id, session_id, created_at);
+CREATE UNIQUE INDEX uk_agi_tenant_code ON agi_tenant(code);
+CREATE UNIQUE INDEX uk_agi_unit_tenant_code ON agi_unit(tenant_id, code);
+CREATE INDEX idx_agi_department_unit ON agi_department(tenant_id, unit_id, status);
+CREATE UNIQUE INDEX uk_agi_department_unit_code ON agi_department(unit_id, code);
+CREATE INDEX idx_agi_role_tenant ON agi_role(tenant_id, unit_id, status);
+CREATE UNIQUE INDEX uk_agi_role_tenant_code ON agi_role(tenant_id, code);
+CREATE UNIQUE INDEX uk_agi_user_tenant_username ON agi_user(tenant_id, username);
+CREATE INDEX idx_agi_user_external ON agi_user(source_app_id, external_user_id);
+CREATE INDEX idx_agi_user_unit_user ON agi_user_unit(user_id, unit_id);
+CREATE INDEX idx_agi_user_department_user ON agi_user_department(user_id, department_id);
+CREATE INDEX idx_agi_user_role_user ON agi_user_role(user_id, role_id);
+CREATE INDEX idx_agi_app_secret_app ON agi_integration_app_secret(app_id, enabled);
+CREATE INDEX idx_agi_app_scope_app ON agi_integration_app_scope(app_id, scope_type, scope_id);
+CREATE INDEX idx_agi_login_session_user ON agi_login_session(user_id, expires_at);
+CREATE INDEX idx_agi_auth_audit_actor ON agi_auth_audit_log(user_id, app_id, occurred_at);

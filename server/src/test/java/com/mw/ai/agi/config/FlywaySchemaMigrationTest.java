@@ -60,8 +60,41 @@ class FlywaySchemaMigrationTest {
                 "agi_knowledge_chunk_vector",
                 "agi_ai_bot",
                 "agi_bot_session",
-                "agi_bot_message"
+                "agi_bot_message",
+                "agi_tenant",
+                "agi_unit",
+                "agi_department",
+                "agi_role",
+                "agi_user",
+                "agi_user_unit",
+                "agi_user_department",
+                "agi_user_role",
+                "agi_integration_app_secret",
+                "agi_integration_app_scope",
+                "agi_login_session",
+                "agi_auth_audit_log"
         );
         assertThat(tableNames).allMatch(tableName -> tableName.startsWith("agi_"));
+
+        List<String> unitColumns = jdbcTemplate.queryForList("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'agi_unit'
+                """, String.class);
+        assertThat(unitColumns).contains("code", "external_unit_id");
+
+        List<String> departmentColumns = jdbcTemplate.queryForList("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'agi_department'
+                """, String.class);
+        assertThat(departmentColumns).contains("code", "external_department_id");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agi_user WHERE username = 'admin'",
+                Integer.class
+        )).isEqualTo(1);
     }
 }
