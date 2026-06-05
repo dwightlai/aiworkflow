@@ -1,0 +1,11 @@
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS dataset_type VARCHAR(32) NOT NULL DEFAULT 'TEXT_DOCUMENT';
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS processing_status VARCHAR(32) NOT NULL DEFAULT 'READY';
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS tags TEXT;
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS category VARCHAR(255);
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS row_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS parser_type VARCHAR(64);
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS splitter_type VARCHAR(64);
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS splitter_config TEXT;
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS raw_content TEXT;
+ALTER TABLE agi_knowledge_document ADD COLUMN IF NOT EXISTS error_message TEXT;

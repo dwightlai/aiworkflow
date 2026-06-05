@@ -1,11 +1,11 @@
 import {
   ArrowLeftOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   EditOutlined,
   FileAddOutlined,
   FileSearchOutlined,
   FileTextOutlined,
-  PlusOutlined,
   SearchOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -48,6 +48,9 @@ export function KnowledgeDocumentsPage({ knowledgeBaseId }: KnowledgeDocumentsPa
   );
   const documents = documentsQuery.data?.items ?? [];
   const chunkTotal = documents.reduce((sum, document) => sum + document.chunkCount, 0);
+  const navigateToCreate = (type: 'manual' | 'text' | 'table') => {
+    navigateTo(`/knowledge/${knowledgeBaseId}/documents/new?type=${type}`);
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (document: KnowledgeDocument) => deleteKnowledgeDocument(document.knowledgeBaseId, document.id),
@@ -138,13 +141,17 @@ export function KnowledgeDocumentsPage({ knowledgeBaseId }: KnowledgeDocumentsPa
             管理该知识库下的文档集合，新增文档和切片编辑已拆分到独立页面。
           </Typography.Text>
         </Space>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigateTo(`/knowledge/${knowledgeBaseId}/documents/new`)}
-        >
-          新增文档
-        </Button>
+        <Space wrap>
+          <Button icon={<FileAddOutlined />} onClick={() => navigateToCreate('manual')}>
+            手动数据集
+          </Button>
+          <Button type="primary" icon={<FileTextOutlined />} onClick={() => navigateToCreate('text')}>
+            文本文档
+          </Button>
+          <Button icon={<DatabaseOutlined />} onClick={() => navigateToCreate('table')}>
+            表格文档
+          </Button>
+        </Space>
       </div>
 
       {basesQuery.isError ? (
@@ -172,7 +179,6 @@ export function KnowledgeDocumentsPage({ knowledgeBaseId }: KnowledgeDocumentsPa
       <Card
         variant="borderless"
         title={<Space><FileTextOutlined />文档列表</Space>}
-        extra={<Button icon={<FileAddOutlined />} onClick={() => navigateTo(`/knowledge/${knowledgeBaseId}/documents/new`)}>上传或新增</Button>}
       >
         <Table
           rowKey="id"

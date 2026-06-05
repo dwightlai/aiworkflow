@@ -1,4 +1,4 @@
-import {
+﻿import {
   BookOutlined,
   CheckCircleOutlined,
   DatabaseOutlined,
@@ -16,11 +16,13 @@ import {
   Alert,
   Button,
   Card,
+  Dropdown,
   Drawer,
   Form,
   Input,
   InputNumber,
   List,
+  Radio,
   Select,
   Space,
   Steps,
@@ -34,6 +36,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import {
+  addManualKnowledgeDataset,
   addKnowledgeDocument,
   createKnowledgeBase,
   createVectorStoreConfig,
@@ -44,14 +47,21 @@ import {
   listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
   listVectorStoreConfigs,
+  previewUploadedTableKnowledgeDocumentFile,
+  previewUploadedTextKnowledgeDocumentFile,
   previewUploadedKnowledgeDocumentFile,
   previewKnowledgeChunks,
+  reparseKnowledgeDocument,
   searchKnowledgeBase,
   updateKnowledgeBase,
   updateKnowledgeChunk,
   updateVectorStoreConfig,
+  uploadTableKnowledgeDocumentFile,
+  uploadTextKnowledgeDocumentFile,
   uploadKnowledgeDocumentFile,
   type AddKnowledgeDocumentRequest,
+  type KnowledgeSplitOptions,
+  type ManualDatasetEntryRequest,
   type KnowledgeBase,
   type KnowledgeChunk,
   type KnowledgeChunkPreview,
@@ -74,7 +84,7 @@ const initialBaseValues: SaveKnowledgeBaseRequest = {
   splitterType: 'SIMPLE_TEXT',
   chunkSize: 500,
   chunkOverlap: 50,
-  retrievalMode: 'KEYWORD',
+  retrievalMode: 'HYBRID',
   topK: 3
 };
 
@@ -100,17 +110,28 @@ const initialVectorValues: SaveVectorStoreConfigRequest = {
 };
 
 const supportedUploadTypes = '.txt,.doc,.docx,.pdf,.md,.markdown,.html,.htm,.ppt,.pptx,.xls,.xlsx';
+const textDocumentTypes = '.txt,.md,.markdown,.doc,.docx,.pdf,.html,.htm';
+const tableDocumentTypes = '.xls,.xlsx';
+
+interface ManualDatasetFormValues {
+  entries: ManualDatasetEntryRequest[];
+}
 
 export function KnowledgeBasesPage() {
   const [baseForm] = Form.useForm<SaveKnowledgeBaseRequest>();
   const [documentForm] = Form.useForm<AddKnowledgeDocumentRequest>();
+  const [manualDatasetForm] = Form.useForm<ManualDatasetFormValues>();
+  const [textDocumentForm] = Form.useForm<KnowledgeSplitOptions>();
+  const [tableDocumentForm] = Form.useForm<KnowledgeSplitOptions>();
   const [searchForm] = Form.useForm<{ query: string; topK: number }>();
   const [vectorForm] = Form.useForm<SaveVectorStoreConfigRequest>();
   const vectorStoreType = Form.useWatch('storeType', vectorForm);
+  const textSplitterType = Form.useWatch('splitterType', textDocumentForm);
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [documentOpen, setDocumentOpen] = useState(false);
   const [vectorOpen, setVectorOpen] = useState(false);
+  const [dataDrawerType, setDataDrawerType] = useState<'manual' | 'text' | 'table' | null>(null);
   const [editingBase, setEditingBase] = useState<KnowledgeBase | null>(null);
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null);
@@ -122,6 +143,10 @@ export function KnowledgeBasesPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<UploadedDocumentPreview | null>(null);
   const [uploadStep, setUploadStep] = useState(0);
+  const [textUploadFile, setTextUploadFile] = useState<File | null>(null);
+  const [textUploadPreview, setTextUploadPreview] = useState<UploadedDocumentPreview | null>(null);
+  const [tableUploadFile, setTableUploadFile] = useState<File | null>(null);
+  const [tableUploadPreview, setTableUploadPreview] = useState<UploadedDocumentPreview | null>(null);
 
   const basesQuery = useQuery({
     queryKey: ['knowledge-bases'],
@@ -161,7 +186,12 @@ export function KnowledgeBasesPage() {
         ...values,
         description: values.description || null,
         embeddingModelId: values.embeddingModelId || null,
-        vectorStoreConfigId: values.vectorStoreConfigId || null
+        vectorStoreConfigId: values.vectorStoreConfigId || null,
+        splitterType: 'SIMPLE_TEXT',
+        chunkSize: 500,
+        chunkOverlap: 50,
+        retrievalMode: 'HYBRID',
+        topK: 3
       };
       return editingBase ? updateKnowledgeBase(editingBase.id, request) : createKnowledgeBase(request);
     },
@@ -306,6 +336,107 @@ export function KnowledgeBasesPage() {
     }
   });
 
+  const manualDatasetMutation = useMutation({
+    mutationFn: async (values: ManualDatasetFormValues) => {
+      if (!selectedBase) {
+        throw new Error('请选择知识库');
+      }
+      const entries = (values.entries ?? []).map((entry) => ({
+        title: entry.title,
+        content: entry.content,
+        tags: entry.tags || null,
+        category: entry.category || null,
+        source: entry.source || null
+      }));
+      return addManualKnowledgeDataset(selectedBase.id, { entries });
+    },
+    onSuccess: async () => {
+      message.success('手动数据集已入库');
+      setDataDrawerType(null);
+      manualDatasetForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
+  const textUploadPreviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!textUploadFile) {
+        throw new Error('请先选择文本文档');
+      }
+      return previewUploadedTextKnowledgeDocumentFile(textUploadFile, textDocumentForm.getFieldsValue());
+    },
+    onSuccess: (preview) => {
+      setTextUploadPreview(preview);
+      setChunkPreviews(preview.chunks);
+    }
+  });
+
+  const textUploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedBase || !textUploadFile) {
+        throw new Error('请先选择知识库和文本文档');
+      }
+      return uploadTextKnowledgeDocumentFile(selectedBase.id, textUploadFile, textDocumentForm.getFieldsValue());
+    },
+    onSuccess: async () => {
+      message.success('文本文档已解析并入库');
+      setDataDrawerType(null);
+      setTextUploadFile(null);
+      setTextUploadPreview(null);
+      setChunkPreviews([]);
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
+  const tableUploadPreviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!tableUploadFile) {
+        throw new Error('请先选择表格文档');
+      }
+      return previewUploadedTableKnowledgeDocumentFile(tableUploadFile, {
+        splitterType: 'STRUCTURED',
+        chunkSize: tableDocumentForm.getFieldValue('chunkSize') || 200
+      });
+    },
+    onSuccess: (preview) => {
+      setTableUploadPreview(preview);
+      setChunkPreviews(preview.chunks);
+    }
+  });
+
+  const tableUploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedBase || !tableUploadFile) {
+        throw new Error('请先选择知识库和表格文档');
+      }
+      return uploadTableKnowledgeDocumentFile(selectedBase.id, tableUploadFile, {
+        splitterType: 'STRUCTURED',
+        chunkSize: tableDocumentForm.getFieldValue('chunkSize') || 200
+      });
+    },
+    onSuccess: async () => {
+      message.success('表格文档已解析并入库');
+      setDataDrawerType(null);
+      setTableUploadFile(null);
+      setTableUploadPreview(null);
+      setChunkPreviews([]);
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
+  const reparseDocumentMutation = useMutation({
+    mutationFn: async (document: KnowledgeDocument) => reparseKnowledgeDocument(document.knowledgeBaseId, document.id),
+    onSuccess: async () => {
+      message.success('文档已重新解析');
+      setSelectedDocument(null);
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', selectedBase?.id] });
+    }
+  });
+
   const searchMutation = useMutation({
     mutationFn: async (values: { query: string; topK: number }) => {
       if (!selectedBase) {
@@ -333,8 +464,8 @@ export function KnowledgeBasesPage() {
       splitterType: base.splitterType || 'SIMPLE_TEXT',
       chunkSize: base.chunkSize || 500,
       chunkOverlap: base.chunkOverlap ?? 50,
-      retrievalMode: base.retrievalMode || 'KEYWORD',
-      topK: base.topK || 3
+      retrievalMode: 'HYBRID',
+      topK: 3
     });
     setCreateOpen(true);
   }
@@ -349,14 +480,44 @@ export function KnowledgeBasesPage() {
     setUploadFile(null);
     setUploadPreview(null);
     setUploadStep(0);
+    setDataDrawerType(null);
+    setTextUploadFile(null);
+    setTextUploadPreview(null);
+    setTableUploadFile(null);
+    setTableUploadPreview(null);
+    manualDatasetForm.setFieldsValue({
+      entries: [{ title: '', content: '', tags: '', category: '', source: '' }]
+    });
+    textDocumentForm.setFieldsValue({ splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' });
+    tableDocumentForm.setFieldsValue({ splitterType: 'STRUCTURED', chunkSize: 200 });
     documentForm.setFieldsValue({
       ...initialDocumentValues,
       splitterType: base.splitterType || 'SIMPLE_TEXT',
       chunkSize: base.chunkSize || 500,
       chunkOverlap: base.chunkOverlap ?? 50
     });
-    searchForm.setFieldsValue({ query: '', topK: base.topK || 3 });
+    searchForm.setFieldsValue({ query: '', topK: 3 });
     setDocumentOpen(true);
+  }
+
+  function openDataDrawer(type: 'manual' | 'text' | 'table') {
+    setChunkPreviews([]);
+    setDataDrawerType(type);
+    if (type === 'manual') {
+      manualDatasetForm.setFieldsValue({
+        entries: [{ title: '', content: '', tags: '', category: '', source: '' }]
+      });
+    }
+    if (type === 'text') {
+      setTextUploadFile(null);
+      setTextUploadPreview(null);
+      textDocumentForm.setFieldsValue({ splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' });
+    }
+    if (type === 'table') {
+      setTableUploadFile(null);
+      setTableUploadPreview(null);
+      tableDocumentForm.setFieldsValue({ splitterType: 'STRUCTURED', chunkSize: 200 });
+    }
   }
 
   function openChunkEditor(chunk: KnowledgeChunk) {
@@ -412,6 +573,7 @@ export function KnowledgeBasesPage() {
         <Space direction="vertical" size={2}>
           <Typography.Text strong>{base.name}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>{base.description || '暂无描述'}</Typography.Text>
+          <Tag color="purple">向量维度 {base.vectorDimension || 1536}</Tag>
         </Space>
       )
     },
@@ -433,7 +595,7 @@ export function KnowledgeBasesPage() {
     {
       title: '检索模式',
       width: 130,
-      render: (_, base) => <Tag color={base.retrievalMode === 'HYBRID' ? 'purple' : 'green'}>{base.retrievalMode || 'KEYWORD'}</Tag>
+      render: (_, base) => <Tag color={base.retrievalMode === 'HYBRID' || !base.retrievalMode ? 'purple' : 'green'}>{base.retrievalMode || 'HYBRID'}</Tag>
     },
     {
       title: '文档/切片',
@@ -660,7 +822,7 @@ export function KnowledgeBasesPage() {
           <Form.Item name="vectorStoreConfigId" label="向量库配置">
             <Select allowClear placeholder="默认使用内存向量库" options={vectorStoreOptions} />
           </Form.Item>
-          <Form.Item label="分段策略" style={{ marginBottom: 0 }}>
+          <Form.Item label="分段策略" style={{ display: 'none', marginBottom: 0 }}>
             <Space align="start" wrap>
               <Form.Item name="splitterType" noStyle>
                 <Select
@@ -682,7 +844,7 @@ export function KnowledgeBasesPage() {
               </Form.Item>
             </Space>
           </Form.Item>
-          <Form.Item label="检索设置" style={{ marginTop: 24, marginBottom: 0 }}>
+          <Form.Item label="检索设置" style={{ display: 'none', marginTop: 24, marginBottom: 0 }}>
             <Space align="start" wrap>
               <Form.Item name="retrievalMode" noStyle>
                 <Select
@@ -709,7 +871,32 @@ export function KnowledgeBasesPage() {
         width={980}
         onClose={() => setDocumentOpen(false)}
       >
-        <Card size="small" title={<Space><UploadOutlined />文件上传与数据处理</Space>} style={{ marginBottom: 16 }}>
+        <Card
+          size="small"
+          title={<Space><FileAddOutlined />新增数据</Space>}
+          extra={(
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'manual', label: '手动数据集', icon: <FileAddOutlined /> },
+                  { key: 'text', label: '文本文档', icon: <FileTextOutlined /> },
+                  { key: 'table', label: '表格文档', icon: <DatabaseOutlined /> }
+                ],
+                onClick: ({ key }) => openDataDrawer(key as 'manual' | 'text' | 'table')
+              }}
+              trigger={['click']}
+            >
+              <Button type="primary" icon={<PlusOutlined />}>新增数据</Button>
+            </Dropdown>
+          )}
+          style={{ marginBottom: 16 }}
+        >
+          <Typography.Text type="secondary">
+            当前知识库支持手动录入、文本文档上传和表格文档上传；入库后自动执行分段、向量化和索引构建。
+          </Typography.Text>
+        </Card>
+
+        <Card size="small" title={<Space><UploadOutlined />文件上传与数据处理</Space>} style={{ display: 'none', marginBottom: 16 }}>
           <Steps
             current={uploadStep}
             items={[
@@ -812,7 +999,7 @@ export function KnowledgeBasesPage() {
           ) : null}
         </Card>
 
-        <Card size="small" title={<Space><FileAddOutlined />文档入库</Space>} style={{ marginBottom: 16 }}>
+        <Card size="small" title={<Space><FileAddOutlined />文档入库</Space>} style={{ display: 'none', marginBottom: 16 }}>
           <Form form={documentForm} layout="vertical" initialValues={initialDocumentValues} onFinish={(values) => documentMutation.mutate(values)}>
             <Form.Item name="name" label="文档名称" rules={[{ required: true, message: '请输入文档名称' }]}>
               <Input placeholder="faq.md" />
@@ -859,12 +1046,38 @@ export function KnowledgeBasesPage() {
                 <List.Item
                   actions={[
                     <Button key="chunks" size="small" icon={<FileSearchOutlined />} onClick={() => setSelectedDocument(document)}>查看切片</Button>,
+                    <Button
+                      key="reparse"
+                      size="small"
+                      loading={reparseDocumentMutation.isPending}
+                      disabled={document.processingStatus === 'PROCESSING'}
+                      onClick={() => reparseDocumentMutation.mutate(document)}
+                    >
+                      重新解析
+                    </Button>,
                     <Button key="delete" danger size="small" icon={<DeleteOutlined />} onClick={() => deleteDocumentMutation.mutate(document)}>删除文档</Button>
                   ]}
                 >
                   <List.Item.Meta
-                    title={document.name}
-                    description={`${document.chunkCount} 个切片`}
+                    title={(
+                      <Space wrap>
+                        <Typography.Text>{document.name}</Typography.Text>
+                        <Tag color={document.datasetType === 'TABLE_DOCUMENT' ? 'cyan' : document.datasetType === 'MANUAL' ? 'green' : 'blue'}>
+                          {datasetTypeLabel(document.datasetType)}
+                        </Tag>
+                        <Tag color={document.processingStatus === 'FAILED' ? 'red' : document.processingStatus === 'PROCESSING' ? 'orange' : 'geekblue'}>
+                          {document.processingStatus || 'READY'}
+                        </Tag>
+                      </Space>
+                    )}
+                    description={(
+                      <Space direction="vertical" size={2}>
+                        <Typography.Text type="secondary">
+                          {document.chunkCount} 个切片{document.rowCount ? ` / ${document.rowCount} 行数据` : ''}
+                        </Typography.Text>
+                        {document.errorMessage ? <Typography.Text type="danger">{document.errorMessage}</Typography.Text> : null}
+                      </Space>
+                    )}
                   />
                 </List.Item>
               )}
@@ -946,6 +1159,178 @@ export function KnowledgeBasesPage() {
       </Drawer>
 
       <Drawer
+        title="手动数据集"
+        open={dataDrawerType === 'manual'}
+        width={720}
+        onClose={() => setDataDrawerType(null)}
+        footer={(
+          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setDataDrawerType(null)}>取消</Button>
+            <Button type="primary" icon={<FileAddOutlined />} loading={manualDatasetMutation.isPending} onClick={() => manualDatasetForm.submit()}>
+              保存并入库
+            </Button>
+          </Space>
+        )}
+      >
+        <Form
+          form={manualDatasetForm}
+          layout="vertical"
+          initialValues={{ entries: [{ title: '', content: '', tags: '', category: '', source: '' }] }}
+          onFinish={(values) => manualDatasetMutation.mutate(values)}
+        >
+          <Form.List name="entries">
+            {(fields, { add, remove }) => (
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                {fields.map((field, index) => (
+                  <Card
+                    key={field.key}
+                    size="small"
+                    title={`知识条目 ${index + 1}`}
+                    extra={fields.length > 1 ? <Button size="small" danger onClick={() => remove(field.name)}>删除</Button> : null}
+                  >
+                    <Form.Item name={[field.name, 'title']} label="标题" rules={[{ required: true, message: '请输入标题' }]}>
+                      <Input placeholder="例如：退费规则" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'content']} label="正文内容" rules={[{ required: true, message: '请输入正文内容' }]}>
+                      <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} placeholder="录入 FAQ、业务规则、标准说明等知识内容" />
+                    </Form.Item>
+                    <Space wrap>
+                      <Form.Item name={[field.name, 'tags']} label="标签">
+                        <Input style={{ width: 180 }} placeholder="多个标签用逗号分隔" />
+                      </Form.Item>
+                      <Form.Item name={[field.name, 'category']} label="分类">
+                        <Input style={{ width: 180 }} placeholder="业务分类" />
+                      </Form.Item>
+                      <Form.Item name={[field.name, 'source']} label="来源说明">
+                        <Input style={{ width: 220 }} placeholder="来源系统、文件或人工录入" />
+                      </Form.Item>
+                    </Space>
+                  </Card>
+                ))}
+                <Button icon={<PlusOutlined />} onClick={() => add({ title: '', content: '', tags: '', category: '', source: '' })}>
+                  新增一条
+                </Button>
+              </Space>
+            )}
+          </Form.List>
+        </Form>
+      </Drawer>
+
+      <Drawer
+        title="文本文档"
+        open={dataDrawerType === 'text'}
+        width={760}
+        onClose={() => setDataDrawerType(null)}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <label htmlFor="knowledge-text-upload-file" style={uploadDropStyle}>
+            <UploadOutlined style={{ color: '#1677ff', fontSize: 28 }} />
+            <Typography.Text strong>选择文本文档</Typography.Text>
+            <Typography.Text type="secondary">支持 TXT、MD、DOC、DOCX、PDF、HTML</Typography.Text>
+            <input
+              id="knowledge-text-upload-file"
+              aria-label="选择文本文档"
+              accept={textDocumentTypes}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                setTextUploadFile(nextFile);
+                setTextUploadPreview(null);
+                setChunkPreviews([]);
+              }}
+            />
+          </label>
+          {textUploadFile ? <Tag color="blue">{textUploadFile.name} / {(textUploadFile.size / 1024 / 1024).toFixed(2)} MB</Tag> : null}
+
+          <Card size="small" title="分段策略">
+            <Form form={textDocumentForm} layout="vertical" initialValues={{ splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' }}>
+              <Form.Item name="splitterType">
+                <Radio.Group>
+                  <Space direction="vertical">
+                    <Radio value="FIXED_LENGTH">固定长度分段</Radio>
+                    <Radio value="PARAGRAPH">段落分段</Radio>
+                    <Radio value="SEMANTIC">语义分段</Radio>
+                    <Radio value="SYMBOL">符号分段</Radio>
+                  </Space>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item name="chunkSize" label="分段长度" rules={[{ required: true, message: '请输入分段长度' }]}>
+                <InputNumber min={1} controls style={{ width: 180 }} />
+              </Form.Item>
+              {textSplitterType === 'SYMBOL' ? (
+                <Form.Item name="separator" label="分段符">
+                  <Input placeholder="请输入分段符号" />
+                </Form.Item>
+              ) : null}
+            </Form>
+          </Card>
+
+          <Space>
+            <Button icon={<FileSearchOutlined />} disabled={!textUploadFile} loading={textUploadPreviewMutation.isPending} onClick={() => textUploadPreviewMutation.mutate()}>
+              预览分段
+            </Button>
+            <Button type="primary" icon={<FileAddOutlined />} disabled={!textUploadFile || !textUploadPreview} loading={textUploadMutation.isPending} onClick={() => textUploadMutation.mutate()}>
+              确认上传
+            </Button>
+          </Space>
+          {textUploadPreview ? <UploadPreviewCard preview={textUploadPreview} /> : null}
+        </Space>
+      </Drawer>
+
+      <Drawer
+        title="表格文档"
+        open={dataDrawerType === 'table'}
+        width={760}
+        onClose={() => setDataDrawerType(null)}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <label htmlFor="knowledge-table-upload-file" style={uploadDropStyle}>
+            <UploadOutlined style={{ color: '#1677ff', fontSize: 28 }} />
+            <Typography.Text strong>选择表格文档</Typography.Text>
+            <Typography.Text type="secondary">支持 XLS、XLSX</Typography.Text>
+            <input
+              id="knowledge-table-upload-file"
+              aria-label="选择表格文档"
+              accept={tableDocumentTypes}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                setTableUploadFile(nextFile);
+                setTableUploadPreview(null);
+                setChunkPreviews([]);
+              }}
+            />
+          </label>
+          {tableUploadFile ? <Tag color="cyan">{tableUploadFile.name} / {(tableUploadFile.size / 1024 / 1024).toFixed(2)} MB</Tag> : null}
+
+          <Card size="small" title="数据处理配置">
+            <Form form={tableDocumentForm} layout="vertical" initialValues={{ splitterType: 'STRUCTURED', chunkSize: 200 }}>
+              <Form.Item name="splitterType" label="分段方式">
+                <Radio.Group>
+                  <Radio value="STRUCTURED">结构化分段</Radio>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item name="chunkSize" label="分段长度" rules={[{ required: true, message: '请输入分段长度' }]}>
+                <InputNumber min={1} controls style={{ width: 180 }} />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          <Space>
+            <Button icon={<FileSearchOutlined />} disabled={!tableUploadFile} loading={tableUploadPreviewMutation.isPending} onClick={() => tableUploadPreviewMutation.mutate()}>
+              预览分段
+            </Button>
+            <Button type="primary" icon={<FileAddOutlined />} disabled={!tableUploadFile || !tableUploadPreview} loading={tableUploadMutation.isPending} onClick={() => tableUploadMutation.mutate()}>
+              确认上传
+            </Button>
+          </Space>
+          {tableUploadPreview ? <UploadPreviewCard preview={tableUploadPreview} /> : null}
+        </Space>
+      </Drawer>
+
+      <Drawer
         title={editingChunk ? `编辑切片 #${editingChunk.index + 1}` : '编辑切片'}
         open={Boolean(editingChunk)}
         width={640}
@@ -995,6 +1380,39 @@ export function KnowledgeBasesPage() {
       </Drawer>
     </section>
   );
+}
+
+function UploadPreviewCard({ preview }: { preview: UploadedDocumentPreview }) {
+  return (
+    <Card size="small" title={<Space><FileTextOutlined />分段预览</Space>}>
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Tag color="blue">{preview.fileName}</Tag>
+        <Tag>{preview.characterCount} 字符</Tag>
+        <Tag>{preview.chunks.length} 个分段</Tag>
+      </Space>
+      <List
+        dataSource={preview.chunks.slice(0, 5)}
+        renderItem={(item) => (
+          <List.Item>
+            <List.Item.Meta
+              title={<Space><Tag color="blue">#{item.index + 1}</Tag><Typography.Text type="secondary">{item.tokenEstimate} tokens</Typography.Text></Space>}
+              description={<Typography.Paragraph style={{ marginBottom: 0 }}>{item.content}</Typography.Paragraph>}
+            />
+          </List.Item>
+        )}
+      />
+    </Card>
+  );
+}
+
+function datasetTypeLabel(datasetType?: string) {
+  if (datasetType === 'MANUAL') {
+    return '手动数据集';
+  }
+  if (datasetType === 'TABLE_DOCUMENT') {
+    return '表格文档';
+  }
+  return '文本文档';
 }
 
 const pageStyle: React.CSSProperties = {
@@ -1055,3 +1473,4 @@ const uploadDropStyle: React.CSSProperties = {
   minHeight: 150,
   textAlign: 'center'
 };
+

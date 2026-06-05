@@ -146,6 +146,17 @@ CREATE TABLE agi_knowledge_document (
     name VARCHAR(300) NOT NULL,
     chunk_count INTEGER NOT NULL,
     created_at TIMESTAMP NOT NULL,
+    dataset_type VARCHAR(32) NOT NULL DEFAULT 'TEXT_DOCUMENT',
+    processing_status VARCHAR(32) NOT NULL DEFAULT 'READY',
+    tags CLOB,
+    category VARCHAR(255),
+    source CLOB,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    parser_type VARCHAR(64),
+    splitter_type VARCHAR(64),
+    splitter_config CLOB,
+    raw_content CLOB,
+    error_message CLOB,
     CONSTRAINT fk_agi_knowledge_document_base FOREIGN KEY (knowledge_base_id) REFERENCES agi_knowledge_base(id) ON DELETE CASCADE
 );
 

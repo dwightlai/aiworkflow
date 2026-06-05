@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.aiworkflow</groupId>
+    <groupId>com.mw.ai.agi</groupId>
     <artifactId>aiworkflow-server</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <name>aiworkflow-server</name>

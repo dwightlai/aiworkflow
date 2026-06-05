@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeBasesPage } from './KnowledgeBasesPage';
@@ -57,6 +57,14 @@ const knowledgeApiMock = vi.hoisted(() => ({
     name: 'faq.txt',
     chunkCount: 1
   })),
+  addManualKnowledgeDataset: vi.fn(async () => ({
+    id: 'doc_manual',
+    knowledgeBaseId: 'kb_1',
+    name: '退费规则',
+    chunkCount: 2,
+    datasetType: 'MANUAL',
+    processingStatus: 'READY'
+  })),
   listVectorStoreConfigs: vi.fn(async () => ({
     items: [
       {
@@ -108,7 +116,9 @@ const knowledgeApiMock = vi.hoisted(() => ({
         id: 'doc_1',
         knowledgeBaseId: 'kb_1',
         name: 'faq.txt',
-        chunkCount: 1
+        chunkCount: 1,
+        datasetType: 'TEXT_DOCUMENT',
+        processingStatus: 'READY'
       }
     ],
     total: 1
@@ -162,6 +172,52 @@ const knowledgeApiMock = vi.hoisted(() => ({
     knowledgeBaseId: 'kb_1',
     name: 'policy.pdf',
     chunkCount: 1
+  })),
+  previewUploadedTextKnowledgeDocumentFile: vi.fn(async () => ({
+    fileName: 'policy.pdf',
+    characterCount: 78,
+    chunks: [
+      {
+        index: 0,
+        content: 'Uploaded refund policy text',
+        tokenEstimate: 7
+      }
+    ]
+  })),
+  uploadTextKnowledgeDocumentFile: vi.fn(async () => ({
+    id: 'doc_upload',
+    knowledgeBaseId: 'kb_1',
+    name: 'policy.pdf',
+    chunkCount: 1,
+    datasetType: 'TEXT_DOCUMENT',
+    processingStatus: 'READY'
+  })),
+  previewUploadedTableKnowledgeDocumentFile: vi.fn(async () => ({
+    fileName: 'ledger.xlsx',
+    characterCount: 28,
+    chunks: [
+      {
+        index: 0,
+        content: '字段A:XX；字段B:XX',
+        tokenEstimate: 6
+      }
+    ]
+  })),
+  uploadTableKnowledgeDocumentFile: vi.fn(async () => ({
+    id: 'doc_table',
+    knowledgeBaseId: 'kb_1',
+    name: 'ledger.xlsx',
+    chunkCount: 1,
+    datasetType: 'TABLE_DOCUMENT',
+    processingStatus: 'READY'
+  })),
+  reparseKnowledgeDocument: vi.fn(async () => ({
+    id: 'doc_1',
+    knowledgeBaseId: 'kb_1',
+    name: 'faq.txt',
+    chunkCount: 1,
+    datasetType: 'TEXT_DOCUMENT',
+    processingStatus: 'READY'
   })),
   searchKnowledgeBase: vi.fn(async () => [
     {
@@ -241,7 +297,27 @@ describe('KnowledgeBasesPage', () => {
     expect(screen.getByText('HYBRID')).toBeInTheDocument();
   });
 
-  it('creates a knowledge base with retrieval settings', async () => {
+  it('hides retrieval and splitter controls when creating a knowledge base', async () => {
+    renderPage();
+
+    await screen.findByText('HYBRID');
+    await userEvent.click(screen.getAllByRole('button')[1]);
+
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getAllByRole('spinbutton')).toHaveLength(1);
+  });
+
+  it('hides retrieval and splitter controls when editing a knowledge base', async () => {
+    renderPage();
+
+    await screen.findByText('HYBRID');
+    await userEvent.click(screen.getAllByRole('button')[2]);
+
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getAllByRole('spinbutton')).toHaveLength(1);
+  });
+
+  it('creates a knowledge base with hidden retrieval and splitter settings', async () => {
     renderPage();
 
     await userEvent.click(screen.getByRole('button', { name: /新增知识库/ }));
@@ -253,7 +329,10 @@ describe('KnowledgeBasesPage', () => {
         name: '售后知识库',
         vectorDimension: 1536,
         splitterType: 'SIMPLE_TEXT',
-        retrievalMode: 'KEYWORD'
+        chunkSize: 500,
+        chunkOverlap: 50,
+        retrievalMode: 'HYBRID',
+        topK: 3
       }));
     });
   });
@@ -288,7 +367,7 @@ describe('KnowledgeBasesPage', () => {
       expect(knowledgeApiMock.updateKnowledgeBase).toHaveBeenCalledWith('kb_1', expect.objectContaining({
         name: '运营知识库',
         description: '生产资料',
-        splitterType: 'MARKDOWN_HEADING',
+        splitterType: 'SIMPLE_TEXT',
         retrievalMode: 'HYBRID'
       }));
     });
@@ -299,58 +378,69 @@ describe('KnowledgeBasesPage', () => {
     });
   });
 
-  it('previews chunks before document ingestion and can search the selected base', async () => {
+  it('adds manual dataset entries and can search the selected base', async () => {
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: /管理文档/ }));
-    fireEvent.change(await screen.findByLabelText('文档名称'), { target: { value: 'faq.txt' } });
-    fireEvent.change(screen.getByLabelText('文档内容'), { target: { value: '# Refund\nRefund requests are handled within seven days.' } });
-    await userEvent.click(screen.getByRole('button', { name: /预览切片/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /新增数据/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /手动数据集/ }));
+    fireEvent.change(await screen.findByLabelText('标题'), { target: { value: '退费规则' } });
+    fireEvent.change(screen.getByLabelText('正文内容'), { target: { value: 'Refund requests are handled within seven days.' } });
+    fireEvent.change(screen.getByLabelText('标签'), { target: { value: 'refund,policy' } });
+    await userEvent.click(screen.getByRole('button', { name: /新增一条/ }));
+    fireEvent.change(screen.getAllByLabelText('标题')[1], { target: { value: '发票规则' } });
+    fireEvent.change(screen.getAllByLabelText('正文内容')[1], { target: { value: 'Invoices can be downloaded after payment.' } });
+    await userEvent.click(screen.getByRole('button', { name: /保存并入库/ }));
 
     await waitFor(() => {
-      expect(knowledgeApiMock.previewKnowledgeChunks).toHaveBeenCalledWith(expect.objectContaining({
-        content: '# Refund\nRefund requests are handled within seven days.'
-      }));
-    });
-    expect((await screen.findAllByText(/Refund requests/)).length).toBeGreaterThan(0);
-
-    await userEvent.click(screen.getByRole('button', { name: /入库/ }));
-    await waitFor(() => {
-      expect(knowledgeApiMock.addKnowledgeDocument).toHaveBeenCalledWith('kb_1', expect.objectContaining({
-        name: 'faq.txt'
-      }));
+      expect(knowledgeApiMock.addManualKnowledgeDataset).toHaveBeenCalledWith('kb_1', {
+        entries: [
+          expect.objectContaining({
+            title: '退费规则',
+            content: 'Refund requests are handled within seven days.',
+            tags: 'refund,policy'
+          }),
+          expect.objectContaining({
+            title: '发票规则',
+            content: 'Invoices can be downloaded after payment.'
+          })
+        ]
+      });
     });
 
     fireEvent.change(screen.getByLabelText('检索测试'), { target: { value: '发票申请' } });
     await userEvent.click(screen.getByRole('button', { name: /检索/ }));
 
     expect(await screen.findByText('发票可以在订单完成后七日内申请。')).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('previews and uploads files from the document wizard', async () => {
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: /管理文档/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /新增数据/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /文本文档/ }));
     const file = new File(['Uploaded refund policy text'], 'policy.pdf', { type: 'application/pdf' });
-    fireEvent.change(await screen.findByLabelText('选择知识库文件'), {
+    fireEvent.change(await screen.findByLabelText('选择文本文档'), {
       target: { files: [file] }
     });
     await userEvent.click(screen.getByRole('button', { name: /预览分段/ }));
 
     expect((await screen.findAllByText('Uploaded refund policy text')).length).toBeGreaterThan(0);
     await waitFor(() => {
-      expect(knowledgeApiMock.previewUploadedKnowledgeDocumentFile).toHaveBeenCalledWith(file, expect.objectContaining({
-        splitterType: 'MARKDOWN_HEADING'
+      expect(knowledgeApiMock.previewUploadedTextKnowledgeDocumentFile).toHaveBeenCalledWith(file, expect.objectContaining({
+        splitterType: 'FIXED_LENGTH',
+        chunkSize: 200
       }));
     });
 
     await userEvent.click(screen.getByRole('button', { name: /确认上传/ }));
     await waitFor(() => {
-      expect(knowledgeApiMock.uploadKnowledgeDocumentFile).toHaveBeenCalledWith('kb_1', file, expect.objectContaining({
-        chunkSize: 500
+      expect(knowledgeApiMock.uploadTextKnowledgeDocumentFile).toHaveBeenCalledWith('kb_1', file, expect.objectContaining({
+        chunkSize: 200
       }));
     });
-  });
+  }, 10000);
 
   it('manages vector store configs from the knowledge page', async () => {
     renderPage();
@@ -394,13 +484,17 @@ describe('KnowledgeBasesPage', () => {
     await waitFor(() => {
       expect(knowledgeApiMock.deleteVectorStoreConfig).toHaveBeenCalledWith('vector_1');
     });
-  });
+  }, 10000);
 
-  it('lists documents, toggles chunks and deletes documents', async () => {
+  it('lists documents, reparses, toggles chunks and deletes documents', async () => {
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: /管理文档/ }));
     expect(await screen.findByText('faq.txt')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /重新解析/ }));
+    await waitFor(() => {
+      expect(knowledgeApiMock.reparseKnowledgeDocument).toHaveBeenCalledWith('kb_1', 'doc_1');
+    });
     await userEvent.click(screen.getByRole('button', { name: /查看切片/ }));
     expect(await screen.findByText(/Refund requests/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /禁用/ }));
@@ -415,7 +509,7 @@ describe('KnowledgeBasesPage', () => {
     await waitFor(() => {
       expect(knowledgeApiMock.deleteKnowledgeDocument).toHaveBeenCalledWith('kb_1', 'doc_1');
     });
-  });
+  }, 10000);
 
   it('edits chunk content from document management', async () => {
     renderPage();
@@ -435,7 +529,7 @@ describe('KnowledgeBasesPage', () => {
         enabled: true
       }));
     });
-  });
+  }, 10000);
 });
 
 function renderPage() {

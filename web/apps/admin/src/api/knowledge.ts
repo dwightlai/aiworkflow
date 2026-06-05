@@ -33,6 +33,16 @@ export interface KnowledgeDocument {
   knowledgeBaseId: string;
   name: string;
   chunkCount: number;
+  datasetType?: string;
+  processingStatus?: string;
+  tags?: string | null;
+  category?: string | null;
+  source?: string | null;
+  rowCount?: number | null;
+  parserType?: string | null;
+  splitterType?: string | null;
+  splitterConfig?: string | null;
+  errorMessage?: string | null;
   createdAt?: string;
 }
 
@@ -120,6 +130,24 @@ export interface UploadKnowledgeDocumentOptions {
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
+}
+
+export interface KnowledgeSplitOptions {
+  splitterType?: string;
+  chunkSize?: number;
+  separator?: string | null;
+}
+
+export interface ManualDatasetEntryRequest {
+  title: string;
+  content: string;
+  tags?: string | null;
+  category?: string | null;
+  source?: string | null;
+}
+
+export interface AddManualDatasetRequest {
+  entries: ManualDatasetEntryRequest[];
 }
 
 export interface SearchKnowledgeBaseRequest {
@@ -222,6 +250,55 @@ export async function uploadKnowledgeDocumentFile(
   }, false);
 }
 
+export async function addManualKnowledgeDataset(
+  knowledgeBaseId: string,
+  request: AddManualDatasetRequest
+): Promise<KnowledgeDocument> {
+  return requestJson<KnowledgeDocument>(`/api/knowledge-bases/${knowledgeBaseId}/documents/manual`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function uploadTextKnowledgeDocumentFile(
+  knowledgeBaseId: string,
+  file: File,
+  options: KnowledgeSplitOptions = {}
+): Promise<KnowledgeDocument> {
+  return uploadDatasetFile(`/api/knowledge-bases/${knowledgeBaseId}/documents/text/upload`, file, options);
+}
+
+export async function uploadTableKnowledgeDocumentFile(
+  knowledgeBaseId: string,
+  file: File,
+  options: KnowledgeSplitOptions = {}
+): Promise<KnowledgeDocument> {
+  return uploadDatasetFile(`/api/knowledge-bases/${knowledgeBaseId}/documents/table/upload`, file, options);
+}
+
+export async function previewUploadedTextKnowledgeDocumentFile(
+  file: File,
+  options: KnowledgeSplitOptions = {}
+): Promise<UploadedDocumentPreview> {
+  return uploadDatasetFile('/api/knowledge-bases/documents/text/upload/preview', file, options);
+}
+
+export async function previewUploadedTableKnowledgeDocumentFile(
+  file: File,
+  options: KnowledgeSplitOptions = {}
+): Promise<UploadedDocumentPreview> {
+  return uploadDatasetFile('/api/knowledge-bases/documents/table/upload/preview', file, options);
+}
+
+export async function reparseKnowledgeDocument(
+  knowledgeBaseId: string,
+  documentId: string
+): Promise<KnowledgeDocument> {
+  return requestJson<KnowledgeDocument>(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/reparse`, {
+    method: 'POST'
+  });
+}
+
 export async function previewUploadedKnowledgeDocumentFile(
   file: File,
   options: UploadKnowledgeDocumentOptions = {}
@@ -288,6 +365,17 @@ export async function searchKnowledgeBase(
   });
 }
 
+export async function searchKnowledgeDocument(
+  knowledgeBaseId: string,
+  documentId: string,
+  request: SearchKnowledgeBaseRequest
+): Promise<KnowledgeSearchResult[]> {
+  return requestJson<KnowledgeSearchResult[]>(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/search`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
 async function requestJson<T>(url: string, init?: RequestInit, jsonHeaders = true): Promise<T> {
   const response = init ? await fetch(url, jsonHeaders ? withJsonHeaders(init) : init) : await fetch(url);
   const envelope = await response.json() as ApiEnvelope<T>;
@@ -295,6 +383,28 @@ async function requestJson<T>(url: string, init?: RequestInit, jsonHeaders = tru
     throw new Error(envelope.error?.message ?? `Request failed: ${response.status}`);
   }
   return envelope.data;
+}
+
+function uploadDatasetFile<T>(
+  url: string,
+  file: File,
+  options: KnowledgeSplitOptions = {}
+): Promise<T> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (options.splitterType) {
+    formData.append('splitterType', options.splitterType);
+  }
+  if (options.chunkSize) {
+    formData.append('chunkSize', String(options.chunkSize));
+  }
+  if (options.separator) {
+    formData.append('separator', options.separator);
+  }
+  return requestJson<T>(url, {
+    method: 'POST',
+    body: formData
+  }, false);
 }
 
 function withJsonHeaders(init?: RequestInit): RequestInit | undefined {
