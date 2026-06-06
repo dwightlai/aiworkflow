@@ -8,6 +8,7 @@ public record AuthUserPrincipal(
         String tenantId,
         String displayName,
         String userType,
+        Integer sortOrder,
         List<String> organizationIds,
         String activeOrganizationId,
         List<String> unitIds,

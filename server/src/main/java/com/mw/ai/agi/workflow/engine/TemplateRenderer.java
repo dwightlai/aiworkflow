@@ -5,7 +5,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class TemplateRenderer {
-    private static final Pattern TEMPLATE_TOKEN_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_.-]+)\\s*}}");
+    private static final Pattern TEMPLATE_TOKEN_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_.-]+)\\s*}}|\\$\\{\\s*([A-Za-z0-9_.-]+)\\s*}");
 
     private TemplateRenderer() {
     }
@@ -14,7 +14,8 @@ final class TemplateRenderer {
         Matcher matcher = TEMPLATE_TOKEN_PATTERN.matcher(template == null ? "" : template);
         StringBuilder rendered = new StringBuilder();
         while (matcher.find()) {
-            Object value = resolvePath(context, matcher.group(1));
+            String key = matcher.group(1) == null ? matcher.group(2) : matcher.group(1);
+            Object value = resolvePath(context, key);
             matcher.appendReplacement(rendered, Matcher.quoteReplacement(value == null ? "" : String.valueOf(value)));
         }
         matcher.appendTail(rendered);

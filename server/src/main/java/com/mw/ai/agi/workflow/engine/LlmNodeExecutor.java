@@ -10,12 +10,9 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Component
 public class LlmNodeExecutor implements WorkflowNodeExecutor {
-    private static final Pattern TEMPLATE_TOKEN_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_.-]+)\\s*}}");
     private final ChatModelClient chatModelClient;
     private final ModelProviderService modelProviderService;
 
@@ -38,19 +35,25 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
         }
         String model = optionalStringConfig(node, "model", provider.model());
         String promptKey = optionalStringConfig(node, "promptKey", "question");
-        String outputKey = outputKey(node);
+        String outputKey = optionalStringConfig(node, "outputKey", "content");
 
         Map<String, Object> nodeContext = new LinkedHashMap<>(context.context());
         nodeContext.putAll(resolveInputParams(node, context.context()));
-        String userPrompt = optionalStringConfig(node, "userPrompt", "");
-        Object promptValue = userPrompt.isBlank() ? nodeContext.get(promptKey) : renderTemplate(userPrompt, nodeContext);
+        String userPrompt = optionalStringConfig(node, "userMessage", optionalStringConfig(node, "userPrompt", ""));
+        Object promptValue = userPrompt.isBlank() ? TemplateRenderer.resolvePath(nodeContext, promptKey) : TemplateRenderer.render(userPrompt, nodeContext);
         String prompt = promptValue == null ? "" : String.valueOf(promptValue);
-        String systemPrompt = optionalStringConfig(node, "systemPrompt", "");
-        if (!systemPrompt.isBlank()) {
-            prompt = systemPrompt + "\n\n" + prompt;
+        String systemMessage = optionalStringConfig(node, "systemMessage", optionalStringConfig(node, "systemPrompt", ""));
+        if (!systemMessage.isBlank()) {
+            prompt = TemplateRenderer.render(systemMessage, nodeContext) + "\n\n" + prompt;
         }
         String response = chatModelClient.generate(providerId, model, prompt, modelOptions(node));
-        return NodeExecutionResult.output(Map.of(outputKey, response));
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("content", response);
+        output.put("reasoning_content", "");
+        if (!"content".equals(outputKey) && !"reasoning_content".equals(outputKey)) {
+            output.put(outputKey, response);
+        }
+        return NodeExecutionResult.output(output);
     }
 
     private Map<String, Object> resolveInputParams(WorkflowNode node, Map<String, Object> context) {
@@ -72,32 +75,11 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
     }
 
     private Object resolveParamValue(Object value, Map<String, Object> context) {
-        if (value instanceof String stringValue && context.containsKey(stringValue)) {
-            return context.get(stringValue);
+        if (value instanceof String stringValue) {
+            Object resolved = TemplateRenderer.resolvePath(context, stringValue);
+            return resolved == null ? stringValue : resolved;
         }
         return value == null ? "" : value;
-    }
-
-    private String renderTemplate(String template, Map<String, Object> context) {
-        Matcher matcher = TEMPLATE_TOKEN_PATTERN.matcher(template);
-        StringBuilder rendered = new StringBuilder();
-        while (matcher.find()) {
-            Object value = context.get(matcher.group(1));
-            matcher.appendReplacement(rendered, Matcher.quoteReplacement(value == null ? "" : String.valueOf(value)));
-        }
-        matcher.appendTail(rendered);
-        return rendered.toString();
-    }
-
-    private String outputKey(WorkflowNode node) {
-        Object outputParams = node.config().get("outputParams");
-        if (outputParams instanceof List<?> params && !params.isEmpty() && params.get(0) instanceof Map<?, ?> first) {
-            Object name = first.get("name");
-            if (name instanceof String nameValue && !nameValue.isBlank()) {
-                return nameValue;
-            }
-        }
-        return requiredStringConfig(node, "outputKey");
     }
 
     private Map<String, Object> modelOptions(WorkflowNode node) {
@@ -109,6 +91,7 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
         copyOption(node, options, "responseFormat");
         copyOption(node, options, "outputFormat");
         copyOption(node, options, "stream");
+        copyOption(node, options, "streaming");
         return options;
     }
 

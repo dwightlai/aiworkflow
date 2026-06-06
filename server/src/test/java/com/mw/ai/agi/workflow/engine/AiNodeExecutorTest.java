@@ -68,7 +68,9 @@ class AiNodeExecutorTest {
         assertThat(chatModelClient.providerId).isEqualTo(providerId);
         assertThat(chatModelClient.model).isEqualTo("deepseek-chat");
         assertThat(chatModelClient.prompt).isEqualTo("Hello Ada");
-        assertThat(result.output()).containsExactlyEntriesOf(Map.of("answer", "model response"));
+        assertThat(result.output()).containsEntry("answer", "model response");
+        assertThat(result.output()).containsEntry("content", "model response");
+        assertThat(result.output()).containsEntry("reasoning_content", "");
     }
 
     @Test
@@ -106,7 +108,48 @@ class AiNodeExecutorTest {
 
         assertThat(chatModelClient.prompt).isEqualTo("你是客服助手\n\n请回答：如何退款");
         assertThat(chatModelClient.options).containsEntry("topK", 50);
-        assertThat(result.output()).containsExactlyEntriesOf(Map.of("output", "model response"));
+        assertThat(result.output()).containsEntry("content", "model response");
+        assertThat(result.output()).containsEntry("reasoning_content", "");
+    }
+
+    @Test
+    void llmNodeSupportsMessageConfigResponseFormatAndStreamingOptions() {
+        RecordingChatModelClient chatModelClient = new RecordingChatModelClient();
+        ModelProviderService modelProviderService = new ModelProviderService();
+        String providerId = modelProviderService.create(
+                "DeepSeek",
+                "DeepSeek",
+                "CHAT",
+                null,
+                false,
+                BigDecimal.ONE,
+                "https://api.deepseek.com/v1",
+                "deepseek-chat",
+                "dev-key",
+                true
+        ).id();
+        LlmNodeExecutor executor = new LlmNodeExecutor(chatModelClient, modelProviderService);
+
+        NodeExecutionResult result = executor.execute(node(
+                "llm",
+                WorkflowNodeType.LLM,
+                Map.of(
+                        "providerId", providerId,
+                        "systemMessage", "You are a support assistant",
+                        "userMessage", "Question: ${input}",
+                        "inputParams", List.of(Map.of("name", "input", "value", "start.input", "type", "String")),
+                        "responseFormat", "JSON",
+                        "streaming", true,
+                        "outputKey", "legacyAnswer"
+                )
+        ), new NodeExecutionContext(Map.of(), Map.of("start", Map.of("input", "How to refund?"))));
+
+        assertThat(chatModelClient.prompt).isEqualTo("You are a support assistant\n\nQuestion: How to refund?");
+        assertThat(chatModelClient.options).containsEntry("responseFormat", "JSON");
+        assertThat(chatModelClient.options).containsEntry("streaming", true);
+        assertThat(result.output()).containsEntry("content", "model response");
+        assertThat(result.output()).containsEntry("reasoning_content", "");
+        assertThat(result.output()).containsEntry("legacyAnswer", "model response");
     }
 
     @Test

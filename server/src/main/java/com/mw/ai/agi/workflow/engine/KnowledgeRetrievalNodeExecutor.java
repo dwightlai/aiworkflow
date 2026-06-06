@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.engine;
 
+import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.service.KnowledgeBaseService;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
@@ -8,12 +9,10 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Component
 public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
-    private static final Pattern TEMPLATE_TOKEN_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_.-]+)\\s*}}");
     private final KnowledgeBaseService knowledgeBaseService;
 
     public KnowledgeRetrievalNodeExecutor(KnowledgeBaseService knowledgeBaseService) {
@@ -29,19 +28,21 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
         String knowledgeBaseId = requiredStringConfig(node, "knowledgeBaseId");
         String queryKey = optionalStringConfig(node, "queryKey", "question");
-        String outputKey = outputKey(node);
+        String outputKey = optionalStringConfig(node, "outputKey", "documents");
         int topK = intConfig(node, "fetchCount", intConfig(node, "topK", 3));
+        double similarityThreshold = doubleConfig(node, "similarityThreshold", 0.0d);
         Map<String, Object> nodeContext = new LinkedHashMap<>(context.context());
         nodeContext.putAll(resolveInputParams(node, context.context()));
-        String keywordTemplate = optionalStringConfig(node, "keywordTemplate", "");
-        Object query = keywordTemplate.isBlank() ? nodeContext.get(queryKey) : renderTemplate(keywordTemplate, nodeContext);
-        if (query == null || String.valueOf(query).isBlank()) {
-            return NodeExecutionResult.output(Map.of(outputKey, java.util.List.of()));
+        String queryTemplate = optionalStringConfig(node, "queryText", optionalStringConfig(node, "keywordTemplate", ""));
+        Object query = queryTemplate.isBlank() ? nodeContext.get(queryKey) : TemplateRenderer.render(queryTemplate, nodeContext);
+        String queryText = query == null ? "" : String.valueOf(query);
+        if (queryText.isBlank()) {
+            return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, List.of()));
         }
-        return NodeExecutionResult.output(Map.of(
-                outputKey,
-                knowledgeBaseService.search(knowledgeBaseId, String.valueOf(query), topK)
-        ));
+        List<KnowledgeSearchResult> results = knowledgeBaseService.search(knowledgeBaseId, queryText, topK).stream()
+                .filter(result -> similarityThreshold <= 0 || result.score() >= Math.round(similarityThreshold * 1000))
+                .toList();
+        return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, results));
     }
 
     private Map<String, Object> resolveInputParams(WorkflowNode node, Map<String, Object> context) {
@@ -63,32 +64,25 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
     }
 
     private Object resolveParamValue(Object value, Map<String, Object> context) {
-        if (value instanceof String stringValue && context.containsKey(stringValue)) {
-            return context.get(stringValue);
+        if (value instanceof String stringValue) {
+            Object resolved = TemplateRenderer.resolvePath(context, stringValue);
+            return resolved == null ? stringValue : resolved;
         }
         return value == null ? "" : value;
     }
 
-    private String renderTemplate(String template, Map<String, Object> context) {
-        Matcher matcher = TEMPLATE_TOKEN_PATTERN.matcher(template);
-        StringBuilder rendered = new StringBuilder();
-        while (matcher.find()) {
-            Object value = context.get(matcher.group(1));
-            matcher.appendReplacement(rendered, Matcher.quoteReplacement(value == null ? "" : String.valueOf(value)));
+    private Map<String, Object> knowledgeOutput(String legacyOutputKey, String query, List<KnowledgeSearchResult> results) {
+        String content = results.stream()
+                .map(KnowledgeSearchResult::content)
+                .collect(Collectors.joining("\n\n"));
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("content", content);
+        output.put("sources", results);
+        output.put("query", query);
+        if (!"sources".equals(legacyOutputKey) && !"content".equals(legacyOutputKey) && !"query".equals(legacyOutputKey)) {
+            output.put(legacyOutputKey, results);
         }
-        matcher.appendTail(rendered);
-        return rendered.toString();
-    }
-
-    private String outputKey(WorkflowNode node) {
-        Object outputParams = node.config().get("outputParams");
-        if (outputParams instanceof List<?> params && !params.isEmpty() && params.get(0) instanceof Map<?, ?> first) {
-            Object name = first.get("name");
-            if (name instanceof String nameValue && !nameValue.isBlank()) {
-                return nameValue;
-            }
-        }
-        return optionalStringConfig(node, "outputKey", "documents");
+        return output;
     }
 
     private String requiredStringConfig(WorkflowNode node, String key) {
@@ -114,6 +108,17 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
         }
         if (value instanceof String stringValue && !stringValue.isBlank()) {
             return Integer.parseInt(stringValue);
+        }
+        return defaultValue;
+    }
+
+    private double doubleConfig(WorkflowNode node, String key, double defaultValue) {
+        Object value = node.config().get(key);
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String stringValue && !stringValue.isBlank()) {
+            return Double.parseDouble(stringValue);
         }
         return defaultValue;
     }

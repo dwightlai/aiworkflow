@@ -14,11 +14,12 @@ import {
   createEmptyWorkflowDefinition,
   validateWorkflowDefinition,
   type WorkflowDefinition,
+  type WorkflowEdge,
   type WorkflowNode,
   type WorkflowValidationIssue
 } from '@aiworkflow/workflow-schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Drawer, Space, Tag, Typography, message } from 'antd';
+import { Alert, Button, Drawer, Input, Space, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listKnowledgeBases } from '../../api/knowledge';
@@ -30,6 +31,7 @@ import {
   publishWorkflow,
   runWorkflow,
   updateWorkflowDraft,
+  updateWorkflowMetadata,
   type Workflow,
   type WorkflowExecution
 } from '../../api/workflows';
@@ -48,11 +50,16 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   const canvasDropRef = useRef<HTMLDivElement | null>(null);
   const [definition, setDefinition] = useState<WorkflowDefinition>(() => createEmptyWorkflowDefinition());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [debugInput, setDebugInput] = useState('{\n  "name": "Ada"\n}');
   const [execution, setExecution] = useState<WorkflowExecution | null>(null);
   const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[]>([]);
   const [configOpen, setConfigOpen] = useState(false);
+  const [edgeConfigOpen, setEdgeConfigOpen] = useState(false);
+  const [workflowConfigOpen, setWorkflowConfigOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [workflowTitle, setWorkflowTitle] = useState('新建工作流');
+  const [workflowDescription, setWorkflowDescription] = useState('');
 
   const workflowQuery = useQuery({
     queryKey: ['workflow', workflowId],
@@ -78,6 +85,10 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       setDefinition(nextDefinition);
       setSelectedNodeId(nextDefinition.nodes[0]?.id ?? null);
     }
+    if (workflowQuery.data) {
+      setWorkflowTitle(workflowQuery.data.name);
+      setWorkflowDescription(workflowQuery.data.description ?? '');
+    }
   }, [workflowQuery.data]);
 
   const saveMutation = useMutation({
@@ -85,8 +96,8 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       const nextDefinition = designerRef.current?.getValue() ?? definition;
       if (isNewWorkflow) {
         return createWorkflow({
-          name: '新建工作流',
-          description: null,
+          name: workflowTitle.trim() || '新建工作流',
+          description: workflowDescription.trim() || null,
           definition: nextDefinition
         });
       }
@@ -101,6 +112,32 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       }
       message.success('草稿已保存');
       await queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] });
+    }
+  });
+
+  const metadataMutation = useMutation({
+    mutationFn: () => {
+      const payload = {
+        name: workflowTitle.trim() || '新建工作流',
+        description: workflowDescription.trim() || null
+      };
+      if (isNewWorkflow) {
+        return Promise.resolve({
+          id: 'new',
+          name: payload.name,
+          description: payload.description,
+          status: 'DRAFT'
+        } as Workflow);
+      }
+      return updateWorkflowMetadata(workflowId, payload);
+    },
+    onSuccess: async () => {
+      message.success(isNewWorkflow ? '工作流属性已暂存' : '工作流属性已保存');
+      setWorkflowConfigOpen(false);
+      if (!isNewWorkflow) {
+        await queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] });
+        await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+      }
     }
   });
 
@@ -124,7 +161,11 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
     () => definition.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [definition.nodes, selectedNodeId]
   );
-  const workflowName = workflowQuery.data?.name ?? (isNewWorkflow ? '新建工作流' : '工作流设计器');
+  const selectedEdge = useMemo(
+    () => definition.edges.find((edge) => edge.id === selectedEdgeId) ?? null,
+    [definition.edges, selectedEdgeId]
+  );
+  const workflowName = workflowTitle || workflowQuery.data?.name || (isNewWorkflow ? '新建工作流' : '工作流设计器');
   const configCompleteness = useMemo(() => calculateConfigCompleteness(definition), [definition]);
   const nodeRunStates = useMemo(() => {
     return Object.fromEntries((execution?.nodeExecutions ?? []).map((node) => [node.nodeId, node.status]));
@@ -137,7 +178,10 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       nodes: [...current.nodes.filter((item) => item.id !== node.id), node]
     }));
     setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
     setConfigOpen(true);
+    setEdgeConfigOpen(false);
+    setWorkflowConfigOpen(false);
     setValidationIssues([]);
   }
 
@@ -161,6 +205,15 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
     setDefinition((current) => ({
       ...current,
       nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, ...patch, id: node.id } : node)
+    }));
+    setValidationIssues([]);
+  }
+
+  function handleUpdateEdge(edgeId: string, patch: Partial<WorkflowEdge>) {
+    designerRef.current?.updateEdge(edgeId, patch);
+    setDefinition((current) => ({
+      ...current,
+      edges: current.edges.map((edge) => edge.id === edgeId ? { ...edge, ...patch, id: edge.id } : edge)
     }));
     setValidationIssues([]);
   }
@@ -208,7 +261,24 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           <Tag>{definition.edges.length} 连线</Tag>
           <Tag icon={<CheckCircleOutlined />}>{configCompleteness}% 配置</Tag>
           <Tag icon={<ClockCircleOutlined />}>{execution?.status ?? '待调试'}</Tag>
-          <Button icon={<SettingOutlined />} disabled={!selectedNode} onClick={() => setConfigOpen(true)}>
+          <Button
+            icon={<SettingOutlined />}
+            onClick={() => {
+              if (selectedNode) {
+                setConfigOpen(true);
+                setEdgeConfigOpen(false);
+                setWorkflowConfigOpen(false);
+                return;
+              }
+              if (selectedEdge) {
+                setEdgeConfigOpen(true);
+                setConfigOpen(false);
+                setWorkflowConfigOpen(false);
+                return;
+              }
+              setWorkflowConfigOpen(true);
+            }}
+          >
             属性
           </Button>
           <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>
@@ -289,6 +359,15 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
               }
             }}
             onDrop={handleCanvasDrop}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+                setConfigOpen(false);
+                setEdgeConfigOpen(false);
+                setWorkflowConfigOpen(true);
+              }
+            }}
           >
             <WorkflowDesignerReact
               ref={designerRef}
@@ -298,7 +377,24 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
               onChange={setDefinition}
               onNodeSelect={(nodeId) => {
                 setSelectedNodeId(nodeId);
+                setSelectedEdgeId(null);
+                setWorkflowConfigOpen(false);
+                setEdgeConfigOpen(false);
                 setConfigOpen(true);
+              }}
+              onEdgeSelect={(edgeId) => {
+                setSelectedEdgeId(edgeId);
+                setSelectedNodeId(null);
+                setConfigOpen(false);
+                setWorkflowConfigOpen(false);
+                setEdgeConfigOpen(true);
+              }}
+              onCanvasSelect={() => {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+                setConfigOpen(false);
+                setEdgeConfigOpen(false);
+                setWorkflowConfigOpen(true);
               }}
             />
           </div>
@@ -322,6 +418,83 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           promptTemplates={promptTemplatesQuery.data?.items ?? []}
           knowledgeBases={knowledgeBasesQuery.data?.items ?? []}
         />
+      </Drawer>
+
+      <Drawer
+        title={selectedEdge ? `连线属性：${selectedEdge.id}` : '连线属性'}
+        open={edgeConfigOpen}
+        onClose={() => setEdgeConfigOpen(false)}
+        keyboard={false}
+        mask={false}
+        maskClosable={false}
+        width={380}
+      >
+        {selectedEdge ? (
+          <Space direction="vertical" size={14} style={{ width: '100%' }}>
+            <label style={fieldLabelStyle}>
+              <span>源节点</span>
+              <Input aria-label="源节点" value={resolveNodeName(definition, selectedEdge.sourceNodeId)} disabled />
+            </label>
+            <label style={fieldLabelStyle}>
+              <span>目标节点</span>
+              <Input aria-label="目标节点" value={resolveNodeName(definition, selectedEdge.targetNodeId)} disabled />
+            </label>
+            <label style={fieldLabelStyle}>
+              <span>执行条件</span>
+              <Input.TextArea
+                aria-label="连线条件表达式"
+                value={selectedEdge.condition ?? ''}
+                onChange={(event) => handleUpdateEdge(selectedEdge.id, { condition: event.target.value === '' ? null : event.target.value })}
+                placeholder="例如：intent == refund；为空表示无条件执行"
+                autoSize={{ minRows: 4, maxRows: 8 }}
+              />
+            </label>
+            <Typography.Text type="secondary">
+              条件会在保存草稿时写入流程定义，用于后端 DAG 执行时判断是否沿该连线继续流转。
+            </Typography.Text>
+          </Space>
+        ) : null}
+      </Drawer>
+
+      <Drawer
+        title="工作流属性"
+        open={workflowConfigOpen}
+        onClose={() => setWorkflowConfigOpen(false)}
+        keyboard={false}
+        mask={false}
+        maskClosable={false}
+        width={380}
+      >
+        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+          <label style={fieldLabelStyle}>
+            <span>工作流名称</span>
+            <Input
+              aria-label="工作流名称"
+              value={workflowTitle}
+              maxLength={200}
+              onChange={(event) => setWorkflowTitle(event.target.value)}
+              placeholder="请输入工作流名称"
+            />
+          </label>
+          <label style={fieldLabelStyle}>
+            <span>工作流描述</span>
+            <Input.TextArea
+              aria-label="工作流描述"
+              value={workflowDescription}
+              onChange={(event) => setWorkflowDescription(event.target.value)}
+              placeholder="请输入工作流描述"
+              autoSize={{ minRows: 4, maxRows: 8 }}
+            />
+          </label>
+          <Button
+            type="primary"
+            block
+            loading={metadataMutation.isPending}
+            onClick={() => metadataMutation.mutate()}
+          >
+            保存属性
+          </Button>
+        </Space>
       </Drawer>
 
       <Drawer
@@ -369,6 +542,11 @@ function parseJson(value: string) {
   } catch {
     return {};
   }
+}
+
+function resolveNodeName(definition: WorkflowDefinition, nodeId: string) {
+  const node = definition.nodes.find((item) => item.id === nodeId);
+  return node ? `${node.name} (${node.type})` : nodeId;
 }
 
 function navigateTo(path: string) {
@@ -428,6 +606,14 @@ const validationAlertStyle: React.CSSProperties = {
 const validationListStyle: React.CSSProperties = {
   margin: '4px 0 0',
   paddingLeft: 18
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  color: '#344054',
+  display: 'grid',
+  fontSize: 13,
+  fontWeight: 600,
+  gap: 8
 };
 
 const titleIconStyle: React.CSSProperties = {

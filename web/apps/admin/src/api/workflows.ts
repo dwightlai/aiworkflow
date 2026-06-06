@@ -1,4 +1,5 @@
 import type { WorkflowDefinition } from '@aiworkflow/workflow-schema';
+import { requestJson } from './auth';
 
 export type WorkflowStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type WorkflowVersionStatus = 'DRAFT' | 'PUBLISHED' | 'DISABLED';
@@ -44,6 +45,11 @@ export interface CreateWorkflowRequest {
   name: string;
   description: string | null;
   definition: WorkflowDefinition;
+}
+
+export interface UpdateWorkflowMetadataRequest {
+  name: string;
+  description: string | null;
 }
 
 export interface NodeExecution {
@@ -97,6 +103,16 @@ export async function updateWorkflowDraft(
   });
 }
 
+export async function updateWorkflowMetadata(
+  workflowId: string,
+  request: UpdateWorkflowMetadataRequest
+): Promise<Workflow> {
+  return requestJson<Workflow>(`/api/workflows/${workflowId}/metadata`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  });
+}
+
 export async function publishWorkflow(workflowId: string): Promise<Workflow> {
   return requestJson<Workflow>(`/api/workflows/${workflowId}/publish`, {
     method: 'POST'
@@ -127,24 +143,3 @@ export async function listWorkflowRuns(): Promise<PageResponse<WorkflowExecution
   return requestJson<PageResponse<WorkflowExecution>>('/api/workflow-runs');
 }
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = init ? await fetch(url, withJsonHeaders(init)) : await fetch(url);
-  const envelope = await response.json() as ApiEnvelope<T>;
-  if (!response.ok || !envelope.success) {
-    throw new Error(envelope.error?.message ?? `Request failed: ${response.status}`);
-  }
-  return envelope.data;
-}
-
-function withJsonHeaders(init?: RequestInit): RequestInit | undefined {
-  if (!init) {
-    return undefined;
-  }
-  return {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init.headers
-    }
-  };
-}

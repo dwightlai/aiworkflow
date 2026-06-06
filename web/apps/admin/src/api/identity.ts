@@ -1,3 +1,5 @@
+import { requestJson } from './auth';
+
 export interface ApiEnvelope<T> {
   success: boolean;
   data: T;
@@ -47,6 +49,8 @@ export interface IdentityUser {
   tenantId?: string;
   displayName: string;
   userType: string;
+  sortOrder?: number;
+  status?: string;
   organizationIds: string[];
   activeOrganizationId?: string | null;
   unitIds: string[];
@@ -86,6 +90,7 @@ export interface SaveUserRequest {
   displayName: string;
   mobile?: string | null;
   email?: string | null;
+  sortOrder?: number;
   organizationIds: string[];
   roleCodes: string[];
 }
@@ -118,10 +123,26 @@ export interface SaveRoleRequest {
 
 export interface UpdateRoleRequest {
   organizationId?: string | null;
+  code?: string;
   name: string;
   roleType?: string;
   externalRoleId?: string | null;
   status?: string;
+}
+
+export interface UpdateUserRequest {
+  password?: string;
+  displayName: string;
+  mobile?: string | null;
+  email?: string | null;
+  sortOrder?: number;
+  organizationIds: string[];
+  roleCodes: string[];
+}
+
+export interface UserSortOrderUpdate {
+  userId: string;
+  sortOrder: number;
 }
 
 export interface SaveIntegrationAppRequest {
@@ -167,6 +188,12 @@ export async function updateOrganization(organizationId: string, request: Update
   });
 }
 
+export async function deleteOrganization(organizationId: string): Promise<Organization> {
+  return requestJson<Organization>(`/api/auth/admin/organizations/${organizationId}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function createRole(request: SaveRoleRequest): Promise<Role> {
   return requestJson<Role>('/api/auth/admin/roles', {
     method: 'POST',
@@ -181,6 +208,12 @@ export async function updateRole(roleId: string, request: UpdateRoleRequest): Pr
   });
 }
 
+export async function deleteRole(roleId: string): Promise<Role> {
+  return requestJson<Role>(`/api/auth/admin/roles/${roleId}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function listIntegrationApps(): Promise<PageResponse<IntegrationApp>> {
   return requestJson<PageResponse<IntegrationApp>>('/api/auth/admin/integration-apps');
 }
@@ -192,10 +225,23 @@ export async function createUser(request: SaveUserRequest): Promise<IdentityUser
   });
 }
 
-export async function updateUser(userId: string, request: Omit<SaveUserRequest, 'username' | 'password'>): Promise<IdentityUser> {
+export async function updateUser(userId: string, request: UpdateUserRequest): Promise<IdentityUser> {
   return requestJson<IdentityUser>(`/api/auth/admin/users/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(request)
+  });
+}
+
+export async function updateUserSortOrders(organizationId: string, items: UserSortOrderUpdate[]): Promise<PageResponse<IdentityUser>> {
+  return requestJson<PageResponse<IdentityUser>>('/api/auth/admin/users/sort-orders', {
+    method: 'PUT',
+    body: JSON.stringify({ organizationId, items })
+  });
+}
+
+export async function deleteUser(userId: string): Promise<IdentityUser> {
+  return requestJson<IdentityUser>(`/api/auth/admin/users/${userId}`, {
+    method: 'DELETE'
   });
 }
 
@@ -227,6 +273,12 @@ export async function updateIntegrationAppStatus(appId: string, status: string):
   });
 }
 
+export async function deleteIntegrationApp(appId: string): Promise<IntegrationApp> {
+  return requestJson<IntegrationApp>(`/api/auth/admin/integration-apps/${appId}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function createIntegrationAppSecret(appId: string): Promise<GeneratedApiKey> {
   return requestJson<GeneratedApiKey>(`/api/auth/admin/integration-apps/${appId}/secrets`, {
     method: 'POST',
@@ -242,26 +294,4 @@ export async function createIntegrationAppScope(
     method: 'POST',
     body: JSON.stringify(request)
   });
-}
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = init ? await fetch(url, withJsonHeaders(init)) : await fetch(url);
-  const envelope = await response.json() as ApiEnvelope<T>;
-  if (!response.ok || !envelope.success) {
-    throw new Error(envelope.error?.message ?? `Request failed: ${response.status}`);
-  }
-  return envelope.data;
-}
-
-function withJsonHeaders(init?: RequestInit): RequestInit | undefined {
-  if (!init) {
-    return undefined;
-  }
-  return {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init.headers
-    }
-  };
 }

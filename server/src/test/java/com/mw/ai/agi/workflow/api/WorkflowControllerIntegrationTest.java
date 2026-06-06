@@ -103,6 +103,25 @@ class WorkflowControllerIntegrationTest {
     }
 
     @Test
+    void updatesWorkflowMetadata() throws Exception {
+        String workflowId = createWorkflow();
+
+        mockMvc.perform(put("/api/workflows/{workflowId}/metadata", workflowId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "客服意图识别",
+                                  "description": "识别用户咨询意图"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.name").value("客服意图识别"))
+                .andExpect(jsonPath("$.data.description").value("识别用户咨询意图"))
+                .andExpect(jsonPath("$.data.latestVersion.version").value(1));
+    }
+
+    @Test
     void publishesWorkflowDraft() throws Exception {
         String workflowId = createWorkflow();
 

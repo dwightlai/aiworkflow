@@ -31,6 +31,7 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class AuthAdminService {
@@ -82,24 +83,32 @@ public class AuthAdminService {
 
     public List<OrganizationEntity> listOrganizations() {
         return organizationMapper.selectList(new LambdaQueryWrapper<OrganizationEntity>()
+                .ne(OrganizationEntity::getStatus, "DELETED")
                 .orderByAsc(OrganizationEntity::getPath)
                 .orderByAsc(OrganizationEntity::getSortOrder)
                 .orderByAsc(OrganizationEntity::getCode));
     }
 
     public List<RoleEntity> listRoles() {
-        return roleMapper.selectList(new LambdaQueryWrapper<RoleEntity>().orderByAsc(RoleEntity::getCode));
+        return roleMapper.selectList(new LambdaQueryWrapper<RoleEntity>()
+                .ne(RoleEntity::getStatus, "DELETED")
+                .orderByAsc(RoleEntity::getCode));
     }
 
     public List<AuthUserPrincipal> listUsers() {
-        return userMapper.selectList(new LambdaQueryWrapper<UserEntity>().orderByAsc(UserEntity::getUsername))
+        return userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .ne(UserEntity::getStatus, "DELETED")
+                        .orderByAsc(UserEntity::getSortOrder)
+                        .orderByAsc(UserEntity::getUsername))
                 .stream()
                 .map(this::toPrincipal)
                 .toList();
     }
 
     public List<IntegrationAppEntity> listIntegrationApps() {
-        return integrationAppMapper.selectList(new LambdaQueryWrapper<IntegrationAppEntity>().orderByAsc(IntegrationAppEntity::getCode));
+        return integrationAppMapper.selectList(new LambdaQueryWrapper<IntegrationAppEntity>()
+                .ne(IntegrationAppEntity::getStatus, "DELETED")
+                .orderByAsc(IntegrationAppEntity::getCode));
     }
 
     public OrganizationEntity createOrganization(String parentId, String code, String externalOrgId, String name, String orgType, Integer sortOrder) {
@@ -150,6 +159,32 @@ public class AuthAdminService {
         return organizationMapper.selectById(organizationId);
     }
 
+    public OrganizationEntity deleteOrganization(String organizationId) {
+        OrganizationEntity organization = Optional.ofNullable(organizationMapper.selectById(organizationId))
+                .orElseThrow(() -> new AuthException("ORGANIZATION_NOT_FOUND", HttpStatus.NOT_FOUND, "Organization does not exist."));
+        long childCount = organizationMapper.selectCount(new LambdaQueryWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getParentId, organization.getId())
+                .ne(OrganizationEntity::getStatus, "DELETED"));
+        if (childCount > 0) {
+            throw new AuthException("ORGANIZATION_IN_USE", HttpStatus.BAD_REQUEST, "Organization has child organizations.");
+        }
+        List<UserOrganizationEntity> memberships = userOrganizationMapper.selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
+                .eq(UserOrganizationEntity::getOrganizationId, organization.getId()));
+        boolean hasActiveUser = memberships.stream()
+                .map(UserOrganizationEntity::getUserId)
+                .distinct()
+                .map(userMapper::selectById)
+                .anyMatch(user -> user != null && !"DELETED".equals(user.getStatus()));
+        if (hasActiveUser) {
+            throw new AuthException("ORGANIZATION_IN_USE", HttpStatus.BAD_REQUEST, "Organization has users.");
+        }
+        organizationMapper.update(null, new LambdaUpdateWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getId, organization.getId())
+                .set(OrganizationEntity::getStatus, "DELETED")
+                .set(OrganizationEntity::getUpdatedAt, Instant.now()));
+        return organizationMapper.selectById(organizationId);
+    }
+
     public RoleEntity createRole(String organizationId, String code, String name, String roleType, String externalRoleId) {
         Instant now = Instant.now();
         RoleEntity entity = new RoleEntity();
@@ -167,16 +202,35 @@ public class AuthAdminService {
         return entity;
     }
 
-    public RoleEntity updateRole(String roleId, String organizationId, String name, String roleType, String externalRoleId, String status) {
+    public RoleEntity updateRole(String roleId, String organizationId, String code, String name, String roleType, String externalRoleId, String status) {
         RoleEntity role = Optional.ofNullable(roleMapper.selectById(roleId))
                 .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.NOT_FOUND, "Role does not exist."));
+        String normalizedCode = code == null || code.isBlank() ? role.getCode() : code.trim();
+        if (!normalizedCode.equals(role.getCode())) {
+            findRoleByCode(normalizedCode)
+                    .filter(existing -> !existing.getId().equals(role.getId()))
+                    .ifPresent(existing -> {
+                        throw new AuthException("ROLE_CODE_EXISTS", HttpStatus.BAD_REQUEST, "Role code already exists.");
+                    });
+        }
         roleMapper.update(null, new LambdaUpdateWrapper<RoleEntity>()
                 .eq(RoleEntity::getId, role.getId())
                 .set(RoleEntity::getOrganizationId, organizationId)
+                .set(RoleEntity::getCode, normalizedCode)
                 .set(RoleEntity::getName, name)
                 .set(RoleEntity::getRoleType, roleType == null || roleType.isBlank() ? role.getRoleType() : roleType)
                 .set(RoleEntity::getExternalRoleId, externalRoleId)
                 .set(RoleEntity::getStatus, normalizeActiveStatus(status, "INVALID_ROLE_STATUS"))
+                .set(RoleEntity::getUpdatedAt, Instant.now()));
+        return roleMapper.selectById(roleId);
+    }
+
+    public RoleEntity deleteRole(String roleId) {
+        RoleEntity role = Optional.ofNullable(roleMapper.selectById(roleId))
+                .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.NOT_FOUND, "Role does not exist."));
+        roleMapper.update(null, new LambdaUpdateWrapper<RoleEntity>()
+                .eq(RoleEntity::getId, role.getId())
+                .set(RoleEntity::getStatus, "DELETED")
                 .set(RoleEntity::getUpdatedAt, Instant.now()));
         return roleMapper.selectById(roleId);
     }
@@ -187,6 +241,7 @@ public class AuthAdminService {
             String displayName,
             String mobile,
             String email,
+            Integer sortOrder,
             List<String> organizationIds,
             List<String> roleCodes
     ) {
@@ -201,6 +256,7 @@ public class AuthAdminService {
         entity.setEmail(email);
         entity.setUserType("LOCAL");
         entity.setStatus("ACTIVE");
+        entity.setSortOrder(sortOrder == null ? 0 : sortOrder);
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         userMapper.insert(entity);
@@ -246,22 +302,42 @@ public class AuthAdminService {
         return userMapper.selectById(userId);
     }
 
+    public UserEntity deleteUser(String userId) {
+        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                .eq(UserEntity::getId, user.getId())
+                .set(UserEntity::getStatus, "DELETED")
+                .set(UserEntity::getUpdatedAt, Instant.now()));
+        return userMapper.selectById(userId);
+    }
+
     public AuthUserPrincipal updateLocalUser(
             String userId,
+            String password,
             String displayName,
             String mobile,
             String email,
+            Integer sortOrder,
             List<String> organizationIds,
             List<String> roleCodes
     ) {
         UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
                 .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
-        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+        LambdaUpdateWrapper<UserEntity> updateWrapper = new LambdaUpdateWrapper<UserEntity>()
                 .eq(UserEntity::getId, user.getId())
                 .set(UserEntity::getDisplayName, displayName)
                 .set(UserEntity::getMobile, mobile)
                 .set(UserEntity::getEmail, email)
-                .set(UserEntity::getUpdatedAt, Instant.now()));
+                .set(UserEntity::getSortOrder, sortOrder == null ? 0 : sortOrder)
+                .set(UserEntity::getUpdatedAt, Instant.now());
+        if (password != null && !password.isBlank()) {
+            if (!"LOCAL".equals(user.getUserType())) {
+                throw new AuthException("USER_PASSWORD_UNSUPPORTED", HttpStatus.BAD_REQUEST, "Only local users can update password.");
+            }
+            updateWrapper.set(UserEntity::getPasswordHash, passwordEncoder.encode(password));
+        }
+        userMapper.update(null, updateWrapper);
 
         Instant now = Instant.now();
         userOrganizationMapper.delete(new LambdaQueryWrapper<UserOrganizationEntity>()
@@ -292,6 +368,42 @@ public class AuthAdminService {
             userRoleMapper.insert(relation);
         }
         return toPrincipal(userMapper.selectById(userId));
+    }
+
+    public List<AuthUserPrincipal> updateUserSortOrders(String organizationId, List<UserSortOrderUpdate> items) {
+        if (organizationId == null || organizationId.isBlank()) {
+            throw new AuthException("ORGANIZATION_REQUIRED", HttpStatus.BAD_REQUEST, "Organization is required.");
+        }
+        List<UserOrganizationEntity> memberships = userOrganizationMapper.selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
+                .eq(UserOrganizationEntity::getOrganizationId, organizationId));
+        Set<String> memberUserIds = memberships.stream()
+                .map(UserOrganizationEntity::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+        Instant now = Instant.now();
+        for (UserSortOrderUpdate item : items == null ? List.<UserSortOrderUpdate>of() : items) {
+            if (item.userId() == null || item.userId().isBlank()) {
+                throw new AuthException("USER_REQUIRED", HttpStatus.BAD_REQUEST, "User is required.");
+            }
+            if (!memberUserIds.contains(item.userId())) {
+                throw new AuthException("USER_ORGANIZATION_NOT_FOUND", HttpStatus.BAD_REQUEST, "User does not belong to the selected organization.");
+            }
+            userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                    .eq(UserEntity::getId, item.userId())
+                    .set(UserEntity::getSortOrder, item.sortOrder() == null ? 0 : item.sortOrder())
+                    .set(UserEntity::getUpdatedAt, now));
+        }
+        if (memberUserIds.isEmpty()) {
+            return List.of();
+        }
+        return userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .in(UserEntity::getId, memberUserIds)
+                        .ne(UserEntity::getStatus, "DELETED"))
+                .stream()
+                .sorted(Comparator
+                        .comparing((UserEntity user) -> user.getSortOrder() == null ? 0 : user.getSortOrder())
+                        .thenComparing(UserEntity::getUsername))
+                .map(this::toPrincipal)
+                .toList();
     }
 
     public AuthUserPrincipal resetLocalUserPassword(String userId, String password) {
@@ -376,6 +488,16 @@ public class AuthAdminService {
         return integrationAppMapper.selectById(appId);
     }
 
+    public IntegrationAppEntity deleteIntegrationApp(String appId) {
+        IntegrationAppEntity app = Optional.ofNullable(integrationAppMapper.selectById(appId))
+                .orElseThrow(() -> new AuthException("APP_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app does not exist."));
+        integrationAppMapper.update(null, new LambdaUpdateWrapper<IntegrationAppEntity>()
+                .eq(IntegrationAppEntity::getId, app.getId())
+                .set(IntegrationAppEntity::getStatus, "DELETED")
+                .set(IntegrationAppEntity::getUpdatedAt, Instant.now()));
+        return integrationAppMapper.selectById(appId);
+    }
+
     private AuthUserPrincipal toPrincipal(UserEntity user) {
         List<String> organizationIds = userOrganizationMapper.selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
                         .eq(UserOrganizationEntity::getUserId, user.getId()))
@@ -392,6 +514,7 @@ public class AuthAdminService {
                 user.getTenantId(),
                 user.getDisplayName(),
                 user.getUserType(),
+                user.getSortOrder() == null ? 0 : user.getSortOrder(),
                 organizationIds,
                 organizationIds.isEmpty() ? null : organizationIds.get(0),
                 organizationIds,
@@ -442,5 +565,8 @@ public class AuthAdminService {
     }
 
     public record GeneratedApiKey(String id, String secretPrefix, String apiKey) {
+    }
+
+    public record UserSortOrderUpdate(String userId, Integer sortOrder) {
     }
 }

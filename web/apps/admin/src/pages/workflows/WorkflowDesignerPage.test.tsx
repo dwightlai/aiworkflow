@@ -30,6 +30,22 @@ const workflowApiMock = vi.hoisted(() => ({
     }
   })),
   updateWorkflowDraft: vi.fn(),
+  updateWorkflowMetadata: vi.fn(async (_workflowId: string, request: { name: string; description: string | null }) => ({
+    id: 'workflow-1',
+    name: request.name,
+    description: request.description,
+    status: 'DRAFT',
+    latestVersion: {
+      definition: {
+        nodes: [
+          { id: 'start', type: 'START', name: '开始', config: {} },
+          { id: 'end', type: 'END', name: '结束', config: {} }
+        ],
+        edges: [{ id: 'edge_start_end', sourceNodeId: 'start', targetNodeId: 'end', condition: null }],
+        variables: []
+      }
+    }
+  })),
   publishWorkflow: vi.fn(),
   runWorkflow: vi.fn(async () => ({
     id: 'run-1',
@@ -162,8 +178,8 @@ describe('WorkflowDesignerPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '节点 结束' }));
     expect(await screen.findByText('节点属性：结束')).toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('工作流画布投放区'));
-    expect(screen.getByText('节点属性：结束')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('工作流画布视口'));
+    expect(screen.queryByText('节点属性：结束')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'bug 调试' }));
     expect(await screen.findByText('运行调试')).toBeInTheDocument();
@@ -289,6 +305,49 @@ describe('WorkflowDesignerPage', () => {
     );
   });
 
+  it('opens edge properties and saves edge conditions into the draft definition', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByLabelText('选择连线 edge_start_end'));
+
+    expect(await screen.findByText('连线属性：edge_start_end')).toBeInTheDocument();
+    const conditionInput = screen.getByLabelText('连线条件表达式');
+    await userEvent.type(conditionInput, 'intent == refund');
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+
+    expect(workflowApiMock.updateWorkflowDraft).toHaveBeenCalledWith(
+      'workflow-1',
+      expect.objectContaining({
+        edges: [expect.objectContaining({
+          id: 'edge_start_end',
+          condition: 'intent == refund'
+        })]
+      })
+    );
+  });
+
+  it('does not switch properties when hovering an edge until it is clicked', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    const edge = screen.getByLabelText('选择连线 edge_start_end');
+    fireEvent.mouseEnter(edge);
+
+    expect(screen.queryByText('连线属性：edge_start_end')).not.toBeInTheDocument();
+
+    await userEvent.click(edge);
+    expect(await screen.findByText('连线属性：edge_start_end')).toBeInTheDocument();
+  });
+
   it('links right panel selection with the canvas and overlays run status on nodes', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
@@ -321,6 +380,45 @@ describe('WorkflowDesignerPage', () => {
       description: null
     }));
     expect(window.location.pathname).toBe('/workflows/workflow-created/designer');
+  });
+
+  it('opens workflow properties from blank canvas selection and saves metadata', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('客服意图识别')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('工作流画布视口'));
+
+    expect(await screen.findByText('工作流属性')).toBeInTheDocument();
+    const nameInput = screen.getByLabelText('工作流名称');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, '售后处理流程');
+    await userEvent.click(screen.getByRole('button', { name: '保存属性' }));
+
+    expect(workflowApiMock.updateWorkflowMetadata).toHaveBeenCalledWith('workflow-1', {
+      name: '售后处理流程',
+      description: null
+    });
+  });
+
+  it('switches from node properties to workflow properties when clicking blank canvas', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByRole('button', { name: '节点 结束' }));
+    expect(screen.getByDisplayValue('结束')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('工作流画布投放区'));
+
+    expect(await screen.findByDisplayValue('客服意图识别')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('结束')).not.toBeInTheDocument();
   });
 
   it('loads saved model providers for LLM node configuration', async () => {

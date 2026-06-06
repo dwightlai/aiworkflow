@@ -27,6 +27,14 @@ const workflowApiMock = vi.hoisted(() => ({
     finishedAt: '2026-05-28T10:21:01Z',
     nodeExecutions: []
   })),
+  updateWorkflowMetadata: vi.fn(async (_workflowId: string, request: { name: string; description: string | null }) => ({
+    id: 'workflow-1',
+    name: request.name,
+    description: request.description,
+    status: 'PUBLISHED',
+    latestVersion: { version: 3 },
+    updatedAt: '2026-05-28T10:22:00Z'
+  })),
   listWorkflows: vi.fn(async () => ({
     items: [
       {
@@ -96,6 +104,25 @@ describe('WorkflowCardsPage', () => {
       expect(workflowApiMock.runWorkflow).toHaveBeenCalledWith('workflow-1', { question: '发票怎么申请' });
     });
     expect(window.location.pathname).toBe('/workflow-runs/run-1');
+  });
+
+  it('opens workflow settings from the card action and saves metadata', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /设置/ }));
+    expect(await screen.findByText(/工作流设置/)).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText('工作流名称');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, '售后处理流程');
+    await userEvent.click(screen.getByRole('button', { name: '保存设置' }));
+
+    await waitFor(() => {
+      expect(workflowApiMock.updateWorkflowMetadata).toHaveBeenCalledWith('workflow-1', {
+        name: '售后处理流程',
+        description: '识别用户咨询意图并输出下一步动作'
+      });
+    });
   });
 });
 

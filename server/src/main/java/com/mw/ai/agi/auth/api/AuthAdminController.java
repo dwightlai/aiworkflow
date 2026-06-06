@@ -12,6 +12,7 @@ import com.mw.ai.agi.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -70,6 +71,11 @@ public class AuthAdminController {
         ));
     }
 
+    @DeleteMapping("/organizations/{organizationId}")
+    public ApiResponse<OrganizationEntity> deleteOrganization(@PathVariable String organizationId) {
+        return ApiResponse.success(authAdminService.deleteOrganization(organizationId));
+    }
+
     @GetMapping("/roles")
     public ApiResponse<PageResponse<RoleEntity>> listRoles() {
         List<RoleEntity> roles = authAdminService.listRoles();
@@ -92,11 +98,17 @@ public class AuthAdminController {
         return ApiResponse.success(authAdminService.updateRole(
                 roleId,
                 request.organizationId(),
+                request.code(),
                 request.name(),
                 request.roleType(),
                 request.externalRoleId(),
                 request.status()
         ));
+    }
+
+    @DeleteMapping("/roles/{roleId}")
+    public ApiResponse<RoleEntity> deleteRole(@PathVariable String roleId) {
+        return ApiResponse.success(authAdminService.deleteRole(roleId));
     }
 
     @GetMapping("/users")
@@ -113,6 +125,7 @@ public class AuthAdminController {
                 request.displayName(),
                 request.mobile(),
                 request.email(),
+                request.sortOrder(),
                 request.organizationIds(),
                 request.roleCodes()
         ));
@@ -125,12 +138,27 @@ public class AuthAdminController {
     ) {
         return ApiResponse.success(authAdminService.updateLocalUser(
                 userId,
+                request.password(),
                 request.displayName(),
                 request.mobile(),
                 request.email(),
+                request.sortOrder(),
                 request.organizationIds(),
                 request.roleCodes()
         ));
+    }
+
+    @PutMapping("/users/sort-orders")
+    public ApiResponse<PageResponse<AuthUserPrincipal>> updateUserSortOrders(
+            @Valid @RequestBody UpdateUserSortOrdersRequest request
+    ) {
+        List<AuthUserPrincipal> users = authAdminService.updateUserSortOrders(
+                request.organizationId(),
+                request.items() == null ? List.of() : request.items().stream()
+                        .map(item -> new AuthAdminService.UserSortOrderUpdate(item.userId(), item.sortOrder()))
+                        .toList()
+        );
+        return ApiResponse.success(new PageResponse<>(users, users.size()));
     }
 
     @PostMapping("/users/{userId}/status")
@@ -139,6 +167,11 @@ public class AuthAdminController {
             @Valid @RequestBody UpdateStatusRequest request
     ) {
         return ApiResponse.success(authAdminService.updateUserStatus(userId, request.status()));
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public ApiResponse<UserEntity> deleteUser(@PathVariable String userId) {
+        return ApiResponse.success(authAdminService.deleteUser(userId));
     }
 
     @PostMapping("/users/{userId}/reset-password")
@@ -171,6 +204,11 @@ public class AuthAdminController {
             @Valid @RequestBody UpdateStatusRequest request
     ) {
         return ApiResponse.success(authAdminService.updateIntegrationAppStatus(appId, request.status()));
+    }
+
+    @DeleteMapping("/integration-apps/{appId}")
+    public ApiResponse<IntegrationAppEntity> deleteIntegrationApp(@PathVariable String appId) {
+        return ApiResponse.success(authAdminService.deleteIntegrationApp(appId));
     }
 
     @PostMapping("/integration-apps/{appId}/secrets")
@@ -225,6 +263,7 @@ public class AuthAdminController {
 
     public record UpdateRoleRequest(
             String organizationId,
+            @NotBlank String code,
             @NotBlank String name,
             String roleType,
             String externalRoleId,
@@ -238,17 +277,32 @@ public class AuthAdminController {
             @NotBlank String displayName,
             String mobile,
             String email,
+            Integer sortOrder,
             List<String> organizationIds,
             List<String> roleCodes
     ) {
     }
 
     public record UpdateUserRequest(
+            String password,
             @NotBlank String displayName,
             String mobile,
             String email,
+            Integer sortOrder,
             List<String> organizationIds,
             List<String> roleCodes
+    ) {
+    }
+
+    public record UpdateUserSortOrdersRequest(
+            @NotBlank String organizationId,
+            List<UserSortOrderRequest> items
+    ) {
+    }
+
+    public record UserSortOrderRequest(
+            @NotBlank String userId,
+            Integer sortOrder
     ) {
     }
 

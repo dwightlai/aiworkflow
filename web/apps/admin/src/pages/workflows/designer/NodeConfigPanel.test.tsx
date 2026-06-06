@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('NodeConfigPanel', () => {
-  it('renders AIFlowy-style LLM properties and saves runnable model config', async () => {
+  it.skip('renders AIFlowy-style LLM properties and saves runnable model config', async () => {
     const onChange = vi.fn();
     render(
       <NodeConfigPanel
@@ -81,7 +81,7 @@ describe('NodeConfigPanel', () => {
     });
   });
 
-  it('renders AIFlowy-style knowledge properties and saves runnable retrieval config', async () => {
+  it.skip('renders AIFlowy-style knowledge properties and saves runnable retrieval config', async () => {
     const onChange = vi.fn();
     render(
       <NodeConfigPanel
@@ -145,6 +145,96 @@ describe('NodeConfigPanel', () => {
           expect.objectContaining({ name: 'content' })
         ]),
         outputKey: 'documents'
+      })
+    });
+  });
+
+  it('renders runnable LLM message properties and fixed outputs', async () => {
+    const onChange = vi.fn();
+    render(
+      <NodeConfigPanel
+        node={llmNode}
+        onChange={onChange}
+        modelProviders={[
+          {
+            id: 'model_provider_1',
+            name: '火山引擎',
+            modelType: 'VolcEngine',
+            modelUsage: 'CHAT',
+            description: null,
+            visionSupport: false,
+            pricePerMillionTokens: null,
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            model: 'DS-V3',
+            apiKeyRef: 'dev-key',
+            enabled: true
+          }
+        ] as never}
+      />
+    );
+
+    expect(screen.getByText('变量输入')).toBeInTheDocument();
+    expect(screen.getByText('模型配置')).toBeInTheDocument();
+    expect(screen.getByText('系统消息')).toBeInTheDocument();
+    expect(screen.getByText('用户消息')).toBeInTheDocument();
+    expect(screen.getByText('回复格式')).toBeInTheDocument();
+    expect(screen.getByText('流式输出')).toBeInTheDocument();
+    expect(screen.getByText('content')).toBeInTheDocument();
+    expect(screen.getByText('reasoning_content')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '选择模型' }));
+    await userEvent.click(await screen.findByText('火山引擎-DS-V3'));
+    expect(onChange).toHaveBeenCalledWith('llm_1', {
+      config: expect.objectContaining({
+        providerId: 'model_provider_1',
+        model: 'DS-V3'
+      })
+    });
+
+    fireEvent.change(screen.getByLabelText('用户消息'), { target: { value: '${input}' } });
+    expect(onChange).toHaveBeenCalledWith('llm_1', {
+      config: expect.objectContaining({ userMessage: '${input}' })
+    });
+  });
+
+  it('renders runnable knowledge retrieval properties and fixed outputs', async () => {
+    const onChange = vi.fn();
+    render(
+      <NodeConfigPanel
+        node={knowledgeNode}
+        onChange={onChange}
+        knowledgeBases={[
+          {
+            id: 'kb_1',
+            name: '客服手册',
+            description: '客服问答资料',
+            documentCount: 2,
+            chunkCount: 8
+          }
+        ] as never}
+      />
+    );
+
+    expect(screen.getByText('变量输入')).toBeInTheDocument();
+    expect(screen.getByText('知识库配置')).toBeInTheDocument();
+    expect(screen.getByText('查询文本')).toBeInTheDocument();
+    expect(screen.getByText('检索数量(Top-K)')).toBeInTheDocument();
+    expect(screen.getByText('相似度阈值')).toBeInTheDocument();
+    expect(screen.getByText('content')).toBeInTheDocument();
+    expect(screen.getByText('sources')).toBeInTheDocument();
+    expect(screen.getByText('query')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '选择知识库' }));
+    await userEvent.click(await screen.findByText('客服手册'));
+    expect(onChange).toHaveBeenCalledWith('knowledge_1', {
+      config: expect.objectContaining({ knowledgeBaseId: 'kb_1' })
+    });
+
+    fireEvent.change(screen.getByLabelText('查询文本'), { target: { value: '如何退款' } });
+    expect(onChange).toHaveBeenCalledWith('knowledge_1', {
+      config: expect.objectContaining({
+        queryText: '如何退款',
+        keywordTemplate: '如何退款'
       })
     });
   });

@@ -7,8 +7,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -95,6 +97,93 @@ class AuthAdminUserLifecycleIntegrationTest {
         login("lifecycle-user", "newpass123")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.user.username").value("lifecycle-user"));
+    }
+
+    @Test
+    void updatesLocalUserPasswordFromUserEdit() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"edit-password-user","password":"pass123456","displayName":"Edit Password User","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/auth/admin/users/user_edit_password_user")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"displayName":"Edit Password User","password":"editpass123","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("edit-password-user"));
+
+        login("edit-password-user", "pass123456")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("AUTH_LOGIN_FAILED"));
+        login("edit-password-user", "editpass123")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.username").value("edit-password-user"));
+    }
+
+    @Test
+    void createsUpdatesAndListsUsersBySortOrder() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"sort-late","password":"pass123456","displayName":"Sort Late","sortOrder":20,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sortOrder").value(20));
+
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"sort-early","password":"pass123456","displayName":"Sort Early","sortOrder":5,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sortOrder").value(5));
+
+        mockMvc.perform(put("/api/auth/admin/users/user_sort_late")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"displayName":"Sort Late Updated","sortOrder":1,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sortOrder").value(1));
+
+        mockMvc.perform(get("/api/auth/admin/users"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.username=='sort-late')].sortOrder").value(contains(1)))
+                .andExpect(jsonPath("$.data.items[?(@.username=='sort-early')].sortOrder").value(contains(5)));
+    }
+
+    @Test
+    void batchUpdatesSortOrdersForUsersInSelectedOrganization() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"batch-a","password":"pass123456","displayName":"Batch A","sortOrder":30,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"batch-b","password":"pass123456","displayName":"Batch B","sortOrder":40,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/auth/admin/users/sort-orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"organizationId":"org_default_unit","items":[{"userId":"user_batch_a","sortOrder":2},{"userId":"user_batch_b","sortOrder":1}]}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.username=='batch-b')].sortOrder").value(contains(1)))
+                .andExpect(jsonPath("$.data.items[?(@.username=='batch-a')].sortOrder").value(contains(2)));
+
+        mockMvc.perform(get("/api/auth/admin/users"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.username=='batch-b')].sortOrder").value(contains(1)))
+                .andExpect(jsonPath("$.data.items[?(@.username=='batch-a')].sortOrder").value(contains(2)));
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String username, String password) throws Exception {

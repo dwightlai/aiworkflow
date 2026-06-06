@@ -81,6 +81,13 @@ class FlywaySchemaMigrationTest {
                   AND table_name = 'agi_organization'
                 """, String.class);
         assertThat(organizationColumns).contains("code", "external_org_id", "org_type", "parent_id", "path", "level");
+        List<String> userColumns = jdbcTemplate.queryForList("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'agi_user'
+                """, String.class);
+        assertThat(userColumns).contains("sort_order");
 
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM agi_user WHERE username = 'admin'",

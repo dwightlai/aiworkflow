@@ -118,6 +118,22 @@ public class WorkflowApplicationService {
         return store.listWorkflows();
     }
 
+    public synchronized Workflow updateWorkflowMetadata(String workflowId, String name, String description) {
+        Workflow workflow = getWorkflow(workflowId);
+        Workflow updated = new Workflow(
+                workflow.id(),
+                workflow.tenantId(),
+                name,
+                description,
+                workflow.status(),
+                workflow.currentVersionId(),
+                workflow.createdBy(),
+                workflow.createdAt(),
+                Instant.now()
+        );
+        return store.saveWorkflow(updated);
+    }
+
     public synchronized Workflow archiveWorkflow(String workflowId) {
         Workflow workflow = getWorkflow(workflowId);
         Workflow archived = new Workflow(

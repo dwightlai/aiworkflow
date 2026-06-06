@@ -19,6 +19,7 @@ public class UserEntity {
     private String sourceAppId;
     private String externalUserId;
     private String status;
+    private Integer sortOrder;
     private Instant lastLoginAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -45,6 +46,8 @@ public class UserEntity {
     public void setExternalUserId(String externalUserId) { this.externalUserId = externalUserId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public Instant getLastLoginAt() { return lastLoginAt; }
     public void setLastLoginAt(Instant lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public Instant getCreatedAt() { return createdAt; }

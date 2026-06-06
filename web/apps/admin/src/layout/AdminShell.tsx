@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { AuthUser } from '../api/auth';
 import { useState } from 'react';
 import { PageHeader } from './PageHeader';
 import { menuGroups } from './menu';
@@ -7,7 +8,9 @@ export interface AdminShellProps {
   title: string;
   breadcrumb: string[];
   currentPath?: string;
+  currentUser?: AuthUser;
   children: ReactNode;
+  onLogout?: () => void | Promise<void>;
   onNavigate?: (path: string) => void;
 }
 
@@ -15,7 +18,9 @@ export function AdminShell({
   title,
   breadcrumb,
   currentPath = '/',
+  currentUser,
   children,
+  onLogout,
   onNavigate
 }: AdminShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -95,6 +100,8 @@ export function AdminShell({
         <PageHeader
           title={title}
           breadcrumb={breadcrumb}
+          currentUser={currentUser}
+          onLogout={onLogout}
           onToggleSidebar={() => setCollapsed((value) => !value)}
         />
         <div style={{ padding: 24 }}>{children}</div>

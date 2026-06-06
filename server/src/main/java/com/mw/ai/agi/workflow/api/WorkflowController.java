@@ -62,6 +62,19 @@ public class WorkflowController {
         return ApiResponse.success(toResponse(workflowService.getWorkflow(workflowId)));
     }
 
+    @PutMapping("/{workflowId}/metadata")
+    public ApiResponse<WorkflowResponse> updateMetadata(
+            @PathVariable String workflowId,
+            @Valid @RequestBody UpdateWorkflowMetadataRequest request
+    ) {
+        Workflow workflow = workflowService.updateWorkflowMetadata(
+                workflowId,
+                request.name(),
+                request.description()
+        );
+        return ApiResponse.success(toResponse(workflow));
+    }
+
     @PostMapping("/{workflowId}/publish")
     public ApiResponse<WorkflowResponse> publish(@PathVariable String workflowId) {
         WorkflowVersion publishedVersion = workflowService.publishDraftVersion(workflowId, DEFAULT_USER_ID);

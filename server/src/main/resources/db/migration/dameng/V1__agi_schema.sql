@@ -280,6 +280,7 @@ CREATE TABLE agi_user (
     source_app_id VARCHAR(64),
     external_user_id VARCHAR(200),
     status VARCHAR(32) NOT NULL,
+    sort_order INT DEFAULT 0 NOT NULL,
     last_login_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
@@ -393,6 +394,7 @@ CREATE INDEX idx_agi_role_tenant ON agi_role(tenant_id, organization_id, status)
 CREATE UNIQUE INDEX uk_agi_role_tenant_code ON agi_role(tenant_id, code);
 CREATE UNIQUE INDEX uk_agi_user_tenant_username ON agi_user(tenant_id, username);
 CREATE INDEX idx_agi_user_external ON agi_user(source_app_id, external_user_id);
+CREATE INDEX idx_agi_user_sort_order ON agi_user(tenant_id, sort_order, username);
 CREATE INDEX idx_agi_user_organization_user ON agi_user_organization(user_id, organization_id);
 CREATE INDEX idx_agi_user_role_user ON agi_user_role(user_id, role_id);
 CREATE INDEX idx_agi_app_secret_app ON agi_integration_app_secret(app_id, enabled);

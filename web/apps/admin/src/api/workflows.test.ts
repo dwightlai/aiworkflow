@@ -5,7 +5,8 @@ import {
   getWorkflowRun,
   listWorkflows,
   publishWorkflow,
-  runWorkflow
+  runWorkflow,
+  updateWorkflowMetadata
 } from './workflows';
 
 describe('workflow admin api', () => {
@@ -88,6 +89,27 @@ describe('workflow admin api', () => {
 
     expect(archived.status).toBe('ARCHIVED');
     expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1/archive', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('updates workflow metadata', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: { id: 'workflow-1', name: '售后处理流程', description: '售后自动化', status: 'DRAFT' },
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const workflow = await updateWorkflowMetadata('workflow-1', {
+      name: '售后处理流程',
+      description: '售后自动化'
+    });
+
+    expect(workflow.name).toBe('售后处理流程');
+    expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1/metadata', {
+      method: 'PUT',
+      body: JSON.stringify({ name: '售后处理流程', description: '售后自动化' }),
+      headers: { 'Content-Type': 'application/json' }
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 import { CommentOutlined, DeleteOutlined, PlusOutlined, RedoOutlined, RobotOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
 import type { WorkflowNode } from '@aiworkflow/workflow-schema';
-import { Button, Empty, Form, Input, InputNumber, Select, Slider, Space, Typography } from 'antd';
+import { Button, Empty, Form, Input, InputNumber, Radio, Select, Slider, Space, Switch, Typography } from 'antd';
 import type React from 'react';
 import type { KnowledgeBase } from '../../../api/knowledge';
 import type { ModelProvider } from '../../../api/models';
@@ -60,7 +60,7 @@ export function NodeConfigPanel({
   if (node.type === 'LLM') {
     return (
       <Panel node={node} title="大模型" description="使用大模型处理问题" icon={<RobotOutlined />} onChange={onChange}>
-        <LlmConfig node={node} setConfig={setConfig} modelProviders={modelProviders} />
+        <LlmConfigV2 node={node} setConfig={setConfig} modelProviders={modelProviders} />
       </Panel>
     );
   }
@@ -68,7 +68,7 @@ export function NodeConfigPanel({
   if (node.type === 'KNOWLEDGE_RETRIEVAL') {
     return (
       <Panel node={node} title="知识库" description="通过知识库获取内容" icon={<SearchOutlined />} onChange={onChange}>
-        <KnowledgeConfig node={node} setConfig={setConfig} knowledgeBases={knowledgeBases} />
+        <KnowledgeConfigV2 node={node} setConfig={setConfig} knowledgeBases={knowledgeBases} />
       </Panel>
     );
   }
@@ -258,6 +258,215 @@ function KnowledgeConfig({ node, setConfig, knowledgeBases }: { node: WorkflowNo
         }}
       />
     </>
+  );
+}
+
+function LlmConfigV2({ node, setConfig, modelProviders }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; modelProviders: ModelProvider[] }) {
+  const config = node.config ?? {};
+  const inputParams = readParams(config.inputParams, [{ name: 'input', value: 'start.input', type: 'String' }]);
+  const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
+  return (
+    <>
+      <ParamSectionV2
+        title="变量输入"
+        emptyText="暂无变量输入"
+        params={inputParams}
+        valueMode="select"
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: 'start.input', type: 'String' }] })}
+        onChange={(next) => setConfig({ inputParams: next })}
+      />
+      <SectionTitle title="模型配置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="模型">
+          <Select
+            aria-label="选择模型"
+            placeholder="请选择模型"
+            value={stringValue(config.providerId, undefined)}
+            options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name}-${provider.model}` }))}
+            onChange={(providerId) => {
+              const provider = enabledModels.find((item) => item.id === providerId);
+              setConfig({ providerId, model: provider?.model ?? '' });
+            }}
+          />
+        </Form.Item>
+      </Form>
+      <SectionTitle title="系统消息" />
+      <Form layout="vertical" size="small">
+        <Form.Item>
+          <Input.TextArea
+            aria-label="系统消息"
+            placeholder="你是一个聪明的助手"
+            autoSize={{ minRows: 5, maxRows: 10 }}
+            value={String(config.systemMessage ?? config.systemPrompt ?? '')}
+            onChange={(event) => setConfig({ systemMessage: event.target.value })}
+          />
+        </Form.Item>
+      </Form>
+      <SectionTitle title="用户消息" />
+      <Form layout="vertical" size="small">
+        <Form.Item>
+          <Input.TextArea
+            aria-label="用户消息"
+            placeholder="${input}"
+            autoSize={{ minRows: 5, maxRows: 10 }}
+            value={String(config.userMessage ?? config.userPrompt ?? '${input}')}
+            onChange={(event) => setConfig({ userMessage: event.target.value })}
+          />
+        </Form.Item>
+      </Form>
+      <section style={sectionStyle}>
+        <SectionTitle title="配置" />
+        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+          <div style={inlineSettingStyle}>
+            <Typography.Text type="secondary">回复格式</Typography.Text>
+            <Radio.Group
+              aria-label="回复格式"
+              value={stringValue(config.responseFormat, 'TEXT')}
+              options={[{ value: 'TEXT', label: '文本' }, { value: 'JSON', label: 'JSON' }, { value: 'CODE', label: '代码' }]}
+              onChange={(event) => setConfig({ responseFormat: event.target.value, outputFormat: event.target.value })}
+            />
+          </div>
+          <div style={inlineSettingStyle}>
+            <Typography.Text type="secondary">流式输出</Typography.Text>
+            <Switch
+              checkedChildren="开启"
+              unCheckedChildren="关闭"
+              checked={Boolean(config.streaming ?? config.stream ?? true)}
+              onChange={(streaming) => setConfig({ streaming, stream: streaming })}
+            />
+          </div>
+        </Space>
+      </section>
+      <FixedOutputSection params={[
+        { name: 'content', type: 'String' },
+        { name: 'reasoning_content', type: 'String' }
+      ]} />
+    </>
+  );
+}
+
+function KnowledgeConfigV2({ node, setConfig, knowledgeBases }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; knowledgeBases: KnowledgeBase[] }) {
+  const config = node.config ?? {};
+  const inputParams = readParams(config.inputParams, [{ name: '', value: 'start.input', type: 'String' }]);
+  const topK = numberValue(config.fetchCount ?? config.topK, 5);
+  const similarityThreshold = numberValue(config.similarityThreshold, 0.7);
+  return (
+    <>
+      <ParamSectionV2
+        title="变量输入"
+        params={inputParams}
+        valueMode="select"
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: '', value: 'start.input', type: 'String' }] })}
+        onChange={(next) => setConfig({ inputParams: next })}
+      />
+      <SectionTitle title="知识库配置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="选择知识库">
+          <Select
+            aria-label="选择知识库"
+            placeholder="请选择知识库"
+            value={stringValue(config.knowledgeBaseId, undefined)}
+            options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}
+            onChange={(knowledgeBaseId) => setConfig({ knowledgeBaseId })}
+          />
+        </Form.Item>
+        <Form.Item label="查询文本">
+          <Input.TextArea
+            aria-label="查询文本"
+            placeholder="如何冒泡排序"
+            autoSize={{ minRows: 4, maxRows: 7 }}
+            value={String(config.queryText ?? config.keywordTemplate ?? '')}
+            onChange={(event) => setConfig({ queryText: event.target.value, keywordTemplate: event.target.value })}
+          />
+        </Form.Item>
+      </Form>
+      <section style={sectionStyle}>
+        <SliderStepperField
+          label="检索数量(Top-K)"
+          value={topK}
+          min={1}
+          max={50}
+          step={1}
+          onChange={(value) => setConfig({ fetchCount: value, topK: value })}
+        />
+        <SliderStepperField
+          label="相似度阈值"
+          value={similarityThreshold}
+          min={0}
+          max={1}
+          step={0.01}
+          precision={2}
+          onChange={(value) => setConfig({ similarityThreshold: value })}
+        />
+      </section>
+      <FixedOutputSection params={[
+        { name: 'content', type: 'String' },
+        { name: 'sources', type: 'Array[String]' },
+        { name: 'query', type: 'String' }
+      ]} />
+    </>
+  );
+}
+
+function ParamSectionV2({ title, params, emptyText = '暂无变量输入', valueMode = 'input', onAdd, onChange }: { title: string; params: ParamRow[]; emptyText?: string; valueMode?: 'input' | 'select'; onAdd: () => void; onChange: (params: ParamRow[]) => void }) {
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle title={title} action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={onAdd}>添加</Button>} />
+      {params.length === 0 ? (
+        <div style={emptyParamStyle}>{emptyText}</div>
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {params.map((param, index) => (
+            <div key={`${param.name}-${index}`} style={paramGridStyle}>
+              <Input aria-label={`变量名 ${index + 1}`} placeholder="变量名" value={param.name} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
+              {valueMode === 'select' ? (
+                <Select aria-label={`变量值 ${index + 1}`} value={param.value} options={variableReferenceOptions} onChange={(value) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item))} />
+              ) : (
+                <Input aria-label={`变量值 ${index + 1}`} placeholder="变量值" value={param.value} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} />
+              )}
+              <Button
+                aria-label={`删除变量输入 ${index + 1}`}
+                icon={<DeleteOutlined />}
+                size="small"
+                onClick={() => onChange(params.filter((_, itemIndex) => itemIndex !== index))}
+              />
+            </div>
+          ))}
+        </Space>
+      )}
+    </section>
+  );
+}
+
+function FixedOutputSection({ params }: { params: ParamRow[] }) {
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle title="输出变量" />
+      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        {params.map((param) => (
+          <div key={param.name} style={fixedOutputRowStyle}>
+            <Typography.Text code>{param.name}</Typography.Text>
+            <Typography.Text type="secondary" style={fixedOutputTypeStyle}>{param.type}</Typography.Text>
+          </div>
+        ))}
+      </Space>
+    </section>
+  );
+}
+
+function SliderStepperField({ label, value, min, max, step, precision = 0, onChange }: { label: string; value: number; min: number; max: number; step: number; precision?: number; onChange: (value: number) => void }) {
+  const normalize = (next: number | null) => {
+    const safe = Math.min(Math.max(next ?? value, min), max);
+    onChange(Number(safe.toFixed(precision)));
+  };
+  return (
+    <div style={sliderStepperStyle}>
+      <Typography.Text type="secondary">{label}</Typography.Text>
+      <div style={sliderStepperControlStyle}>
+        <Slider min={min} max={max} step={step} value={value} onChange={normalize} style={{ flex: 1 }} />
+        <InputNumber min={min} max={max} step={step} precision={precision} value={value} onChange={normalize} style={{ width: 130 }} />
+      </div>
+    </div>
   );
 }
 
@@ -649,6 +858,12 @@ const bodyTypeOptions = [
   { value: 'FORM_DATA', label: 'Form Data' },
   { value: 'NONE', label: 'None' }
 ];
+const variableReferenceOptions = [
+  { value: 'start.input', label: '开始.input' },
+  { value: 'input', label: 'input' },
+  { value: 'question', label: 'question' },
+  { value: 'content', label: 'content' }
+];
 
 const panelStyle: React.CSSProperties = { background: '#fff', borderLeft: '0', height: '100%', overflow: 'auto', padding: 0, width: '100%' };
 const tinyHeaderStyle: React.CSSProperties = { background: '#f5f6f8', borderBottom: '1px solid #e5e7eb', color: '#c1c7d0', fontSize: 12, lineHeight: '34px', padding: '0 14px' };
@@ -664,3 +879,8 @@ const keyValueGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTe
 const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px', marginBottom: 6 };
 const outputGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px' };
 const stepCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: 8, display: 'grid', gap: 8, padding: 10 };
+const inlineSettingStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: 12 };
+const fixedOutputRowStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between' };
+const fixedOutputTypeStyle: React.CSSProperties = { background: '#f5f5f5', borderRadius: 4, padding: '2px 8px' };
+const sliderStepperStyle: React.CSSProperties = { display: 'grid', gap: 8, marginBottom: 14 };
+const sliderStepperControlStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', gap: 16 };

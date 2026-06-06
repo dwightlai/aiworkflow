@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Drawer, Empty, Input, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { archiveWorkflow, listWorkflows, runWorkflow, type Workflow } from '../../api/workflows';
+import { archiveWorkflow, listWorkflows, runWorkflow, updateWorkflowMetadata, type Workflow } from '../../api/workflows';
 
 const demoDescription = '配置节点、Prompt、模型和工具调用，编排可运行的 AI 自动化流程。';
 const statusOptions = [
@@ -35,6 +35,9 @@ export function WorkflowCardsPage() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [runningWorkflow, setRunningWorkflow] = useState<Workflow | null>(null);
+  const [settingWorkflow, setSettingWorkflow] = useState<Workflow | null>(null);
+  const [settingName, setSettingName] = useState('');
+  const [settingDescription, setSettingDescription] = useState('');
   const [runInput, setRunInput] = useState('{\n  "input": "请在这里填写运行参数"\n}');
   const [runInputError, setRunInputError] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -59,6 +62,22 @@ export function WorkflowCardsPage() {
     },
     onError: (error) => {
       setRunInputError((error as Error).message);
+    }
+  });
+  const metadataMutation = useMutation({
+    mutationFn: () => {
+      if (!settingWorkflow) {
+        throw new Error('请选择工作流');
+      }
+      return updateWorkflowMetadata(settingWorkflow.id, {
+        name: settingName.trim() || settingWorkflow.name,
+        description: settingDescription.trim() || null
+      });
+    },
+    onSuccess: async () => {
+      message.success('工作流设置已保存');
+      setSettingWorkflow(null);
+      await queryClient.invalidateQueries({ queryKey: ['workflows'] });
     }
   });
 
@@ -156,6 +175,7 @@ export function WorkflowCardsPage() {
                 workflow={workflow}
                 archivePending={archiveMutation.isPending}
                 onArchive={() => archiveMutation.mutate(workflow)}
+                onSettings={() => openSettingsDrawer(workflow)}
                 onRun={() => openRunDrawer(workflow)}
               />
             )) : null}
@@ -223,8 +243,52 @@ export function WorkflowCardsPage() {
           />
         </Space>
       </Drawer>
+
+      <Drawer
+        title={settingWorkflow ? `工作流设置 - ${settingWorkflow.name}` : '工作流设置'}
+        open={Boolean(settingWorkflow)}
+        width={520}
+        onClose={() => setSettingWorkflow(null)}
+        footer={(
+          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setSettingWorkflow(null)}>取消</Button>
+            <Button type="primary" loading={metadataMutation.isPending} onClick={() => metadataMutation.mutate()}>
+              保存设置
+            </Button>
+          </Space>
+        )}
+      >
+        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+          <label style={settingFieldStyle}>
+            <span>工作流名称</span>
+            <Input
+              aria-label="工作流名称"
+              value={settingName}
+              maxLength={200}
+              onChange={(event) => setSettingName(event.target.value)}
+              placeholder="请输入工作流名称"
+            />
+          </label>
+          <label style={settingFieldStyle}>
+            <span>工作流描述</span>
+            <Input.TextArea
+              aria-label="工作流描述"
+              value={settingDescription}
+              onChange={(event) => setSettingDescription(event.target.value)}
+              placeholder="请输入工作流描述"
+              autoSize={{ minRows: 4, maxRows: 8 }}
+            />
+          </label>
+        </Space>
+      </Drawer>
     </div>
   );
+
+  function openSettingsDrawer(workflow: Workflow) {
+    setSettingWorkflow(workflow);
+    setSettingName(workflow.name);
+    setSettingDescription(workflow.description ?? '');
+  }
 
   function openRunDrawer(workflow: Workflow) {
     setRunningWorkflow(workflow);
@@ -264,11 +328,13 @@ function WorkflowCard({
   workflow,
   archivePending,
   onArchive,
+  onSettings,
   onRun
 }: {
   workflow: Workflow;
   archivePending: boolean;
   onArchive: () => void;
+  onSettings: () => void;
   onRun: () => void;
 }) {
   return (
@@ -299,7 +365,7 @@ function WorkflowCard({
       </div>
 
       <div style={cardActionsStyle}>
-        <ActionButton icon={<SettingOutlined />} label="设置" />
+        <ActionButton icon={<SettingOutlined />} label="设置" onClick={onSettings} />
         <ActionButton icon={<PlayCircleOutlined />} label="运行" onClick={onRun} />
         <ActionButton icon={<EditOutlined />} label="编辑" onClick={() => navigateTo(`/workflows/${workflow.id}/designer`)} />
         {workflow.status === 'ARCHIVED' ? (
@@ -527,4 +593,12 @@ const templateDetailStyle: React.CSSProperties = {
   color: '#667085',
   fontSize: 12,
   lineHeight: '18px'
+};
+
+const settingFieldStyle: React.CSSProperties = {
+  color: '#344054',
+  display: 'grid',
+  fontSize: 13,
+  fontWeight: 600,
+  gap: 8
 };

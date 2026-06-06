@@ -98,7 +98,8 @@ class DamengSchemaMigrationContractTest {
                 "create table agi_auth_audit_log",
                 "code varchar(100) not null",
                 "external_org_id varchar(200)",
-                "org_type varchar(64) not null"
+                "org_type varchar(64) not null",
+                "sort_order int default 0 not null"
         );
     }
 

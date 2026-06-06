@@ -1,3 +1,5 @@
+import { requestJson as authRequestJson } from './auth';
+
 export interface ApiEnvelope<T> {
   success: boolean;
   data: T;
@@ -377,12 +379,7 @@ export async function searchKnowledgeDocument(
 }
 
 async function requestJson<T>(url: string, init?: RequestInit, jsonHeaders = true): Promise<T> {
-  const response = init ? await fetch(url, jsonHeaders ? withJsonHeaders(init) : init) : await fetch(url);
-  const envelope = await response.json() as ApiEnvelope<T>;
-  if (!response.ok || !envelope.success) {
-    throw new Error(envelope.error?.message ?? `Request failed: ${response.status}`);
-  }
-  return envelope.data;
+  return authRequestJson<T>(url, init, { jsonHeaders });
 }
 
 function uploadDatasetFile<T>(
@@ -407,15 +404,3 @@ function uploadDatasetFile<T>(
   }, false);
 }
 
-function withJsonHeaders(init?: RequestInit): RequestInit | undefined {
-  if (!init) {
-    return undefined;
-  }
-  return {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init.headers
-    }
-  };
-}

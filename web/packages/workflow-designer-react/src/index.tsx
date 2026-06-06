@@ -14,6 +14,8 @@ export interface WorkflowDesignerReactProps {
   nodeRunStates?: Record<string, string>;
   onChange?: (value: WorkflowDefinition) => void;
   onNodeSelect?: (nodeId: string) => void;
+  onEdgeSelect?: (edgeId: string) => void;
+  onCanvasSelect?: () => void;
 }
 
 export interface WorkflowDesignerHandle {
@@ -277,7 +279,9 @@ function WorkflowDesignerReact(props, ref) {
       return;
     }
     event.preventDefault();
+    setSelectedNodeId(null);
     setSelectedEdgeId(null);
+    props.onCanvasSelect?.();
     setPanningCanvas({
       startClientX: event.clientX,
       startClientY: event.clientY,
@@ -317,12 +321,13 @@ function WorkflowDesignerReact(props, ref) {
     }
     setSelectedEdgeId(edgeId);
     setSelectedNodeId(null);
+    props.onEdgeSelect?.(edgeId);
   }
 
   return (
     <div ref={containerRef} style={containerStyle} data-readonly={props.readonly ? 'true' : 'false'}>
       {!props.readonly ? (
-        <div style={toolbarStyle}>
+        <div style={toolbarStyle} data-workflow-interactive="true">
           <button type="button" aria-label="放大" style={iconButtonStyle} onClick={() => setZoom((value) => clampZoom(value + 0.1))}>
             +
           </button>
@@ -412,6 +417,7 @@ function WorkflowDesignerReact(props, ref) {
               <g key={edge.id}>
                 <path
                   aria-label={`选择连线 ${edge.id}`}
+                  data-workflow-interactive="true"
                   role="button"
                   d={edge.path}
                   fill="none"
@@ -419,7 +425,6 @@ function WorkflowDesignerReact(props, ref) {
                   strokeWidth={22}
                   style={{ cursor: props.readonly ? 'default' : 'pointer', pointerEvents: 'stroke' }}
                   onClick={() => selectEdge(edge.id)}
-                  onMouseEnter={() => selectEdge(edge.id)}
                 />
                 <path
                   aria-hidden="true"
@@ -456,6 +461,7 @@ function WorkflowDesignerReact(props, ref) {
               <button
                 key={node.id}
                 type="button"
+                data-workflow-interactive="true"
                 aria-label={`节点 ${node.name}`}
                 style={{
                   ...nodeStyle,
@@ -506,6 +512,7 @@ function WorkflowDesignerReact(props, ref) {
               >
                 <span
                   role="button"
+                  data-workflow-interactive="true"
                   aria-label={`连接到 ${node.name}`}
                   title="连接到此节点"
                   style={{ ...handleStyle, ...inputHandleStyle(connectingFromNodeId !== null) }}
@@ -521,6 +528,7 @@ function WorkflowDesignerReact(props, ref) {
                 <span style={nodeNameStyle}>{node.name}</span>
                 <span
                   role="button"
+                  data-workflow-interactive="true"
                   aria-label={`从 ${node.name} 连线`}
                   title="从此节点连线"
                   style={{ ...handleStyle, ...outputHandleStyle(connectingFromNodeId === node.id) }}
@@ -737,7 +745,7 @@ function isInteractiveCanvasTarget(target: EventTarget) {
   if (!(target instanceof Element)) {
     return false;
   }
-  return Boolean(target.closest('button, input, label, path, [role="button"]'));
+  return Boolean(target.closest('[data-workflow-interactive="true"], input, label, textarea, select'));
 }
 
 function statusToneStyle(status: string): React.CSSProperties {

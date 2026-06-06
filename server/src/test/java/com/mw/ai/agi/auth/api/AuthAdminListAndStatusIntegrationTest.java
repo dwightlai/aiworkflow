@@ -14,7 +14,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -111,6 +113,89 @@ class AuthAdminListAndStatusIntegrationTest {
                 new RequestAuditContext("127.0.0.1", "JUnit")
         ))
                 .hasMessageContaining("APP_DISABLED");
+    }
+
+    @Test
+    void logicallyDeletesManagedResourcesAndFiltersThemFromLists() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/organizations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"delete_unit","name":"Delete Unit","orgType":"UNIT"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"delete-user","password":"pass123456","displayName":"Delete User","organizationIds":["org_delete_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/auth/admin/organizations/org_delete_unit"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("ORGANIZATION_IN_USE"));
+
+        mockMvc.perform(delete("/api/auth/admin/users/user_delete_user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DELETED"));
+        mockMvc.perform(get("/api/auth/admin/users"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.username=='delete-user')]").isEmpty());
+
+        mockMvc.perform(delete("/api/auth/admin/organizations/org_delete_unit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DELETED"));
+        mockMvc.perform(get("/api/auth/admin/organizations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.code=='delete_unit')]").isEmpty());
+
+        mockMvc.perform(post("/api/auth/admin/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"delete_role","name":"Delete Role","roleType":"BUSINESS"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/auth/admin/roles/role_delete_role"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DELETED"));
+        mockMvc.perform(get("/api/auth/admin/roles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.code=='delete_role')]").isEmpty());
+
+        mockMvc.perform(post("/api/auth/admin/integration-apps")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"delete-app","name":"Delete App","appType":"BUSINESS_SYSTEM","authType":"API_KEY"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/auth/admin/integration-apps/app_delete_app"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DELETED"));
+        mockMvc.perform(get("/api/auth/admin/integration-apps"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.code=='delete-app')]").isEmpty());
+    }
+
+    @Test
+    void updatesRoleCodeFromEditRequest() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"editable_role","name":"Editable Role","roleType":"BUSINESS"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/auth/admin/roles/role_editable_role")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"edited_role","name":"Edited Role","roleType":"BUSINESS","status":"ACTIVE"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.code").value("edited_role"))
+                .andExpect(jsonPath("$.data.name").value("Edited Role"));
+
+        mockMvc.perform(get("/api/auth/admin/roles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.code=='edited_role')]").isNotEmpty());
     }
 
     private String extract(String json, String name) {

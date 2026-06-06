@@ -143,6 +143,27 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void updatesWorkflowMetadataWithoutChangingDraftDefinition() {
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                "Routes messages",
+                "user-1",
+                validDefinition()
+        );
+
+        Workflow updated = service.updateWorkflowMetadata(workflow.id(), "客服意图识别", "识别用户咨询意图");
+
+        assertThat(updated.name()).isEqualTo("客服意图识别");
+        assertThat(updated.description()).isEqualTo("识别用户咨询意图");
+        assertThat(updated.status()).isEqualTo(WorkflowStatus.DRAFT);
+        assertThat(updated.updatedAt()).isAfterOrEqualTo(workflow.updatedAt());
+        assertThat(service.listVersions(workflow.id())).singleElement()
+                .extracting(WorkflowVersion::definition)
+                .isEqualTo(validDefinition());
+    }
+
+    @Test
     void publishedVersionDefinitionIsNotMutatedByOriginalDefinitionCollections() {
         Map<String, Object> transformConfig = new HashMap<>();
         transformConfig.put("template", "original");

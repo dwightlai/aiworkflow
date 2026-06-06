@@ -36,6 +36,8 @@ class KnowledgeRetrievalNodeExecutorTest {
         );
 
         assertThat(result.output()).containsKey("contexts");
+        assertThat(result.output()).containsKeys("content", "sources", "query");
+        assertThat(result.output().get("content")).isEqualTo("发票可以在订单完成后七日内申请。退货需要保留包装。");
         assertThat((List<?>) result.output().get("contexts")).hasSize(1);
         assertThat(result.output().get("contexts").toString()).contains("发票可以在订单完成后七日内申请");
     }
@@ -55,8 +57,9 @@ class KnowledgeRetrievalNodeExecutorTest {
                         Map.of(
                                 "knowledgeBaseId", knowledgeBase.id(),
                                 "inputParams", List.of(Map.of("name", "search_key", "value", "keyword", "type", "String")),
-                                "keywordTemplate", "{{search_key}}",
+                                "queryText", "${search_key}",
                                 "fetchCount", 5,
+                                "similarityThreshold", 0.1,
                                 "outputParams", List.of(Map.of("name", "documents", "type", "Array"))
                         )
                 ),
@@ -64,7 +67,10 @@ class KnowledgeRetrievalNodeExecutorTest {
         );
 
         assertThat(result.output()).containsKey("documents");
+        assertThat(result.output()).containsKeys("content", "sources", "query");
+        assertThat(result.output().get("content")).isEqualTo("退款申请需要在七日内提交，客服会审核订单状态。");
         assertThat((List<?>) result.output().get("documents")).hasSize(1);
+        assertThat((List<?>) result.output().get("sources")).hasSize(1);
         assertThat(result.output().get("documents").toString()).contains("退款申请需要在七日内提交");
     }
 }
