@@ -110,6 +110,7 @@ class MybatisPersistenceIntegrationTest {
                 "kb_1",
                 "客服手册",
                 "FAQ",
+                null,
                 "mp_embed",
                 "vs_1",
                 1024,

@@ -7,6 +7,8 @@ import com.mw.ai.agi.knowledge.domain.KnowledgeChunkPreview;
 import com.mw.ai.agi.knowledge.domain.KnowledgeDocument;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.service.KnowledgeBaseService;
+import com.mw.ai.agi.auth.service.RequestIdentitySupport;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,50 +29,55 @@ import java.util.List;
 @RequestMapping("/api/knowledge-bases")
 public class KnowledgeBaseController {
     private final KnowledgeBaseService knowledgeBaseService;
+    private final RequestIdentitySupport identitySupport;
 
-    public KnowledgeBaseController(KnowledgeBaseService knowledgeBaseService) {
+    public KnowledgeBaseController(KnowledgeBaseService knowledgeBaseService, RequestIdentitySupport identitySupport) {
         this.knowledgeBaseService = knowledgeBaseService;
+        this.identitySupport = identitySupport;
     }
 
     @GetMapping
-    public ApiResponse<PageResponse<KnowledgeBase>> list() {
-        List<KnowledgeBase> knowledgeBases = knowledgeBaseService.list();
+    public ApiResponse<PageResponse<KnowledgeBase>> list(HttpServletRequest request) {
+        List<KnowledgeBase> knowledgeBases = knowledgeBaseService.list(identitySupport.grantContext(request));
         return ApiResponse.success(new PageResponse<>(knowledgeBases, knowledgeBases.size()));
     }
 
     @PostMapping
-    public ApiResponse<KnowledgeBase> create(@Valid @RequestBody SaveKnowledgeBaseRequest request) {
+    public ApiResponse<KnowledgeBase> create(@Valid @RequestBody SaveKnowledgeBaseRequest body, HttpServletRequest request) {
         return ApiResponse.success(knowledgeBaseService.create(
-                request.name(),
-                request.description(),
-                request.embeddingModelId(),
-                request.vectorStoreConfigId(),
-                request.vectorDimension(),
-                request.splitterType(),
-                request.chunkSize(),
-                request.chunkOverlap(),
-                request.retrievalMode(),
-                request.topK()
+                body.name(),
+                body.description(),
+                identitySupport.resolveOwnerUnitId(body.ownerUnitId(), request),
+                body.embeddingModelId(),
+                body.vectorStoreConfigId(),
+                body.vectorDimension(),
+                body.splitterType(),
+                body.chunkSize(),
+                body.chunkOverlap(),
+                body.retrievalMode(),
+                body.topK()
         ));
     }
 
     @PutMapping("/{id}")
     public ApiResponse<KnowledgeBase> update(
             @PathVariable String id,
-            @Valid @RequestBody SaveKnowledgeBaseRequest request
+            @Valid @RequestBody SaveKnowledgeBaseRequest body,
+            HttpServletRequest request
     ) {
         return ApiResponse.success(knowledgeBaseService.update(
                 id,
-                request.name(),
-                request.description(),
-                request.embeddingModelId(),
-                request.vectorStoreConfigId(),
-                request.vectorDimension(),
-                request.splitterType(),
-                request.chunkSize(),
-                request.chunkOverlap(),
-                request.retrievalMode(),
-                request.topK()
+                body.name(),
+                body.description(),
+                body.ownerUnitId(),
+                body.embeddingModelId(),
+                body.vectorStoreConfigId(),
+                body.vectorDimension(),
+                body.splitterType(),
+                body.chunkSize(),
+                body.chunkOverlap(),
+                body.retrievalMode(),
+                body.topK()
         ));
     }
 
@@ -271,9 +278,16 @@ public class KnowledgeBaseController {
     public ApiResponse<List<KnowledgeSearchResult>> searchDocument(
             @PathVariable String id,
             @PathVariable String documentId,
-            @Valid @RequestBody SearchKnowledgeBaseRequest request
+            @Valid @RequestBody SearchKnowledgeBaseRequest body,
+            HttpServletRequest request
     ) {
-        return ApiResponse.success(knowledgeBaseService.searchDocument(id, documentId, request.query(), request.topK()));
+        return ApiResponse.success(knowledgeBaseService.searchDocument(
+                id,
+                documentId,
+                body.query(),
+                body.topK(),
+                identitySupport.grantContext(request)
+        ));
     }
 
     @PutMapping("/{id}/chunks/{chunkId}")
@@ -288,14 +302,21 @@ public class KnowledgeBaseController {
     @PostMapping("/{id}/search")
     public ApiResponse<List<KnowledgeSearchResult>> search(
             @PathVariable String id,
-            @Valid @RequestBody SearchKnowledgeBaseRequest request
+            @Valid @RequestBody SearchKnowledgeBaseRequest body,
+            HttpServletRequest request
     ) {
-        return ApiResponse.success(knowledgeBaseService.search(id, request.query(), request.topK()));
+        return ApiResponse.success(knowledgeBaseService.search(
+                id,
+                body.query(),
+                body.topK(),
+                identitySupport.grantContext(request)
+        ));
     }
 
     public record SaveKnowledgeBaseRequest(
             @NotBlank String name,
             String description,
+            String ownerUnitId,
             String embeddingModelId,
             String vectorStoreConfigId,
             int vectorDimension,

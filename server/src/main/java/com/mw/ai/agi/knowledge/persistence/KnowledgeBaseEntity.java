@@ -11,6 +11,7 @@ public class KnowledgeBaseEntity {
     private String id;
     private String name;
     private String description;
+    private String ownerUnitId;
     private String embeddingModelId;
     private String vectorStoreConfigId;
     private Integer vectorDimension;
@@ -31,6 +32,8 @@ public class KnowledgeBaseEntity {
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getOwnerUnitId() { return ownerUnitId; }
+    public void setOwnerUnitId(String ownerUnitId) { this.ownerUnitId = ownerUnitId; }
     public String getEmbeddingModelId() { return embeddingModelId; }
     public void setEmbeddingModelId(String embeddingModelId) { this.embeddingModelId = embeddingModelId; }
     public String getVectorStoreConfigId() { return vectorStoreConfigId; }

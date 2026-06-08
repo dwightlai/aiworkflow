@@ -7,9 +7,12 @@ import com.mw.ai.agi.knowledge.domain.KnowledgeChunkVector;
 import com.mw.ai.agi.knowledge.domain.KnowledgeDocument;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.domain.VectorStoreConfig;
+import com.mw.ai.agi.asset.service.AssetGrantService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.Comparator;
@@ -39,6 +42,7 @@ public class KnowledgeBaseService {
     private final TableDocumentParser tableDocumentParser;
     private final VectorStoreConfigStore vectorStoreConfigStore;
     private final ElasticsearchVectorStoreClient elasticsearchVectorStoreClient;
+    private final AssetGrantService assetGrantService;
 
     public KnowledgeBaseService() {
         this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient());
@@ -57,7 +61,8 @@ public class KnowledgeBaseService {
                 new KnowledgeDocumentSplitter(splitter),
                 new TableDocumentParser(),
                 new InMemoryVectorStoreConfigStore(),
-                new ElasticsearchVectorStoreClient(new ObjectMapper())
+                new ElasticsearchVectorStoreClient(new ObjectMapper()),
+                null
         );
     }
 
@@ -75,7 +80,8 @@ public class KnowledgeBaseService {
                 new KnowledgeDocumentSplitter(splitter),
                 new TableDocumentParser(),
                 new InMemoryVectorStoreConfigStore(),
-                new ElasticsearchVectorStoreClient(new ObjectMapper())
+                new ElasticsearchVectorStoreClient(new ObjectMapper()),
+                null
         );
     }
 
@@ -88,7 +94,8 @@ public class KnowledgeBaseService {
             KnowledgeDocumentSplitter documentSplitter,
             TableDocumentParser tableDocumentParser,
             VectorStoreConfigStore vectorStoreConfigStore,
-            ElasticsearchVectorStoreClient elasticsearchVectorStoreClient
+            ElasticsearchVectorStoreClient elasticsearchVectorStoreClient,
+            AssetGrantService assetGrantService
     ) {
         this.splitter = splitter;
         this.store = store;
@@ -98,11 +105,13 @@ public class KnowledgeBaseService {
         this.tableDocumentParser = tableDocumentParser;
         this.vectorStoreConfigStore = vectorStoreConfigStore;
         this.elasticsearchVectorStoreClient = elasticsearchVectorStoreClient;
+        this.assetGrantService = assetGrantService;
     }
 
     public KnowledgeBase create(
             String name,
             String description,
+            String ownerUnitId,
             String embeddingModelId,
             String vectorStoreConfigId,
             int vectorDimension,
@@ -117,6 +126,7 @@ public class KnowledgeBaseService {
                 "kb_" + UUID.randomUUID(),
                 name,
                 description,
+                blankToNull(ownerUnitId),
                 blankToNull(embeddingModelId),
                 blankToNull(vectorStoreConfigId),
                 normalizeVectorDimension(vectorDimension),
@@ -131,13 +141,16 @@ public class KnowledgeBaseService {
                 now,
                 now
         );
-        return store.saveKnowledgeBase(knowledgeBase);
+        KnowledgeBase saved = store.saveKnowledgeBase(knowledgeBase);
+        grantOwner(saved);
+        return saved;
     }
 
     public KnowledgeBase create(String name, String description) {
         return create(
                 name,
                 description,
+                null,
                 null,
                 null,
                 DEFAULT_VECTOR_DIMENSION,
@@ -152,6 +165,7 @@ public class KnowledgeBaseService {
     public KnowledgeBase create(
             String name,
             String description,
+            String ownerUnitId,
             String embeddingModelId,
             String vectorStoreConfigId,
             String splitterType,
@@ -163,6 +177,7 @@ public class KnowledgeBaseService {
         return create(
                 name,
                 description,
+                ownerUnitId,
                 embeddingModelId,
                 vectorStoreConfigId,
                 DEFAULT_VECTOR_DIMENSION,
@@ -174,14 +189,19 @@ public class KnowledgeBaseService {
         );
     }
 
-    public List<KnowledgeBase> list() {
+    public List<KnowledgeBase> list(Map<String, Object> context) {
         return store.listKnowledgeBases();
+    }
+
+    public List<KnowledgeBase> list() {
+        return list(Map.of());
     }
 
     public KnowledgeBase update(
             String id,
             String name,
             String description,
+            String ownerUnitId,
             String embeddingModelId,
             String vectorStoreConfigId,
             int vectorDimension,
@@ -196,6 +216,7 @@ public class KnowledgeBaseService {
                 current.id(),
                 defaultString(name, current.name()),
                 description,
+                blankToNull(ownerUnitId != null && !ownerUnitId.isBlank() ? ownerUnitId : current.ownerUnitId()),
                 blankToNull(embeddingModelId),
                 blankToNull(vectorStoreConfigId),
                 vectorDimension <= 0 ? current.vectorDimension() : vectorDimension,
@@ -211,8 +232,30 @@ public class KnowledgeBaseService {
                 Instant.now()
         );
         KnowledgeBase saved = store.saveKnowledgeBase(updated);
+        grantOwner(saved);
         backfillEmbeddingsIfConfigured(saved);
         return saved;
+    }
+
+    private void assertKnowledgeBaseUseAllowed(KnowledgeBase knowledgeBase, Map<String, Object> context) {
+        if (assetGrantService == null) {
+            return;
+        }
+        if (!assetGrantService.isAllowed(
+                AssetGrantService.KNOWLEDGE_BASE,
+                knowledgeBase.id(),
+                knowledgeBase.ownerUnitId(),
+                context
+        )) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "知识库使用无权限：" + knowledgeBase.name());
+        }
+    }
+
+    private void grantOwner(KnowledgeBase knowledgeBase) {
+        if (assetGrantService == null || knowledgeBase.ownerUnitId() == null || knowledgeBase.ownerUnitId().isBlank()) {
+            return;
+        }
+        assetGrantService.save(AssetGrantService.KNOWLEDGE_BASE, knowledgeBase.id(), AssetGrantService.USE, knowledgeBase.ownerUnitId(), AssetGrantService.SELF, null, AssetGrantService.SELF, true, null);
     }
 
     public void delete(String id) {
@@ -474,7 +517,12 @@ public class KnowledgeBaseService {
     }
 
     public List<KnowledgeSearchResult> search(String knowledgeBaseId, String query, int topK) {
+        return search(knowledgeBaseId, query, topK, Map.of());
+    }
+
+    public List<KnowledgeSearchResult> search(String knowledgeBaseId, String query, int topK, Map<String, Object> context) {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
+        assertKnowledgeBaseUseAllowed(knowledgeBase, context);
         Set<String> terms = tokenize(query);
         int limit = Math.min(topK <= 0 ? knowledgeBase.topK() : topK, 50);
         Optional<VectorStoreConfig> externalStore = shouldUseVector(knowledgeBase)
@@ -521,7 +569,12 @@ public class KnowledgeBaseService {
     }
 
     public List<KnowledgeSearchResult> searchDocument(String knowledgeBaseId, String documentId, String query, int topK) {
+        return searchDocument(knowledgeBaseId, documentId, query, topK, Map.of());
+    }
+
+    public List<KnowledgeSearchResult> searchDocument(String knowledgeBaseId, String documentId, String query, int topK, Map<String, Object> context) {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
+        assertKnowledgeBaseUseAllowed(knowledgeBase, context);
         boolean documentExists = store.listDocuments(knowledgeBaseId).stream()
                 .anyMatch(document -> document.id().equals(documentId));
         if (!documentExists) {
@@ -603,6 +656,7 @@ public class KnowledgeBaseService {
                 current.id(),
                 current.name(),
                 current.description(),
+                current.ownerUnitId(),
                 current.embeddingModelId(),
                 current.vectorStoreConfigId(),
                 current.vectorDimension(),

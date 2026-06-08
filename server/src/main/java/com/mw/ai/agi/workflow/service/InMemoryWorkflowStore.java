@@ -1,6 +1,7 @@
 package com.mw.ai.agi.workflow.service;
 
 import com.mw.ai.agi.workflow.domain.Workflow;
+import com.mw.ai.agi.workflow.domain.WorkflowStatus;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 
 import java.util.Comparator;
@@ -27,6 +28,7 @@ public class InMemoryWorkflowStore implements WorkflowStore {
     @Override
     public List<Workflow> listWorkflows() {
         return workflows.values().stream()
+                .filter(workflow -> workflow.status() != WorkflowStatus.DELETED)
                 .sorted(Comparator.comparing(Workflow::createdAt))
                 .toList();
     }

@@ -19,7 +19,7 @@ export function DebugPanel({ input, loading, execution, onInputChange, onRun }: 
           <div style={iconStyle}><BugOutlined /></div>
           <div>
             <Typography.Title level={5} style={{ margin: 0 }}>调试控制台</Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>运行调试 · 输入样例、执行结果和节点轨迹</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>运行调试 · 根据开始节点输入参数生成 JSON</Typography.Text>
           </div>
         </Space>
         <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={onRun}>
@@ -29,7 +29,7 @@ export function DebugPanel({ input, loading, execution, onInputChange, onRun }: 
 
       <div style={contentStyle}>
         <div style={inputColumnStyle}>
-          <Typography.Text strong>请求输入 JSON</Typography.Text>
+          <Typography.Text strong>开始节点输入 JSON</Typography.Text>
           <Input.TextArea
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
@@ -45,7 +45,7 @@ export function DebugPanel({ input, loading, execution, onInputChange, onRun }: 
           {execution ? (
             <pre style={preStyle}>{JSON.stringify(execution.output, null, 2)}</pre>
           ) : (
-            <Alert type="info" showIcon message="保存并运行后，这里会展示最终输出。" />
+            <Alert type="info" showIcon message="运行调试会先保存并发布当前定义，再展示最终输出。" />
           )}
         </div>
         <div style={traceColumnStyle}>

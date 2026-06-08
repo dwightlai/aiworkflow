@@ -18,6 +18,7 @@ export interface Bot {
   id: string;
   name: string;
   description: string | null;
+  ownerUnitId?: string | null;
   avatar: string;
   workflowId: string | null;
   modelProviderId: string | null;
@@ -54,6 +55,7 @@ export interface BotMessage {
 export interface SaveBotRequest {
   name: string;
   description: string | null;
+  ownerUnitId?: string | null;
   avatar: string;
   workflowId: string | null;
   modelProviderId: string | null;

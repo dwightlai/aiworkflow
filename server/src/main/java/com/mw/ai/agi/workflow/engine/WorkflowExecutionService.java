@@ -66,6 +66,7 @@ public class WorkflowExecutionService {
         executionStore.saveWorkflowExecution(execution);
 
         Map<String, Object> context = new LinkedHashMap<>(request.input());
+        mergeGrantContext(context, request.systemVariables());
         context.put("系统变量", systemVariables(request.systemVariables()));
         Map<String, Object> finalOutput = Map.of();
         try {
@@ -237,11 +238,13 @@ public class WorkflowExecutionService {
             Map<String, Object> context
     ) {
         String nextNodeId = nodeResult.nextNodeId()
-                .orElseGet(() -> outgoingEdges.getOrDefault(currentNode.id(), List.of()).stream()
-                        .filter(edge -> matchesCondition(edge.condition(), context))
-                        .findFirst()
-                        .map(WorkflowEdge::targetNodeId)
-                        .orElse(null));
+                .orElseGet(() -> {
+                    WorkflowEdge matchedEdge = selectMatchingEdge(
+                            outgoingEdges.getOrDefault(currentNode.id(), List.of()),
+                            context
+                    );
+                    return matchedEdge == null ? null : matchedEdge.targetNodeId();
+                });
         if (nextNodeId == null) {
             return null;
         }
@@ -257,6 +260,26 @@ public class WorkflowExecutionService {
         context.put(node.id(), output);
         if (node.name() != null && !node.name().isBlank()) {
             context.put(node.name(), output);
+        }
+    }
+
+    private void mergeGrantContext(Map<String, Object> context, Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        copyIfPresent(variables, context, "userId");
+        copyIfPresent(variables, context, "activeUnitId");
+        copyIfPresent(variables, context, "unitIds");
+        copyIfPresent(variables, context, "departmentIds");
+        Object activeUnitId = variables.get("activeUnitId");
+        if (activeUnitId != null && !String.valueOf(activeUnitId).isBlank()) {
+            context.putIfAbsent("unitId", activeUnitId);
+        }
+    }
+
+    private void copyIfPresent(Map<String, Object> source, Map<String, Object> target, String key) {
+        if (source.containsKey(key) && source.get(key) != null) {
+            target.put(key, source.get(key));
         }
     }
 
@@ -292,11 +315,59 @@ public class WorkflowExecutionService {
         return value instanceof String stringValue && !stringValue.isBlank() ? stringValue : defaultValue;
     }
 
+    private WorkflowEdge selectMatchingEdge(List<WorkflowEdge> edges, Map<String, Object> context) {
+        if (edges.isEmpty()) {
+            return null;
+        }
+        for (WorkflowEdge edge : edges) {
+            if (containsEqualityCondition(edge.condition()) && matchesCondition(edge.condition(), context)) {
+                return edge;
+            }
+        }
+        for (WorkflowEdge edge : edges) {
+            if (edge.condition() != null
+                    && !edge.condition().isBlank()
+                    && !containsEqualityCondition(edge.condition())
+                    && matchesCondition(edge.condition(), context)) {
+                return edge;
+            }
+        }
+        for (WorkflowEdge edge : edges) {
+            if (edge.condition() == null || edge.condition().isBlank()) {
+                return edge;
+            }
+        }
+        return null;
+    }
+
+    private boolean containsEqualityCondition(String condition) {
+        if (condition == null || condition.isBlank()) {
+            return false;
+        }
+        return condition.matches(".*(?<![!=])==(?!=).*");
+    }
+
     private boolean matchesCondition(String condition, Map<String, Object> context) {
         if (condition == null || condition.isBlank()) {
             return true;
         }
         String expression = condition.trim();
+        if (expression.contains("||")) {
+            for (String part : expression.split("\\|\\|")) {
+                if (matchesCondition(part.trim(), context)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression.contains("&&")) {
+            for (String part : expression.split("&&")) {
+                if (!matchesCondition(part.trim(), context)) {
+                    return false;
+                }
+            }
+            return true;
+        }
         if (expression.contains("!=")) {
             String[] parts = expression.split("!=", 2);
             return !resolveConditionValue(parts[0], context).equals(cleanExpectedValue(parts[1]));

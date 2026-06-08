@@ -5,6 +5,7 @@ import com.mw.ai.agi.workflow.domain.Workflow;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -86,6 +87,12 @@ public class WorkflowController {
     public ApiResponse<WorkflowResponse> archive(@PathVariable String workflowId) {
         Workflow workflow = workflowService.archiveWorkflow(workflowId);
         return ApiResponse.success(toResponse(workflow));
+    }
+
+    @DeleteMapping("/{workflowId}")
+    public ApiResponse<Void> delete(@PathVariable String workflowId) {
+        workflowService.deleteWorkflow(workflowId);
+        return ApiResponse.success(null);
     }
 
     private WorkflowResponse toResponse(Workflow workflow) {

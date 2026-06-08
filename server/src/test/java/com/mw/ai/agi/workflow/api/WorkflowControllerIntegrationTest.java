@@ -150,6 +150,22 @@ class WorkflowControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.latestVersion.status").value("DRAFT"));
     }
 
+    @Test
+    void softDeletesWorkflowAndHidesItFromList() throws Exception {
+        String workflowId = createWorkflow();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/workflows/{workflowId}", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/workflows/{workflowId}", workflowId))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/workflows"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.id=='" + workflowId + "')]").isEmpty());
+    }
+
     private String createWorkflow() throws Exception {
         String response = mockMvc.perform(post("/api/workflows")
                         .contentType(MediaType.APPLICATION_JSON)

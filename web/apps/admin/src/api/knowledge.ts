@@ -15,6 +15,7 @@ export interface KnowledgeBase {
   id: string;
   name: string;
   description: string | null;
+  ownerUnitId?: string | null;
   embeddingModelId?: string | null;
   vectorStoreConfigId?: string | null;
   vectorDimension?: number;
@@ -110,6 +111,7 @@ export interface SaveVectorStoreConfigRequest {
 export interface SaveKnowledgeBaseRequest {
   name: string;
   description: string | null;
+  ownerUnitId?: string | null;
   embeddingModelId?: string | null;
   vectorStoreConfigId?: string | null;
   vectorDimension?: number;

@@ -109,6 +109,78 @@ class WorkflowExecutionServiceTest {
     }
 
     @Test
+    void runsQuestionClassifierWorkflowThroughMatchingBranch() {
+        WorkflowExecutionService classifierExecutionService = new WorkflowExecutionService(
+                workflowService,
+                executionStore,
+                new WorkflowNodeExecutorRegistry(List.of(
+                        new StartNodeExecutor(),
+                        new QuestionClassifierNodeExecutor((providerId, model, prompt, options) -> "", new ModelProviderService()),
+                        new TextTransformNodeExecutor(),
+                        new EndNodeExecutor()
+                ))
+        );
+        Workflow workflow = createAndPublishWorkflow(questionClassifierDefinition());
+
+        WorkflowExecutionResult result = classifierExecutionService.runWorkflow(new WorkflowExecutionRequest(
+                workflow.id(),
+                Map.of("message", "我要申请退款")
+        ));
+
+        assertThat(result.execution().status()).isEqualTo(WorkflowExecutionStatus.SUCCEEDED);
+        assertThat(result.execution().output()).containsExactlyEntriesOf(Map.of("result", "售后分支"));
+        assertThat(result.nodeExecutions())
+                .extracting(NodeExecution::nodeId)
+                .containsExactly("start", "classifier", "after-sales", "end");
+    }
+
+    @Test
+    void questionClassifierPrefersEqualityBranchOverFallbackCondition() {
+        WorkflowExecutionService classifierExecutionService = new WorkflowExecutionService(
+                workflowService,
+                executionStore,
+                new WorkflowNodeExecutorRegistry(List.of(
+                        new StartNodeExecutor(),
+                        new QuestionClassifierNodeExecutor((providerId, model, prompt, options) -> "", new ModelProviderService()),
+                        new TextTransformNodeExecutor(),
+                        new EndNodeExecutor()
+                ))
+        );
+        Workflow workflow = createAndPublishWorkflow(new WorkflowDefinition(
+                List.of(
+                        node("start", WorkflowNodeType.START, Map.of()),
+                        node("classifier", WorkflowNodeType.QUESTION_CLASSIFIER, Map.of(
+                                "contentTemplate", "${message}",
+                                "outputKey", "index",
+                                "categories", List.of(
+                                        Map.of("id", "1", "name", "办公用品", "keywords", List.of("笔记本"), "matchMode", "CONTAINS"),
+                                        Map.of("id", "4", "name", "闲聊", "keywords", List.of(), "matchMode", "CONTAINS")
+                                )
+                        )),
+                        node("office", WorkflowNodeType.TEXT_TRANSFORM, Map.of("outputKey", "result", "template", "办公用品分支")),
+                        node("chat", WorkflowNodeType.TEXT_TRANSFORM, Map.of("outputKey", "result", "template", "闲聊分支")),
+                        node("end", WorkflowNodeType.END, Map.of("outputParams", List.of(Map.of("name", "result", "value", "result", "type", "String"))))
+                ),
+                List.of(
+                        edge("edge-fallback", "classifier", "chat", "index !=1 || index!=4"),
+                        edge("edge-office", "classifier", "office", "index ==1"),
+                        edge("edge-office-end", "office", "end"),
+                        edge("edge-chat-end", "chat", "end"),
+                        edge("edge-start", "start", "classifier")
+                ),
+                List.of()
+        ));
+
+        WorkflowExecutionResult result = classifierExecutionService.runWorkflow(new WorkflowExecutionRequest(
+                workflow.id(),
+                Map.of("message", "笔记本怎么申领")
+        ));
+
+        assertThat(result.execution().output()).containsEntry("result", "办公用品分支");
+        assertThat(result.nodeExecutions()).extracting(NodeExecution::nodeId).containsExactly("start", "classifier", "office", "end");
+    }
+
+    @Test
     void runsAiflowyStyleKnowledgeAndLlmNodesThroughDag() {
         KnowledgeBaseService knowledgeBaseService = new KnowledgeBaseService();
         KnowledgeBase knowledgeBase = knowledgeBaseService.create("客服手册", "客服问答资料");
@@ -228,6 +300,52 @@ class WorkflowExecutionServiceTest {
         );
     }
 
+    private WorkflowDefinition questionClassifierDefinition() {
+        return new WorkflowDefinition(
+                List.of(
+                        node("start", WorkflowNodeType.START, Map.of()),
+                        node("classifier", WorkflowNodeType.QUESTION_CLASSIFIER, Map.of(
+                                "contentTemplate", "${message}",
+                                "outputKey", "index",
+                                "categories", List.of(
+                                        Map.of(
+                                                "id", "分类1",
+                                                "name", "售后咨询",
+                                                "keywords", List.of("退款", "退货"),
+                                                "matchMode", "CONTAINS"
+                                        ),
+                                        Map.of(
+                                                "id", "分类2",
+                                                "name", "其他问题",
+                                                "keywords", List.of("天气"),
+                                                "matchMode", "CONTAINS"
+                                        )
+                                ),
+                                "outputParams", List.of(Map.of("name", "index", "type", "String"))
+                        )),
+                        node("after-sales", WorkflowNodeType.TEXT_TRANSFORM, Map.of(
+                                "outputKey", "result",
+                                "template", "售后分支"
+                        )),
+                        node("other", WorkflowNodeType.TEXT_TRANSFORM, Map.of(
+                                "outputKey", "result",
+                                "template", "其他分支"
+                        )),
+                        node("end", WorkflowNodeType.END, Map.of(
+                                "outputParams", List.of(Map.of("name", "result", "value", "result", "type", "String"))
+                        ))
+                ),
+                List.of(
+                        edge("edge-1", "start", "classifier"),
+                        edge("edge-2", "classifier", "after-sales", "index==\"分类1\""),
+                        edge("edge-3", "classifier", "other", "index==\"分类2\""),
+                        edge("edge-4", "after-sales", "end"),
+                        edge("edge-5", "other", "end")
+                ),
+                List.of()
+        );
+    }
+
     private WorkflowDefinition aiflowyStyleAiDefinition(String knowledgeBaseId, String providerId) {
         return new WorkflowDefinition(
                 List.of(
@@ -271,6 +389,10 @@ class WorkflowExecutionServiceTest {
     }
 
     private WorkflowEdge edge(String id, String sourceNodeId, String targetNodeId) {
-        return new WorkflowEdge(id, sourceNodeId, targetNodeId, null);
+        return edge(id, sourceNodeId, targetNodeId, null);
+    }
+
+    private WorkflowEdge edge(String id, String sourceNodeId, String targetNodeId, String condition) {
+        return new WorkflowEdge(id, sourceNodeId, targetNodeId, condition);
     }
 }

@@ -91,7 +91,7 @@ export function NodeConfigPanel({
   if (node.type === 'QUESTION_CLASSIFIER') {
     return (
       <Panel node={node} title="问题分类" description="按分类规则路由问题" icon={<BranchesOutlined />} onChange={onChange}>
-        <QuestionClassifierConfig node={node} setConfig={setConfig} variableOptions={variableOptions} />
+        <QuestionClassifierConfig node={node} setConfig={setConfig} variableOptions={variableOptions} modelProviders={modelProviders} />
       </Panel>
     );
   }
@@ -501,45 +501,65 @@ function ExceptionHandlingSection({ config, setConfig }: { config: Record<string
   );
 }
 
-function QuestionClassifierConfig({ node, setConfig, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; variableOptions: VariableOptionGroup[] }) {
+function QuestionClassifierConfig({ node, setConfig, variableOptions, modelProviders }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; variableOptions: VariableOptionGroup[]; modelProviders: ModelProvider[] }) {
   const config = node.config ?? {};
+  const inputParams = readParams(config.inputParams);
   const categories = readCategories(config.categories);
+  const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
   return (
     <>
-      <SectionTitle title="分类配置" />
-      <Form layout="vertical" size="small">
-        <Form.Item label="输入变量">
-          <Select
-            showSearch
-            optionFilterProp="label"
-            popupMatchSelectWidth={320}
-            value={String(config.inputKey ?? '开始.input')}
-            options={variableOptions}
-            onChange={(inputKey) => setConfig({ inputKey })}
-          />
-        </Form.Item>
-        <Form.Item label="输出变量">
-          <Input value={String(config.outputKey ?? 'questionCategory')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
-        </Form.Item>
-      </Form>
+      <ParamSectionV2
+        title="变量输入"
+        params={inputParams}
+        valueMode="select"
+        variableOptions={variableOptions}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: '', value: '' }] })}
+        onChange={(inputParams) => setConfig({ inputParams })}
+      />
       <section style={sectionStyle}>
-        <SectionTitle title="分类项" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setConfig({ categories: [...categories, defaultCategory()] })}>添加</Button>} />
+        <SectionTitle title="待分类内容" />
+        <Form layout="vertical" size="small">
+          <Form.Item>
+            <Input.TextArea
+              autoSize={{ minRows: 4, maxRows: 8 }}
+              placeholder="输入需要分类的内容，可使用${变量名}、${变量名.子属性}、${变量名[数组索引]}引用上方定义的变量"
+              value={String(config.contentTemplate ?? config.questionTemplate ?? '')}
+              onChange={(event) => setConfig({ contentTemplate: event.target.value })}
+            />
+          </Form.Item>
+        </Form>
+      </section>
+      <section style={sectionStyle}>
+        <SectionTitle title="问题分类" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setConfig({ categories: [...categories, defaultCategory(categories.length)] })}>添加</Button>} />
+        <Form layout="vertical" size="small">
+          <Form.Item label="模型配置">
+            <Space.Compact style={{ width: '100%' }}>
+              <Select
+                aria-label="选择分类模型"
+                placeholder="请选择模型"
+                value={stringValue(config.providerId, undefined)}
+                options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name}-${provider.model}` }))}
+                onChange={(providerId) => {
+                  const provider = enabledModels.find((item) => item.id === providerId);
+                  setConfig({ providerId, model: provider?.model ?? '' });
+                }}
+              />
+              <Button icon={<RedoOutlined />} />
+            </Space.Compact>
+          </Form.Item>
+        </Form>
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           {categories.map((category, index) => (
-            <div key={`${category.id}-${index}`} style={stepCardStyle}>
-              <Input placeholder="分类 ID" value={category.id} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { id: event.target.value }) })} />
-              <Input placeholder="分类名称" value={category.name} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { name: event.target.value }) })} />
-              <Input placeholder="关键词，英文逗号分隔" value={category.keywords.join(',')} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { keywords: splitKeywords(event.target.value) }) })} />
-              <Select value={category.matchMode} options={[{ value: 'CONTAINS', label: '包含' }, { value: 'EQUALS', label: '等于' }]} onChange={(matchMode) => setConfig({ categories: updateCategory(categories, index, { matchMode }) })} />
-              <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setConfig({ categories: categories.filter((_, itemIndex) => itemIndex !== index) })}>删除</Button>
+            <div key={`${category.id}-${index}`} style={classifierCategoryGridStyle}>
+              <Input placeholder={`分类${index + 1}`} value={category.id} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { id: event.target.value }) })} />
+              <Input placeholder="分类描述" value={category.name} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { name: event.target.value }) })} />
+              <Button danger icon={<DeleteOutlined />} onClick={() => setConfig({ categories: categories.filter((_, itemIndex) => itemIndex !== index) })} />
             </div>
           ))}
         </Space>
       </section>
       <FixedOutputSection params={[
-        { name: String(config.outputKey ?? 'questionCategory'), type: 'String' },
-        { name: 'categoryName', type: 'String' },
-        { name: 'categoryMatched', type: 'Boolean' }
+        { name: String(config.outputKey ?? 'index'), type: 'String' }
       ]} />
     </>
   );
@@ -985,7 +1005,7 @@ function readKeyValues(value: unknown, fallback: KeyValueRow[] = []): KeyValueRo
 
 function readCategories(value: unknown): CategoryRow[] {
   if (!Array.isArray(value)) {
-    return [defaultCategory()];
+    return [];
   }
   return value
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
@@ -1028,8 +1048,8 @@ function defaultLoopStep(): LoopStep {
   return { type: 'CONTENT_TEMPLATE', name: '模板处理', template: '第 {{index}} 项：{{loopItem}}', outputKey: 'text' };
 }
 
-function defaultCategory(): CategoryRow {
-  return { id: 'category', name: '分类', keywords: [], matchMode: 'CONTAINS' };
+function defaultCategory(index = 0): CategoryRow {
+  return { id: `分类${index + 1}`, name: '', keywords: [], matchMode: 'CONTAINS' };
 }
 
 function splitKeywords(value: string) {
@@ -1106,9 +1126,7 @@ function nodeOutputOptions(node: WorkflowNode): VariableOption[] {
     options.push(typedOption(`${nodeName}.${outputKey}.headers`, 'Object'));
     options.push(typedOption(`${nodeName}.${outputKey}.success`, 'Boolean'));
   } else if (node.type === 'QUESTION_CLASSIFIER') {
-    options.push(typedOption(`${nodeName}.${stringValue(config.outputKey, 'questionCategory') ?? 'questionCategory'}`, 'String'));
-    options.push(typedOption(`${nodeName}.categoryName`, 'String'));
-    options.push(typedOption(`${nodeName}.categoryMatched`, 'Boolean'));
+    options.push(typedOption(`${nodeName}.${stringValue(config.outputKey, 'index') ?? 'index'}`, 'String'));
   } else {
     readParams(config.outputParams)
       .filter((param) => param.name)
@@ -1179,6 +1197,7 @@ const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTe
 const outputGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px' };
 const exceptionGridStyle: React.CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: '120px 120px 1fr' };
 const stepCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: 8, display: 'grid', gap: 8, padding: 10 };
+const classifierCategoryGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 16, gridTemplateColumns: 'minmax(96px, 0.8fr) minmax(140px, 1.6fr) 36px' };
 const inlineSettingStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: 12 };
 const fixedOutputRowStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between' };
 const fixedOutputTypeStyle: React.CSSProperties = { background: '#f5f5f5', borderRadius: 4, padding: '2px 8px' };

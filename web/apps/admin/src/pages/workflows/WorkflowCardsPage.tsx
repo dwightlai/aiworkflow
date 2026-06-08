@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   ClockCircleOutlined,
+  DeleteOutlined,
   EditOutlined,
   FileSearchOutlined,
   FolderOutlined,
@@ -13,10 +14,10 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Drawer, Empty, Input, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
+import { Alert, Button, Card, Drawer, Empty, Input, Popconfirm, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { archiveWorkflow, listWorkflows, runWorkflow, updateWorkflowMetadata, type Workflow } from '../../api/workflows';
+import { archiveWorkflow, deleteWorkflow, listWorkflows, runWorkflow, updateWorkflowMetadata, type Workflow } from '../../api/workflows';
 
 const demoDescription = '配置节点、Prompt、模型和工具调用，编排可运行的 AI 自动化流程。';
 const statusOptions = [
@@ -49,6 +50,13 @@ export function WorkflowCardsPage() {
     mutationFn: (workflow: Workflow) => archiveWorkflow(workflow.id),
     onSuccess: async () => {
       message.success('工作流已归档');
+      await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+    }
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (workflow: Workflow) => deleteWorkflow(workflow.id),
+    onSuccess: async () => {
+      message.success('工作流已删除');
       await queryClient.invalidateQueries({ queryKey: ['workflows'] });
     }
   });
@@ -174,7 +182,9 @@ export function WorkflowCardsPage() {
                 key={workflow.id}
                 workflow={workflow}
                 archivePending={archiveMutation.isPending}
+                deletePending={deleteMutation.isPending}
                 onArchive={() => archiveMutation.mutate(workflow)}
+                onDelete={() => deleteMutation.mutate(workflow)}
                 onSettings={() => openSettingsDrawer(workflow)}
                 onRun={() => openRunDrawer(workflow)}
               />
@@ -327,13 +337,17 @@ function SummaryCard({ title, value, detail, icon }: { title: string; value: str
 function WorkflowCard({
   workflow,
   archivePending,
+  deletePending,
   onArchive,
+  onDelete,
   onSettings,
   onRun
 }: {
   workflow: Workflow;
   archivePending: boolean;
+  deletePending: boolean;
   onArchive: () => void;
+  onDelete: () => void;
   onSettings: () => void;
   onRun: () => void;
 }) {
@@ -373,6 +387,11 @@ function WorkflowCard({
         ) : (
           <ActionButton icon={<FolderOutlined />} label="归档工作流" loading={archivePending} onClick={onArchive} />
         )}
+        <Popconfirm title="确定删除该工作流？" description="删除后不可在列表中查看，历史运行记录仍保留。" onConfirm={onDelete}>
+          <span>
+            <ActionButton icon={<DeleteOutlined />} label="删除" loading={deletePending} />
+          </span>
+        </Popconfirm>
       </div>
     </Card>
   );
@@ -556,7 +575,7 @@ const cardActionsStyle: React.CSSProperties = {
   background: '#f7faff',
   borderTop: '1px solid #edf1f7',
   display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)',
+  gridTemplateColumns: 'repeat(5, 1fr)',
   minHeight: 42
 };
 

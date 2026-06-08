@@ -45,6 +45,7 @@ public class MybatisWorkflowStore implements WorkflowStore {
     @Override
     public List<Workflow> listWorkflows() {
         return workflowMapper.selectList(new LambdaQueryWrapper<WorkflowEntity>()
+                        .ne(WorkflowEntity::getStatus, WorkflowStatus.DELETED.name())
                         .orderByAsc(WorkflowEntity::getCreatedAt))
                 .stream()
                 .map(this::toDomain)

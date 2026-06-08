@@ -6,6 +6,7 @@ public record KnowledgeBase(
         String id,
         String name,
         String description,
+        String ownerUnitId,
         String embeddingModelId,
         String vectorStoreConfigId,
         int vectorDimension,

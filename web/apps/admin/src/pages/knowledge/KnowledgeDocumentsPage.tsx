@@ -63,7 +63,11 @@ export function KnowledgeDocumentsPage({ knowledgeBaseId }: KnowledgeDocumentsPa
 
   const searchMutation = useMutation({
     mutationFn: () => searchKnowledgeBase(knowledgeBaseId, { query, topK }),
-    onSuccess: setSearchResults
+    onSuccess: setSearchResults,
+    onError: (error) => {
+      message.error((error as Error).message);
+      setSearchResults([]);
+    }
   });
 
   const columns: ColumnsType<KnowledgeDocument> = [

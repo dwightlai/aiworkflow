@@ -2,6 +2,8 @@ package com.mw.ai.agi.auth.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.mw.ai.agi.auth.persistence.OrganizationEntity;
+import com.mw.ai.agi.auth.persistence.OrganizationMapper;
 import com.mw.ai.agi.auth.persistence.AuthAuditLogEntity;
 import com.mw.ai.agi.auth.persistence.AuthAuditLogMapper;
 import com.mw.ai.agi.auth.persistence.LoginSessionEntity;
@@ -18,8 +20,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +32,7 @@ import java.util.UUID;
 public class AuthService {
     private final ObjectProvider<UserMapper> userMapperProvider;
     private final ObjectProvider<UserOrganizationMapper> userOrganizationMapperProvider;
+    private final ObjectProvider<OrganizationMapper> organizationMapperProvider;
     private final ObjectProvider<RoleMapper> roleMapperProvider;
     private final ObjectProvider<LoginSessionMapper> loginSessionMapperProvider;
     private final ObjectProvider<AuthAuditLogMapper> authAuditLogMapperProvider;
@@ -39,6 +45,7 @@ public class AuthService {
     public AuthService(
             ObjectProvider<UserMapper> userMapperProvider,
             ObjectProvider<UserOrganizationMapper> userOrganizationMapperProvider,
+            ObjectProvider<OrganizationMapper> organizationMapperProvider,
             ObjectProvider<RoleMapper> roleMapperProvider,
             ObjectProvider<LoginSessionMapper> loginSessionMapperProvider,
             ObjectProvider<AuthAuditLogMapper> authAuditLogMapperProvider,
@@ -50,6 +57,7 @@ public class AuthService {
     ) {
         this.userMapperProvider = userMapperProvider;
         this.userOrganizationMapperProvider = userOrganizationMapperProvider;
+        this.organizationMapperProvider = organizationMapperProvider;
         this.roleMapperProvider = roleMapperProvider;
         this.loginSessionMapperProvider = loginSessionMapperProvider;
         this.authAuditLogMapperProvider = authAuditLogMapperProvider;
@@ -151,8 +159,28 @@ public class AuthService {
                         .thenComparing(UserOrganizationEntity::getOrganizationId))
                 .map(UserOrganizationEntity::getOrganizationId)
                 .toList();
+        Map<String, OrganizationEntity> organizationsById = new HashMap<>();
+        if (!organizationIds.isEmpty()) {
+            organizationMapper().selectBatchIds(organizationIds)
+                    .forEach(organization -> organizationsById.put(organization.getId(), organization));
+        }
+        List<String> unitIds = new ArrayList<>();
+        List<String> departmentIds = new ArrayList<>();
+        for (String organizationId : organizationIds) {
+            OrganizationEntity organization = organizationsById.get(organizationId);
+            if (organization == null) {
+                continue;
+            }
+            if ("UNIT".equalsIgnoreCase(organization.getOrgType())) {
+                unitIds.add(organizationId);
+            }
+            if ("DEPARTMENT".equalsIgnoreCase(organization.getOrgType())) {
+                departmentIds.add(organizationId);
+            }
+        }
         List<String> roleIds = roleMapper().selectRoleCodesByUserId(user.getId());
         String activeOrganizationId = organizationIds.isEmpty() ? null : organizationIds.get(0);
+        String activeUnitId = unitIds.isEmpty() ? null : unitIds.get(0);
         return new AuthUserPrincipal(
                 user.getId(),
                 user.getUsername(),
@@ -162,9 +190,9 @@ public class AuthService {
                 user.getSortOrder() == null ? 0 : user.getSortOrder(),
                 organizationIds,
                 activeOrganizationId,
-                organizationIds,
-                activeOrganizationId,
-                List.of(),
+                unitIds,
+                activeUnitId,
+                departmentIds,
                 roleIds
         );
     }
@@ -226,6 +254,10 @@ public class AuthService {
 
     private UserOrganizationMapper userOrganizationMapper() {
         return required(userOrganizationMapperProvider, UserOrganizationMapper.class);
+    }
+
+    private OrganizationMapper organizationMapper() {
+        return required(organizationMapperProvider, OrganizationMapper.class);
     }
 
     private RoleMapper roleMapper() {

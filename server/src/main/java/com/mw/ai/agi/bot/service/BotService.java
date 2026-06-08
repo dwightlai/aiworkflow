@@ -7,6 +7,7 @@ import com.mw.ai.agi.bot.domain.BotMessageRole;
 import com.mw.ai.agi.bot.domain.BotRunResult;
 import com.mw.ai.agi.bot.domain.BotSession;
 import com.mw.ai.agi.bot.domain.BotStatus;
+import com.mw.ai.agi.asset.service.AssetGrantService;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.service.KnowledgeBaseService;
 import com.mw.ai.agi.model.domain.ModelProvider;
@@ -35,6 +36,7 @@ public class BotService {
     private final ModelProviderService modelProviderService;
     private final ChatModelClient chatModelClient;
     private final KnowledgeBaseService knowledgeBaseService;
+    private final AssetGrantService assetGrantService;
 
     public BotService(
             BotStore store,
@@ -42,7 +44,8 @@ public class BotService {
             WorkflowExecutionService executionService,
             ModelProviderService modelProviderService,
             ChatModelClient chatModelClient,
-            KnowledgeBaseService knowledgeBaseService
+            KnowledgeBaseService knowledgeBaseService,
+            AssetGrantService assetGrantService
     ) {
         this.store = store;
         this.workflowService = workflowService;
@@ -50,15 +53,28 @@ public class BotService {
         this.modelProviderService = modelProviderService;
         this.chatModelClient = chatModelClient;
         this.knowledgeBaseService = knowledgeBaseService;
+        this.assetGrantService = assetGrantService;
+    }
+
+    public List<AiBot> list(Map<String, Object> context) {
+        return store.list().stream()
+                .filter(bot -> assetGrantService.isAllowed(
+                        AssetGrantService.BOT,
+                        bot.id(),
+                        bot.ownerUnitId(),
+                        context
+                ))
+                .toList();
     }
 
     public List<AiBot> list() {
-        return store.list();
+        return list(Map.of());
     }
 
     public AiBot create(
             String name,
             String description,
+            String ownerUnitId,
             String avatar,
             String workflowId,
             String modelProviderId,
@@ -70,10 +86,11 @@ public class BotService {
         ensureRunnable(workflowId, modelProviderId, knowledgeBaseId);
         Instant now = Instant.now();
         BotStatus effectiveStatus = status == null ? BotStatus.ENABLED : status;
-        return store.save(new AiBot(
+        AiBot saved = store.save(new AiBot(
                 "bot_" + UUID.randomUUID(),
                 name,
                 description,
+                blankToNull(ownerUnitId),
                 defaultString(avatar, "robot"),
                 blankToNull(workflowId),
                 blankToNull(modelProviderId),
@@ -86,12 +103,15 @@ public class BotService {
                 now,
                 now
         ));
+        grantOwner(saved);
+        return saved;
     }
 
     public AiBot update(
             String id,
             String name,
             String description,
+            String ownerUnitId,
             String avatar,
             String workflowId,
             String modelProviderId,
@@ -104,10 +124,11 @@ public class BotService {
         ensureRunnable(workflowId, modelProviderId, knowledgeBaseId);
         BotStatus effectiveStatus = status == null ? current.status() : status;
         Instant now = Instant.now();
-        return store.save(new AiBot(
+        AiBot saved = store.save(new AiBot(
                 current.id(),
                 defaultString(name, current.name()),
                 description,
+                blankToNull(ownerUnitId != null && !ownerUnitId.isBlank() ? ownerUnitId : current.ownerUnitId()),
                 defaultString(avatar, current.avatar()),
                 blankToNull(workflowId),
                 blankToNull(modelProviderId),
@@ -120,6 +141,8 @@ public class BotService {
                 current.createdAt(),
                 now
         ));
+        grantOwner(saved);
+        return saved;
     }
 
     public void delete(String id) {
@@ -132,12 +155,14 @@ public class BotService {
         if (bot.status() != BotStatus.ENABLED) {
             throw new IllegalStateException("Bot is disabled: " + id);
         }
+        assetGrantService.assertAllowed(AssetGrantService.BOT, id, bot.ownerUnitId(), input);
         Map<String, Object> executionInput = executionInput(bot, defaultString(message, ""), input, List.of());
         WorkflowExecutionResult execution = runBotLogic(bot, executionInput, defaultString(message, ""), List.of());
         AiBot updated = store.save(new AiBot(
                 bot.id(),
                 bot.name(),
                 bot.description(),
+                bot.ownerUnitId(),
                 bot.avatar(),
                 bot.workflowId(),
                 bot.modelProviderId(),
@@ -169,6 +194,7 @@ public class BotService {
         if (bot.status() != BotStatus.ENABLED) {
             throw new IllegalStateException("Bot is disabled: " + botId);
         }
+        assetGrantService.assertAllowed(AssetGrantService.BOT, botId, bot.ownerUnitId(), input);
         Instant now = Instant.now();
         BotSession session = sessionId == null || sessionId.isBlank()
                 ? store.saveSession(new BotSession(
@@ -214,6 +240,7 @@ public class BotService {
                 bot.id(),
                 bot.name(),
                 bot.description(),
+                bot.ownerUnitId(),
                 bot.avatar(),
                 bot.workflowId(),
                 bot.modelProviderId(),
@@ -231,6 +258,13 @@ public class BotService {
 
     private AiBot get(String id) {
         return store.findById(id).orElseThrow(() -> new BotNotFoundException(id));
+    }
+
+    private void grantOwner(AiBot bot) {
+        if (bot.ownerUnitId() == null || bot.ownerUnitId().isBlank()) {
+            return;
+        }
+        assetGrantService.save(AssetGrantService.BOT, bot.id(), AssetGrantService.USE, bot.ownerUnitId(), AssetGrantService.SELF, null, AssetGrantService.SELF, true, null);
     }
 
     private void ensureRunnable(String workflowId, String modelProviderId, String knowledgeBaseId) {
@@ -273,7 +307,7 @@ public class BotService {
         Instant startedAt = Instant.now();
         List<KnowledgeSearchResult> documents = isBlank(bot.knowledgeBaseId())
                 ? List.of()
-                : knowledgeBaseService.search(bot.knowledgeBaseId(), message, 5);
+                : knowledgeBaseService.search(bot.knowledgeBaseId(), message, 5, executionInput);
         String answer;
         if (!isBlank(bot.modelProviderId())) {
             ModelProvider provider = modelProviderService.get(bot.modelProviderId());

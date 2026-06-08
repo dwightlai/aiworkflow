@@ -20,6 +20,7 @@ class KnowledgeVectorSearchTest {
         KnowledgeBase knowledgeBase = service.create(
                 "support",
                 null,
+                null,
                 "embedding-model-1",
                 "vector-store-1",
                 "SIMPLE_TEXT",
@@ -57,7 +58,7 @@ class KnowledgeVectorSearchTest {
                 store,
                 new LocalEmbeddingClient()
         );
-        KnowledgeBase knowledgeBase = service.create("support", null, "embedding-model-1", null, "SIMPLE_TEXT", 500, 0, "HYBRID", 3);
+        KnowledgeBase knowledgeBase = service.create("support", null, null, "embedding-model-1", null, "SIMPLE_TEXT", 500, 0, "HYBRID", 3);
         KnowledgeDocument document = service.addDocument(knowledgeBase.id(), "faq.txt", "Invoices can be downloaded after payment.");
 
         service.deleteDocument(knowledgeBase.id(), document.id());

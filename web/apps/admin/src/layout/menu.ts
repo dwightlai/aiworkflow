@@ -19,9 +19,7 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'workflow-runs', label: '运行监控', path: '/workflow-runs' },
       { key: 'prompts', label: 'Prompt', path: '/prompts' },
       { key: 'knowledge', label: '知识库', path: '/knowledge' },
-      { key: 'tools', label: '工具插件', path: '/tools' },
-      { key: 'models', label: '模型配置', path: '/models' },
-      { key: 'model-market', label: '模型市场', path: '/model-market' }
+      { key: 'models', label: '模型配置', path: '/models' }
     ]
   },
   {
@@ -30,7 +28,6 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'identity', label: '组织用户', path: '/system/identity' },
       { key: 'menus', label: '菜单管理', path: '/system/menus' },
       { key: 'dictionary', label: '数据字典', path: '/system/dictionary' },
-      { key: 'jobs', label: '定时任务', path: '/system/jobs' },
       { key: 'logs', label: '日志管理', path: '/system/logs' }
     ]
   }

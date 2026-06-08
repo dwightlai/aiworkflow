@@ -84,6 +84,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
     if (nextDefinition) {
       setDefinition(nextDefinition);
       setSelectedNodeId(nextDefinition.nodes[0]?.id ?? null);
+      setDebugInput(debugInputFromDefinition(nextDefinition));
     }
     if (workflowQuery.data) {
       setWorkflowTitle(workflowQuery.data.name);
@@ -150,10 +151,25 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   });
 
   const runMutation = useMutation({
-    mutationFn: () => runWorkflow(workflowId, parseJson(debugInput)),
+    mutationFn: async () => {
+      if (isNewWorkflow) {
+        throw new Error('请先创建工作流');
+      }
+      const { nextDefinition, nextIssues } = validateCurrentDefinition();
+      if (nextIssues.length > 0) {
+        throw new Error('流程结构校验未通过');
+      }
+      await updateWorkflowDraft(workflowId, nextDefinition);
+      await publishWorkflow(workflowId);
+      return runWorkflow(workflowId, parseJson(debugInput));
+    },
     onSuccess: (result) => {
       setExecution(result);
       message.success('运行完成');
+      void queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] });
+    },
+    onError: (error) => {
+      message.error((error as Error).message || '运行失败');
     }
   });
 
@@ -281,7 +297,11 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           >
             属性
           </Button>
-          <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>
+          <Button icon={<BugOutlined />} onClick={() => {
+            const nextDefinition = designerRef.current?.getValue() ?? definition;
+            setDebugInput(debugInputFromDefinition(nextDefinition));
+            setDebugOpen(true);
+          }}>
             调试
           </Button>
           <Button
@@ -547,6 +567,52 @@ function parseJson(value: string) {
   } catch {
     return {};
   }
+}
+
+function debugInputFromDefinition(definition: WorkflowDefinition) {
+  const startNode = definition.nodes.find((node) => node.type === 'START');
+  const defaultInputJson = startNode?.config?.defaultInputJson;
+  if (typeof defaultInputJson === 'string' && defaultInputJson.trim()) {
+    try {
+      const parsed = JSON.parse(defaultInputJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return JSON.stringify(parsed, null, 2);
+      }
+    } catch {
+      // fallback to inputParams
+    }
+  }
+  const input: Record<string, unknown> = {};
+  const inputParams = startNode?.config?.inputParams;
+  if (Array.isArray(inputParams)) {
+    inputParams.forEach((item) => {
+      if (!item || typeof item !== 'object') {
+        return;
+      }
+      const param = item as Record<string, unknown>;
+      const name = typeof param.name === 'string' ? param.name.trim() : '';
+      if (name) {
+        input[name] = debugDefaultValue(param.type);
+      }
+    });
+  }
+  return JSON.stringify(input, null, 2);
+}
+
+function debugDefaultValue(type: unknown) {
+  if (type === 'Number') {
+    return 0;
+  }
+  if (type === 'Boolean') {
+    return false;
+  }
+  if (type === 'Array') {
+    return [];
+  }
+  if (type === 'Object') {
+    return {};
+  }
+  return '';
 }
 
 function resolveNodeName(definition: WorkflowDefinition, nodeId: string) {

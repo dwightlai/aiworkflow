@@ -40,12 +40,33 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
             return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, List.of()));
         }
         List<KnowledgeSearchResult> results = knowledgeBaseIds.stream()
-                .flatMap(knowledgeBaseId -> knowledgeBaseService.search(knowledgeBaseId, queryText, topK).stream())
+                .flatMap(knowledgeBaseId -> knowledgeBaseService.search(
+                        knowledgeBaseId,
+                        queryText,
+                        topK,
+                        grantContext(context.context())
+                ).stream())
                 .filter(result -> similarityThreshold <= 0 || result.score() >= Math.round(similarityThreshold * 1000))
                 .sorted((left, right) -> Integer.compare(right.score(), left.score()))
                 .limit(topK)
                 .toList();
         return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, results));
+    }
+
+    private Map<String, Object> grantContext(Map<String, Object> context) {
+        Map<String, Object> grantContext = new LinkedHashMap<>();
+        copyIfPresent(context, grantContext, "userId");
+        copyIfPresent(context, grantContext, "activeUnitId");
+        copyIfPresent(context, grantContext, "unitId");
+        copyIfPresent(context, grantContext, "unitIds");
+        copyIfPresent(context, grantContext, "departmentIds");
+        return grantContext;
+    }
+
+    private void copyIfPresent(Map<String, Object> source, Map<String, Object> target, String key) {
+        if (source.containsKey(key) && source.get(key) != null) {
+            target.put(key, source.get(key));
+        }
     }
 
     private List<String> knowledgeBaseIds(WorkflowNode node) {

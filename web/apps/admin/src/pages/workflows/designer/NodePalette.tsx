@@ -106,16 +106,17 @@ const nodeTemplates: NodeTemplate[] = [
     description: '按关键词把问题路由到不同分支',
     icon: <BranchesOutlined />,
     config: {
-      inputKey: '开始.input',
-      outputKey: 'questionCategory',
+      inputParams: [],
+      contentTemplate: '',
+      providerId: '',
+      model: '',
+      outputKey: 'index',
       categories: [
-        { id: 'consult', name: '咨询类', keywords: ['咨询', '介绍', '怎么'], matchMode: 'CONTAINS' },
-        { id: 'after_sales', name: '售后类', keywords: ['退款', '退货', '售后'], matchMode: 'CONTAINS' }
+        { id: '分类1', name: '', keywords: [], matchMode: 'CONTAINS' },
+        { id: '分类2', name: '', keywords: [], matchMode: 'CONTAINS' }
       ],
       outputParams: [
-        { name: 'questionCategory', type: 'String' },
-        { name: 'categoryName', type: 'String' },
-        { name: 'categoryMatched', type: 'Boolean' }
+        { name: 'index', type: 'String' }
       ]
     }
   },

@@ -110,6 +110,7 @@ public class MybatisBotStore implements BotStore {
         entity.setId(bot.id());
         entity.setName(bot.name());
         entity.setDescription(bot.description());
+        entity.setOwnerUnitId(bot.ownerUnitId());
         entity.setAvatar(bot.avatar());
         entity.setWorkflowId(bot.workflowId());
         entity.setModelProviderId(bot.modelProviderId());
@@ -129,6 +130,7 @@ public class MybatisBotStore implements BotStore {
                 entity.getId(),
                 entity.getName(),
                 entity.getDescription(),
+                entity.getOwnerUnitId(),
                 entity.getAvatar(),
                 entity.getWorkflowId(),
                 entity.getModelProviderId(),

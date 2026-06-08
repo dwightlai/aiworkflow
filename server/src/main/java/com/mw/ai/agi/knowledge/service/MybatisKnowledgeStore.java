@@ -196,6 +196,7 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setId(knowledgeBase.id());
         entity.setName(knowledgeBase.name());
         entity.setDescription(knowledgeBase.description());
+        entity.setOwnerUnitId(knowledgeBase.ownerUnitId());
         entity.setEmbeddingModelId(knowledgeBase.embeddingModelId());
         entity.setVectorStoreConfigId(knowledgeBase.vectorStoreConfigId());
         entity.setVectorDimension(knowledgeBase.vectorDimension());
@@ -217,6 +218,7 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 entity.getId(),
                 entity.getName(),
                 entity.getDescription(),
+                entity.getOwnerUnitId(),
                 entity.getEmbeddingModelId(),
                 entity.getVectorStoreConfigId(),
                 entity.getVectorDimension(),

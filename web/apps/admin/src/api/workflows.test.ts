@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
   archiveWorkflow,
   createWorkflow,
+  deleteWorkflow,
   getWorkflowRun,
   listWorkflows,
   publishWorkflow,
@@ -89,6 +90,19 @@ describe('workflow admin api', () => {
 
     expect(archived.status).toBe('ARCHIVED');
     expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1/archive', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('deletes workflows logically', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: null,
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deleteWorkflow('workflow-1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('updates workflow metadata', async () => {

@@ -9,10 +9,11 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Avatar, Button, Card, Drawer, Empty, Form, Input, List, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Alert, Avatar, Button, Card, Drawer, Empty, Form, Input, List, Radio, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
 import { useMemo, useState } from 'react';
+import { AssetGrantDrawer } from '../../components/AssetGrantDrawer';
 import {
   chatBot,
   createBot,
@@ -50,6 +51,7 @@ export function BotsPage() {
   const [keyword, setKeyword] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingBot, setEditingBot] = useState<Bot | null>(null);
+  const [grantBot, setGrantBot] = useState<Bot | null>(null);
   const [runningBot, setRunningBot] = useState<Bot | null>(null);
   const [selectedSession, setSelectedSession] = useState<BotSession | null>(null);
   const [localMessages, setLocalMessages] = useState<BotMessage[]>([]);
@@ -192,6 +194,7 @@ export function BotsPage() {
         <Space size={6} wrap>
           <Button size="small" icon={<PlayCircleOutlined />} aria-label="运行智能体" onClick={() => openRunDrawer(bot)}>运行</Button>
           <Button size="small" icon={<EditOutlined />} aria-label="编辑智能体" onClick={() => openEditDrawer(bot)}>编辑</Button>
+          <Button size="small" onClick={() => openGrantDrawer(bot)}>授权</Button>
           <Button size="small" danger icon={<DeleteOutlined />} aria-label="删除智能体" onClick={() => deleteMutation.mutate(bot)}>删除</Button>
         </Space>
       )
@@ -288,6 +291,20 @@ export function BotsPage() {
           </Form.Item>
         </Form>
       </Drawer>
+
+      <AssetGrantDrawer
+        open={Boolean(grantBot)}
+        assetType="BOT"
+        assetId={grantBot?.id}
+        assetName={grantBot?.name}
+        ownerUnitId={grantBot?.ownerUnitId}
+        onSaved={(savedOwnerUnitId) => {
+          if (grantBot && savedOwnerUnitId) {
+            setGrantBot({ ...grantBot, ownerUnitId: savedOwnerUnitId });
+          }
+        }}
+        onClose={() => setGrantBot(null)}
+      />
 
       <Drawer
         title={runningBot ? `多轮对话 - ${runningBot.name}` : '多轮对话'}
@@ -386,6 +403,10 @@ export function BotsPage() {
       status: bot.status
     });
     setDrawerOpen(true);
+  }
+
+  function openGrantDrawer(bot: Bot) {
+    setGrantBot(bot);
   }
 
   function closeBotDrawer() {

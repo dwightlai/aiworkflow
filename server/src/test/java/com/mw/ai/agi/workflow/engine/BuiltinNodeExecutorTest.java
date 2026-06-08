@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.engine;
 
+import com.mw.ai.agi.model.service.ModelProviderService;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -299,6 +300,43 @@ class BuiltinNodeExecutorTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> loopResults = (List<Map<String, Object>>) result.output().get("loopResults");
         assertThat(loopResults).extracting(item -> item.get("text")).containsExactly("0-北京", "1-上海");
+    }
+
+    @Test
+    void questionClassifierNodeMatchesCategoryByKeyword() {
+        QuestionClassifierNodeExecutor executor = new QuestionClassifierNodeExecutor(
+                (providerId, model, prompt, options) -> "",
+                new ModelProviderService()
+        );
+        NodeExecutionContext context = new NodeExecutionContext(
+                Map.of("message", "我要申请退款"),
+                Map.of("message", "我要申请退款")
+        );
+
+        NodeExecutionResult result = executor.execute(node(
+                "classifier",
+                WorkflowNodeType.QUESTION_CLASSIFIER,
+                Map.of(
+                        "contentTemplate", "${message}",
+                        "outputKey", "index",
+                        "categories", List.of(
+                                Map.of(
+                                        "id", "分类1",
+                                        "name", "售后咨询",
+                                        "keywords", List.of("退款"),
+                                        "matchMode", "CONTAINS"
+                                ),
+                                Map.of(
+                                        "id", "分类2",
+                                        "name", "其他问题",
+                                        "keywords", List.of("天气"),
+                                        "matchMode", "CONTAINS"
+                                )
+                        )
+                )
+        ), context);
+
+        assertThat(result.output()).containsEntry("index", "分类1");
     }
 
     private WorkflowNode node(String id, WorkflowNodeType type, Map<String, Object> config) {

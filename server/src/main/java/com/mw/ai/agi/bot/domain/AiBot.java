@@ -6,6 +6,7 @@ public record AiBot(
         String id,
         String name,
         String description,
+        String ownerUnitId,
         String avatar,
         String workflowId,
         String modelProviderId,

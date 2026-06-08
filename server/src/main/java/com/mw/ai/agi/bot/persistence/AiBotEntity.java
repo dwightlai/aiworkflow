@@ -11,6 +11,7 @@ public class AiBotEntity {
     private String id;
     private String name;
     private String description;
+    private String ownerUnitId;
     private String avatar;
     private String workflowId;
     private String modelProviderId;
@@ -45,6 +46,14 @@ public class AiBotEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getOwnerUnitId() {
+        return ownerUnitId;
+    }
+
+    public void setOwnerUnitId(String ownerUnitId) {
+        this.ownerUnitId = ownerUnitId;
     }
 
     public String getAvatar() {

@@ -150,9 +150,32 @@ public class WorkflowApplicationService {
         return store.saveWorkflow(archived);
     }
 
-    public Workflow getWorkflow(String workflowId) {
-        return store.findWorkflowById(workflowId)
+    public synchronized void deleteWorkflow(String workflowId) {
+        Workflow workflow = store.findWorkflowById(workflowId)
                 .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
+        if (workflow.status() == WorkflowStatus.DELETED) {
+            return;
+        }
+        store.saveWorkflow(new Workflow(
+                workflow.id(),
+                workflow.tenantId(),
+                workflow.name(),
+                workflow.description(),
+                WorkflowStatus.DELETED,
+                workflow.currentVersionId(),
+                workflow.createdBy(),
+                workflow.createdAt(),
+                Instant.now()
+        ));
+    }
+
+    public Workflow getWorkflow(String workflowId) {
+        Workflow workflow = store.findWorkflowById(workflowId)
+                .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
+        if (workflow.status() == WorkflowStatus.DELETED) {
+            throw new WorkflowNotFoundException(workflowId);
+        }
+        return workflow;
     }
 
     public List<WorkflowVersion> listVersions(String workflowId) {
