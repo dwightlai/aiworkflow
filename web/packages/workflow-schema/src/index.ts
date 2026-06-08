@@ -82,9 +82,9 @@ export function createEmptyWorkflowDefinition(): WorkflowDefinition {
         type: 'START',
         name: '开始',
         config: {
-          inputParams: [{ name: 'input', type: 'String', required: false }],
-          inputKeys: ['input'],
-          defaultInputJson: '{\n  "input": "请介绍退款政策"\n}'
+          inputParams: [],
+          inputKeys: [],
+          defaultInputJson: '{}'
         }
       }
     ],

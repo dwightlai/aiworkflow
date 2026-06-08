@@ -294,7 +294,7 @@ function KnowledgeConfig({ node, setConfig, knowledgeBases }: { node: WorkflowNo
 
 function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; modelProviders: ModelProvider[]; variableOptions: VariableOptionGroup[] }) {
   const config = node.config ?? {};
-  const inputParams = readParams(config.inputParams, [{ name: 'input', value: '开始.input', type: 'String' }]);
+  const inputParams = readParams(config.inputParams);
   const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
   return (
     <>
@@ -304,7 +304,7 @@ function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { nod
         params={inputParams}
         valueMode="select"
         variableOptions={variableOptions}
-        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: '开始.input', type: 'String' }] })}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: '', value: undefined, type: 'String' }] })}
         onChange={(next) => setConfig({ inputParams: next })}
       />
       <SectionTitle title="模型配置" />
@@ -386,6 +386,7 @@ function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { nod
           />
         </Space>
       </section>
+      <ExceptionHandlingSection config={config} setConfig={setConfig} />
       <FixedOutputSection params={[
         { name: 'content', type: 'String' },
         { name: 'reasoning_content', type: 'String' }
@@ -396,7 +397,8 @@ function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { nod
 
 function KnowledgeConfigV2({ node, setConfig, knowledgeBases, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; knowledgeBases: KnowledgeBase[]; variableOptions: VariableOptionGroup[] }) {
   const config = node.config ?? {};
-  const inputParams = readParams(config.inputParams, [{ name: 'input', value: '开始.input', type: 'String' }]);
+  const inputParams = readParams(config.inputParams);
+  const selectedKnowledgeBaseIds = readStringArray(config.knowledgeBaseIds ?? config.knowledgeBaseId);
   const topK = numberValue(config.fetchCount ?? config.topK, 5);
   const similarityThreshold = numberValue(config.similarityThreshold, 0.7);
   return (
@@ -406,30 +408,33 @@ function KnowledgeConfigV2({ node, setConfig, knowledgeBases, variableOptions }:
         params={inputParams}
         valueMode="select"
         variableOptions={variableOptions}
-        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: '开始.input', type: 'String' }] })}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: '', value: undefined, type: 'String' }] })}
         onChange={(next) => setConfig({ inputParams: next })}
       />
-      <SectionTitle title="知识库配置" />
-      <Form layout="vertical" size="small">
-        <Form.Item label="选择知识库">
-          <Select
-            aria-label="选择知识库"
-            placeholder="请选择知识库"
-            value={stringValue(config.knowledgeBaseId, undefined)}
-            options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}
-            onChange={(knowledgeBaseId) => setConfig({ knowledgeBaseId })}
-          />
-        </Form.Item>
-        <Form.Item label="查询文本">
-          <Input.TextArea
-            aria-label="查询文本"
-            placeholder="如何冒泡排序"
-            autoSize={{ minRows: 4, maxRows: 7 }}
-            value={String(config.queryText ?? config.keywordTemplate ?? '{input}')}
-            onChange={(event) => setConfig({ queryText: event.target.value, keywordTemplate: event.target.value })}
-          />
-        </Form.Item>
-      </Form>
+      <section style={sectionStyle}>
+        <SectionTitle title="知识库配置" />
+        <Form layout="vertical" size="small">
+          <Form.Item label="选择知识库">
+            <Select
+              aria-label="选择知识库"
+              mode="multiple"
+              placeholder="请选择知识库"
+              value={selectedKnowledgeBaseIds}
+              options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}
+              onChange={(knowledgeBaseIds) => setConfig({ knowledgeBaseIds, knowledgeBaseId: knowledgeBaseIds[0] ?? '' })}
+            />
+          </Form.Item>
+          <Form.Item label="查询文本">
+            <Input.TextArea
+              aria-label="查询文本"
+              placeholder="如何冒泡排序"
+              autoSize={{ minRows: 4, maxRows: 7 }}
+              value={String(config.queryText ?? config.keywordTemplate ?? '{input}')}
+              onChange={(event) => setConfig({ queryText: event.target.value, keywordTemplate: event.target.value })}
+            />
+          </Form.Item>
+        </Form>
+      </section>
       <section style={sectionStyle}>
         <SliderStepperField
           label="检索数量(Top-K)"
@@ -449,12 +454,50 @@ function KnowledgeConfigV2({ node, setConfig, knowledgeBases, variableOptions }:
           onChange={(value) => setConfig({ similarityThreshold: value })}
         />
       </section>
+      <ExceptionHandlingSection config={config} setConfig={setConfig} />
       <FixedOutputSection params={[
         { name: 'content', type: 'String' },
         { name: 'sources', type: 'Array[String]' },
         { name: 'query', type: 'String' }
       ]} />
     </>
+  );
+}
+
+function ExceptionHandlingSection({ config, setConfig }: { config: Record<string, unknown>; setConfig: (patch: Record<string, unknown>) => void }) {
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle title="异常处理" />
+      <div style={exceptionGridStyle}>
+        <Form.Item label="超时">
+          <InputNumber
+            min={1}
+            max={3600}
+            addonAfter="秒"
+            style={{ width: '100%' }}
+            value={numberValue(config.timeoutSeconds, 60)}
+            onChange={(timeoutSeconds) => setConfig({ timeoutSeconds: timeoutSeconds ?? 60 })}
+          />
+        </Form.Item>
+        <Form.Item label="重试">
+          <InputNumber
+            min={0}
+            max={10}
+            addonAfter="次"
+            style={{ width: '100%' }}
+            value={numberValue(config.retryCount, 0)}
+            onChange={(retryCount) => setConfig({ retryCount: retryCount ?? 0 })}
+          />
+        </Form.Item>
+        <Form.Item label="异常策略">
+          <Select
+            value={stringValue(config.errorStrategy, 'INTERRUPT_NODE')}
+            options={[{ value: 'INTERRUPT_NODE', label: '中断节点' }]}
+            onChange={(errorStrategy) => setConfig({ errorStrategy })}
+          />
+        </Form.Item>
+      </div>
+    </section>
   );
 }
 
@@ -798,14 +841,14 @@ function OutputSection({ params, format, onFormatChange, onChange, onRemove }: {
 
 function StartConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
   const config = node.config ?? {};
-  const params = readParams(config.inputParams, [{ name: 'input', type: 'String', required: false }]);
+  const params = readParams(config.inputParams);
   function updateParams(next: ParamRow[]) {
     setConfig({ inputParams: next, inputKeys: next.map((param) => param.name).filter(Boolean) });
   }
   return (
     <>
       <section style={sectionStyle}>
-        <SectionTitle title="变量列表" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateParams([...params, { name: 'input', type: 'String', required: false }])}>添加</Button>} />
+        <SectionTitle title="变量列表" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateParams([...params, { name: '', type: 'String', required: false }])}>添加</Button>} />
         <Space direction="vertical" style={{ width: '100%' }} size={8}>
           {params.map((param, index) => (
             <div key={`${param.name}-${index}`} style={startParamGridStyle}>
@@ -997,6 +1040,16 @@ function stringValue(value: unknown, fallback: string | undefined) {
   return typeof value === 'string' && value ? value : fallback;
 }
 
+function readStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String).filter(Boolean);
+  }
+  if (typeof value === 'string' && value) {
+    return [value];
+  }
+  return [];
+}
+
 function numberValue(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
@@ -1021,17 +1074,10 @@ function buildVariableReferenceOptions(currentNode: WorkflowNode, nodes: Workflo
 }
 
 function connectedPreviousNodes(currentNode: WorkflowNode, nodeById: Map<string, WorkflowNode>, edges: WorkflowEdge[]) {
-  const incomingNodes = edges
+  return edges
     .filter((edge) => edge.targetNodeId === currentNode.id)
     .map((edge) => nodeById.get(edge.sourceNodeId))
     .filter((node): node is WorkflowNode => node !== undefined && node.type !== 'START');
-  if (incomingNodes.length > 0) {
-    return incomingNodes;
-  }
-  return edges
-    .filter((edge) => edge.sourceNodeId === currentNode.id)
-    .map((edge) => nodeById.get(edge.targetNodeId))
-    .filter((node): node is WorkflowNode => node !== undefined && node.type !== 'START' && node.type !== 'END');
 }
 
 function startVariableOptions(node: WorkflowNode): VariableOption[] {
@@ -1131,6 +1177,7 @@ const endParamGridStyle: React.CSSProperties = { alignItems: 'center', display: 
 const keyValueGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(140px, 1.4fr)' };
 const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px', marginBottom: 6 };
 const outputGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px' };
+const exceptionGridStyle: React.CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: '120px 120px 1fr' };
 const stepCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: 8, display: 'grid', gap: 8, padding: 10 };
 const inlineSettingStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: 12 };
 const fixedOutputRowStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between' };

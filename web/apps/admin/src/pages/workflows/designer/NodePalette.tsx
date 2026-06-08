@@ -33,9 +33,9 @@ const nodeTemplates: NodeTemplate[] = [
     description: '接收 API、调试或会话输入',
     icon: <PlayCircleOutlined />,
     config: {
-      inputParams: [{ name: 'input', type: 'String', required: false }],
-      inputKeys: ['input'],
-      defaultInputJson: '{\n  "input": "请介绍退款政策",\n  "keyword": "退款",\n  "items": ["北京", "上海"]\n}'
+      inputParams: [],
+      inputKeys: [],
+      defaultInputJson: '{}'
     }
   },
   {
@@ -44,13 +44,17 @@ const nodeTemplates: NodeTemplate[] = [
     description: '通过知识库获取内容',
     icon: <DatabaseOutlined />,
     config: {
-      inputParams: [{ name: 'input', value: '开始.input', type: 'String' }],
+      inputParams: [],
       knowledgeBaseId: '',
+      knowledgeBaseIds: [],
       queryText: '{input}',
       keywordTemplate: '{input}',
       queryKey: 'input',
       fetchCount: 5,
       topK: 5,
+      timeoutSeconds: 60,
+      retryCount: 0,
+      errorStrategy: 'INTERRUPT_NODE',
       outputKey: 'content',
       outputFormat: 'TEXT',
       outputParams: [
@@ -85,6 +89,9 @@ const nodeTemplates: NodeTemplate[] = [
       topP: 0.9,
       topK: 50,
       maxTokens: 60,
+      timeoutSeconds: 60,
+      retryCount: 0,
+      errorStrategy: 'INTERRUPT_NODE',
       systemPrompt: '',
       userPrompt: '${input}',
       promptKey: 'input',

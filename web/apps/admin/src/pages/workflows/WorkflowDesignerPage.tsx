@@ -408,7 +408,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
         keyboard={false}
         mask={false}
         maskClosable={false}
-        width={380}
+        width={480}
         styles={{ body: { padding: 0 } }}
       >
         <NodeConfigPanel

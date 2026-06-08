@@ -26,7 +26,7 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
 
     @Override
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
-        String knowledgeBaseId = requiredStringConfig(node, "knowledgeBaseId");
+        List<String> knowledgeBaseIds = knowledgeBaseIds(node);
         String queryKey = optionalStringConfig(node, "queryKey", "question");
         String outputKey = optionalStringConfig(node, "outputKey", "documents");
         int topK = intConfig(node, "fetchCount", intConfig(node, "topK", 3));
@@ -39,10 +39,24 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
         if (queryText.isBlank()) {
             return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, List.of()));
         }
-        List<KnowledgeSearchResult> results = knowledgeBaseService.search(knowledgeBaseId, queryText, topK).stream()
+        List<KnowledgeSearchResult> results = knowledgeBaseIds.stream()
+                .flatMap(knowledgeBaseId -> knowledgeBaseService.search(knowledgeBaseId, queryText, topK).stream())
                 .filter(result -> similarityThreshold <= 0 || result.score() >= Math.round(similarityThreshold * 1000))
+                .sorted((left, right) -> Integer.compare(right.score(), left.score()))
+                .limit(topK)
                 .toList();
         return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, results));
+    }
+
+    private List<String> knowledgeBaseIds(WorkflowNode node) {
+        Object value = node.config().get("knowledgeBaseIds");
+        List<String> ids = value instanceof List<?> values
+                ? values.stream().map(String::valueOf).filter(item -> !item.isBlank()).toList()
+                : List.of();
+        if (!ids.isEmpty()) {
+            return ids;
+        }
+        return List.of(requiredStringConfig(node, "knowledgeBaseId"));
     }
 
     private Map<String, Object> resolveInputParams(WorkflowNode node, Map<String, Object> context) {

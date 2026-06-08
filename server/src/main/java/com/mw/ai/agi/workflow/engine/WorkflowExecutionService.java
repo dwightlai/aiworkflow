@@ -18,6 +18,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -130,7 +134,7 @@ public class WorkflowExecutionService {
         Map<String, Object> nodeInput = new HashMap<>(context);
         try {
             WorkflowNodeExecutor executor = executorRegistry.getExecutor(node.type());
-            NodeExecutionResult result = executor.execute(node, new NodeExecutionContext(input, context));
+            NodeExecutionResult result = executeWithExceptionHandling(executor, node, new NodeExecutionContext(input, context));
             executionStore.saveNodeExecution(new NodeExecution(
                     UUID.randomUUID().toString(),
                     executionId,
@@ -159,6 +163,63 @@ public class WorkflowExecutionService {
             ));
             throw ex;
         }
+    }
+
+    private NodeExecutionResult executeWithExceptionHandling(
+            WorkflowNodeExecutor executor,
+            WorkflowNode node,
+            NodeExecutionContext context
+    ) {
+        if (!supportsExceptionHandling(node)) {
+            return executor.execute(node, context);
+        }
+        int retryCount = intConfig(node, "retryCount", 0);
+        RuntimeException lastException = null;
+        for (int attempt = 0; attempt <= retryCount; attempt++) {
+            try {
+                return executeWithTimeout(executor, node, context);
+            } catch (RuntimeException ex) {
+                lastException = ex;
+            }
+        }
+        if ("INTERRUPT_NODE".equals(stringConfig(node, "errorStrategy", "INTERRUPT_NODE"))) {
+            throw lastException == null ? new IllegalStateException("Node execution failed.") : lastException;
+        }
+        throw lastException == null ? new IllegalStateException("Node execution failed.") : lastException;
+    }
+
+    private NodeExecutionResult executeWithTimeout(
+            WorkflowNodeExecutor executor,
+            WorkflowNode node,
+            NodeExecutionContext context
+    ) {
+        int timeoutSeconds = intConfig(node, "timeoutSeconds", 60);
+        if (timeoutSeconds <= 0) {
+            return executor.execute(node, context);
+        }
+        CompletableFuture<NodeExecutionResult> future = CompletableFuture.supplyAsync(() -> executor.execute(node, context));
+        try {
+            return future.get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException ex) {
+            future.cancel(true);
+            throw new IllegalArgumentException("Node execution timed out after " + timeoutSeconds + " seconds.", ex);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalArgumentException("Node execution interrupted.", ex);
+        } catch (java.util.concurrent.ExecutionException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof CompletionException completionException && completionException.getCause() != null) {
+                cause = completionException.getCause();
+            }
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalArgumentException("Node execution failed.", cause);
+        }
+    }
+
+    private boolean supportsExceptionHandling(WorkflowNode node) {
+        return node.type() == WorkflowNodeType.KNOWLEDGE_RETRIEVAL || node.type() == WorkflowNodeType.LLM;
     }
 
     private WorkflowNode findStartNode(WorkflowDefinition definition) {
@@ -213,6 +274,22 @@ public class WorkflowExecutionService {
 
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private int intConfig(WorkflowNode node, String key, int defaultValue) {
+        Object value = node.config().get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String stringValue && !stringValue.isBlank()) {
+            return Integer.parseInt(stringValue);
+        }
+        return defaultValue;
+    }
+
+    private String stringConfig(WorkflowNode node, String key, String defaultValue) {
+        Object value = node.config().get(key);
+        return value instanceof String stringValue && !stringValue.isBlank() ? stringValue : defaultValue;
     }
 
     private boolean matchesCondition(String condition, Map<String, Object> context) {
