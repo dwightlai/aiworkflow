@@ -26,7 +26,8 @@ class BuiltinNodeExecutorTest {
 
         NodeExecutionResult result = executor.execute(node("start", WorkflowNodeType.START, Map.of()), context);
 
-        assertThat(result.output()).containsExactlyEntriesOf(Map.of("name", "Ada"));
+        assertThat(result.output()).containsEntry("name", "Ada");
+        assertThat(result.output()).containsEntry("start", Map.of("name", "Ada"));
         assertThat(result.nextNodeId()).isEmpty();
     }
 
@@ -49,6 +50,23 @@ class BuiltinNodeExecutorTest {
     }
 
     @Test
+    void endNodeMapsOutputParamsFromNodeScopedVariables() {
+        EndNodeExecutor executor = new EndNodeExecutor();
+        NodeExecutionContext context = new NodeExecutionContext(
+                Map.of("input", "hello"),
+                Map.of("LLM大模型", Map.of("content", "model answer"))
+        );
+
+        NodeExecutionResult result = executor.execute(node(
+                "end",
+                WorkflowNodeType.END,
+                Map.of("outputParams", List.of(Map.of("name", "result", "value", "LLM大模型.content", "type", "String")))
+        ), context);
+
+        assertThat(result.output()).containsExactlyEntriesOf(Map.of("result", "model answer"));
+    }
+
+    @Test
     void textTransformNodeRendersTemplateFromContext() {
         TextTransformNodeExecutor executor = new TextTransformNodeExecutor();
         NodeExecutionContext context = new NodeExecutionContext(
@@ -64,6 +82,23 @@ class BuiltinNodeExecutorTest {
 
         assertThat(result.output()).containsExactlyEntriesOf(Map.of("message", "Hello Ada from Lovelace Labs"));
         assertThat(result.nextNodeId()).isEmpty();
+    }
+
+    @Test
+    void textTransformNodeRendersArrayIndexTemplateFromContext() {
+        TextTransformNodeExecutor executor = new TextTransformNodeExecutor();
+        NodeExecutionContext context = new NodeExecutionContext(
+                Map.of(),
+                Map.of("items", List.of("北京", "上海"))
+        );
+
+        NodeExecutionResult result = executor.execute(node(
+                "transform",
+                WorkflowNodeType.TEXT_TRANSFORM,
+                Map.of("outputKey", "message", "template", "城市：${items[1]}")
+        ), context);
+
+        assertThat(result.output()).containsExactlyEntriesOf(Map.of("message", "城市：上海"));
     }
 
     @Test

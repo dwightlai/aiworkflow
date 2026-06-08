@@ -42,7 +42,7 @@ class AuthAdminUserLifecycleIntegrationTest {
         mockMvc.perform(put("/api/auth/admin/users/user_lifecycle_user")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"displayName":"Lifecycle User Updated","mobile":"13800000000","email":"life@example.com","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                {"username":"lifecycle-user","displayName":"Lifecycle User Updated","mobile":"13800000000","email":"life@example.com","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.displayName").value("Lifecycle User Updated"))
@@ -111,7 +111,7 @@ class AuthAdminUserLifecycleIntegrationTest {
         mockMvc.perform(put("/api/auth/admin/users/user_edit_password_user")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"displayName":"Edit Password User","password":"editpass123","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                {"username":"edit-password-user","displayName":"Edit Password User","password":"editpass123","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("edit-password-user"));
@@ -145,7 +145,7 @@ class AuthAdminUserLifecycleIntegrationTest {
         mockMvc.perform(put("/api/auth/admin/users/user_sort_late")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"displayName":"Sort Late Updated","sortOrder":1,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                {"username":"sort-late","displayName":"Sort Late Updated","sortOrder":1,"organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.sortOrder").value(1));
@@ -184,6 +184,31 @@ class AuthAdminUserLifecycleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[?(@.username=='batch-b')].sortOrder").value(contains(1)))
                 .andExpect(jsonPath("$.data.items[?(@.username=='batch-a')].sortOrder").value(contains(2)));
+    }
+
+    @Test
+    void renamesUserAndLoginWithNewUsername() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"rename-me","password":"pass123456","displayName":"Rename Me","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("rename-me"));
+
+        mockMvc.perform(put("/api/auth/admin/users/user_rename_me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"renamed-user","displayName":"Renamed","organizationIds":["org_default_unit"],"roleCodes":["app_user"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("renamed-user"));
+
+        login("rename-me", "pass123456")
+                .andExpect(status().isUnauthorized());
+        login("renamed-user", "pass123456")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.username").value("renamed-user"));
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String username, String password) throws Exception {

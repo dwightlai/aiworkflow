@@ -9,6 +9,10 @@ import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,16 +62,17 @@ public class WorkflowExecutionService {
         executionStore.saveWorkflowExecution(execution);
 
         Map<String, Object> context = new LinkedHashMap<>(request.input());
+        context.put("系统变量", systemVariables(request.systemVariables()));
         Map<String, Object> finalOutput = Map.of();
         try {
             while (currentNode != null) {
                 NodeExecutionResult nodeResult = executeNode(executionId, currentNode, request.input(), context);
-                context.putAll(nodeResult.output());
+                mergeNodeOutput(context, currentNode, nodeResult.output());
                 if (currentNode.type() == WorkflowNodeType.END) {
                     finalOutput = nodeResult.output();
                     break;
                 }
-                currentNode = nextNode(currentNode, nodeResult, outgoingEdges, nodesById);
+                currentNode = nextNode(currentNode, nodeResult, outgoingEdges, nodesById, context);
             }
 
             WorkflowExecution succeeded = new WorkflowExecution(
@@ -167,10 +172,12 @@ public class WorkflowExecutionService {
             WorkflowNode currentNode,
             NodeExecutionResult nodeResult,
             Map<String, List<WorkflowEdge>> outgoingEdges,
-            Map<String, WorkflowNode> nodesById
+            Map<String, WorkflowNode> nodesById,
+            Map<String, Object> context
     ) {
         String nextNodeId = nodeResult.nextNodeId()
                 .orElseGet(() -> outgoingEdges.getOrDefault(currentNode.id(), List.of()).stream()
+                        .filter(edge -> matchesCondition(edge.condition(), context))
                         .findFirst()
                         .map(WorkflowEdge::targetNodeId)
                         .orElse(null));
@@ -182,5 +189,59 @@ public class WorkflowExecutionService {
             throw new IllegalStateException("Workflow node not found: " + nextNodeId);
         }
         return nextNode;
+    }
+
+    private void mergeNodeOutput(Map<String, Object> context, WorkflowNode node, Map<String, Object> output) {
+        context.putAll(output);
+        context.put(node.id(), output);
+        if (node.name() != null && !node.name().isBlank()) {
+            context.put(node.name(), output);
+        }
+    }
+
+    private Map<String, Object> systemVariables(Map<String, Object> requestVariables) {
+        ZoneId zone = ZoneId.systemDefault();
+        Instant now = Instant.now();
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("datetime", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(zone).format(now));
+        variables.put("date", LocalDate.now(zone).toString());
+        variables.put("time", LocalTime.now(zone).format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+        variables.put("timestamp", now.toEpochMilli());
+        variables.put("userId", stringValue(requestVariables.get("userId")));
+        return variables;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private boolean matchesCondition(String condition, Map<String, Object> context) {
+        if (condition == null || condition.isBlank()) {
+            return true;
+        }
+        String expression = condition.trim();
+        if (expression.contains("!=")) {
+            String[] parts = expression.split("!=", 2);
+            return !resolveConditionValue(parts[0], context).equals(cleanExpectedValue(parts[1]));
+        }
+        if (expression.contains("==")) {
+            String[] parts = expression.split("==", 2);
+            return resolveConditionValue(parts[0], context).equals(cleanExpectedValue(parts[1]));
+        }
+        Object value = TemplateRenderer.resolvePath(context, expression);
+        return value instanceof Boolean booleanValue ? booleanValue : value != null && !String.valueOf(value).isBlank();
+    }
+
+    private String resolveConditionValue(String key, Map<String, Object> context) {
+        Object value = TemplateRenderer.resolvePath(context, key.trim());
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private String cleanExpectedValue(String value) {
+        String expected = value.trim();
+        if ((expected.startsWith("\"") && expected.endsWith("\"")) || (expected.startsWith("'") && expected.endsWith("'"))) {
+            return expected.substring(1, expected.length() - 1);
+        }
+        return expected;
     }
 }

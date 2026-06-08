@@ -138,6 +138,7 @@ public class AuthAdminController {
     ) {
         return ApiResponse.success(authAdminService.updateLocalUser(
                 userId,
+                request.username(),
                 request.password(),
                 request.displayName(),
                 request.mobile(),
@@ -284,6 +285,7 @@ public class AuthAdminController {
     }
 
     public record UpdateUserRequest(
+            @NotBlank String username,
             String password,
             @NotBlank String displayName,
             String mobile,

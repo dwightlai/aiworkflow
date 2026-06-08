@@ -33,9 +33,9 @@ const nodeTemplates: NodeTemplate[] = [
     description: '接收 API、调试或会话输入',
     icon: <PlayCircleOutlined />,
     config: {
-      inputParams: [{ name: 'question', type: 'String' }],
-      inputKeys: ['question'],
-      defaultInputJson: '{\n  "question": "请介绍退款政策",\n  "keyword": "退款",\n  "items": ["北京", "上海"]\n}'
+      inputParams: [{ name: 'input', type: 'String', required: false }],
+      inputKeys: ['input'],
+      defaultInputJson: '{\n  "input": "请介绍退款政策",\n  "keyword": "退款",\n  "items": ["北京", "上海"]\n}'
     }
   },
   {
@@ -44,20 +44,19 @@ const nodeTemplates: NodeTemplate[] = [
     description: '通过知识库获取内容',
     icon: <DatabaseOutlined />,
     config: {
-      inputParams: [{ name: 'search_key', value: 'keyword', type: 'String' }],
+      inputParams: [{ name: 'input', value: '开始.input', type: 'String' }],
       knowledgeBaseId: '',
-      keywordTemplate: '{{search_key}}',
-      queryKey: 'keyword',
+      queryText: '{input}',
+      keywordTemplate: '{input}',
+      queryKey: 'input',
       fetchCount: 5,
       topK: 5,
-      outputKey: 'documents',
-      outputFormat: 'ARRAY',
+      outputKey: 'content',
+      outputFormat: 'TEXT',
       outputParams: [
-        { name: 'documents', type: 'Array' },
-        { name: 'title', type: 'String' },
         { name: 'content', type: 'String' },
-        { name: 'documentId', type: 'Number' },
-        { name: 'knowledgeId', type: 'Number' }
+        { name: 'sources', type: 'Array[String]' },
+        { name: 'query', type: 'String' }
       ]
     }
   },
@@ -82,15 +81,35 @@ const nodeTemplates: NodeTemplate[] = [
       inputParams: [],
       providerId: '',
       model: '',
-      temperature: 0.5,
+      temperature: 0,
       topP: 0.9,
       topK: 50,
+      maxTokens: 60,
       systemPrompt: '',
-      userPrompt: '{{question}}',
-      promptKey: 'question',
-      outputKey: 'output',
+      userPrompt: '${input}',
+      promptKey: 'input',
+      outputKey: 'content',
       outputFormat: 'TEXT',
-      outputParams: [{ name: 'output', type: 'String' }]
+      outputParams: [{ name: 'content', type: 'String' }]
+    }
+  },
+  {
+    type: 'QUESTION_CLASSIFIER',
+    name: '问题分类',
+    description: '按关键词把问题路由到不同分支',
+    icon: <BranchesOutlined />,
+    config: {
+      inputKey: '开始.input',
+      outputKey: 'questionCategory',
+      categories: [
+        { id: 'consult', name: '咨询类', keywords: ['咨询', '介绍', '怎么'], matchMode: 'CONTAINS' },
+        { id: 'after_sales', name: '售后类', keywords: ['退款', '退货', '售后'], matchMode: 'CONTAINS' }
+      ],
+      outputParams: [
+        { name: 'questionCategory', type: 'String' },
+        { name: 'categoryName', type: 'String' },
+        { name: 'categoryMatched', type: 'Boolean' }
+      ]
     }
   },
   {
@@ -175,7 +194,7 @@ const nodeTemplates: NodeTemplate[] = [
     icon: <StopOutlined />,
     config: {
       outputKeys: ['output'],
-      outputParams: [{ name: 'output', type: 'String' }],
+      outputParams: [{ name: 'result', value: 'content', type: 'String' }],
       outputFormat: 'JSON'
     }
   }

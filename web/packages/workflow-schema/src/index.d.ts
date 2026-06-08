@@ -1,4 +1,4 @@
-export type WorkflowNodeType = 'START' | 'END' | 'LLM' | 'PROMPT' | 'KNOWLEDGE_RETRIEVAL' | 'HTTP_TOOL' | 'CONDITION' | 'TEXT_TRANSFORM' | 'CONTENT_TEMPLATE' | 'LOOP';
+export type WorkflowNodeType = 'START' | 'END' | 'LLM' | 'QUESTION_CLASSIFIER' | 'PROMPT' | 'KNOWLEDGE_RETRIEVAL' | 'HTTP_TOOL' | 'CONDITION' | 'TEXT_TRANSFORM' | 'CONTENT_TEMPLATE' | 'LOOP';
 export interface WorkflowNode {
     id: string;
     type: WorkflowNodeType;

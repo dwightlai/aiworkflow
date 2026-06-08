@@ -1,5 +1,5 @@
-import { CommentOutlined, DeleteOutlined, PlusOutlined, RedoOutlined, RobotOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
-import type { WorkflowNode } from '@aiworkflow/workflow-schema';
+import { BranchesOutlined, CommentOutlined, DeleteOutlined, PlusOutlined, RedoOutlined, RobotOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
+import type { WorkflowEdge, WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Button, Empty, Form, Input, InputNumber, Radio, Select, Slider, Space, Switch, Typography } from 'antd';
 import type React from 'react';
 import type { KnowledgeBase } from '../../../api/knowledge';
@@ -8,6 +8,8 @@ import type { PromptTemplate } from '../../../api/prompts';
 
 export interface NodeConfigPanelProps {
   node: WorkflowNode | null;
+  nodes?: WorkflowNode[];
+  edges?: WorkflowEdge[];
   onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void;
   modelProviders?: ModelProvider[];
   promptTemplates?: PromptTemplate[];
@@ -18,11 +20,19 @@ interface ParamRow {
   name: string;
   value?: string;
   type: string;
+  required?: boolean;
 }
 
 interface KeyValueRow {
   key: string;
   value: string;
+}
+
+interface CategoryRow {
+  id: string;
+  name: string;
+  keywords: string[];
+  matchMode: string;
 }
 
 interface LoopStep {
@@ -39,8 +49,20 @@ interface LoopStep {
   params?: KeyValueRow[];
 }
 
+interface VariableOption {
+  value: string;
+  label: string;
+}
+
+interface VariableOptionGroup {
+  label: string;
+  options: VariableOption[];
+}
+
 export function NodeConfigPanel({
   node,
+  nodes = [],
+  edges = [],
   onChange,
   modelProviders = [],
   promptTemplates = [],
@@ -56,11 +78,20 @@ export function NodeConfigPanel({
   }
 
   const setConfig = (patch: Record<string, unknown>) => onChange(node.id, { config: { ...(node.config ?? {}), ...patch } });
+  const variableOptions = buildVariableReferenceOptions(node, nodes, edges);
 
   if (node.type === 'LLM') {
     return (
       <Panel node={node} title="大模型" description="使用大模型处理问题" icon={<RobotOutlined />} onChange={onChange}>
-        <LlmConfigV2 node={node} setConfig={setConfig} modelProviders={modelProviders} />
+        <LlmConfigV2 node={node} setConfig={setConfig} modelProviders={modelProviders} variableOptions={variableOptions} />
+      </Panel>
+    );
+  }
+
+  if (node.type === 'QUESTION_CLASSIFIER') {
+    return (
+      <Panel node={node} title="问题分类" description="按分类规则路由问题" icon={<BranchesOutlined />} onChange={onChange}>
+        <QuestionClassifierConfig node={node} setConfig={setConfig} variableOptions={variableOptions} />
       </Panel>
     );
   }
@@ -68,7 +99,7 @@ export function NodeConfigPanel({
   if (node.type === 'KNOWLEDGE_RETRIEVAL') {
     return (
       <Panel node={node} title="知识库" description="通过知识库获取内容" icon={<SearchOutlined />} onChange={onChange}>
-        <KnowledgeConfigV2 node={node} setConfig={setConfig} knowledgeBases={knowledgeBases} />
+        <KnowledgeConfigV2 node={node} setConfig={setConfig} knowledgeBases={knowledgeBases} variableOptions={variableOptions} />
       </Panel>
     );
   }
@@ -99,7 +130,7 @@ export function NodeConfigPanel({
 
   return (
     <Panel node={node} title={node.name} description={node.type} onChange={onChange}>
-      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} />
+      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} variableOptions={variableOptions} />
     </Panel>
   );
 }
@@ -261,9 +292,9 @@ function KnowledgeConfig({ node, setConfig, knowledgeBases }: { node: WorkflowNo
   );
 }
 
-function LlmConfigV2({ node, setConfig, modelProviders }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; modelProviders: ModelProvider[] }) {
+function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; modelProviders: ModelProvider[]; variableOptions: VariableOptionGroup[] }) {
   const config = node.config ?? {};
-  const inputParams = readParams(config.inputParams, [{ name: 'input', value: 'start.input', type: 'String' }]);
+  const inputParams = readParams(config.inputParams, [{ name: 'input', value: '开始.input', type: 'String' }]);
   const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
   return (
     <>
@@ -272,7 +303,8 @@ function LlmConfigV2({ node, setConfig, modelProviders }: { node: WorkflowNode; 
         emptyText="暂无变量输入"
         params={inputParams}
         valueMode="select"
-        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: 'start.input', type: 'String' }] })}
+        variableOptions={variableOptions}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: '开始.input', type: 'String' }] })}
         onChange={(next) => setConfig({ inputParams: next })}
       />
       <SectionTitle title="模型配置" />
@@ -335,6 +367,23 @@ function LlmConfigV2({ node, setConfig, modelProviders }: { node: WorkflowNode; 
               onChange={(streaming) => setConfig({ streaming, stream: streaming })}
             />
           </div>
+          <SliderStepperField
+            label="最大 Token"
+            value={numberValue(config.maxTokens, 60)}
+            min={1}
+            max={32000}
+            step={1}
+            onChange={(maxTokens) => setConfig({ maxTokens })}
+          />
+          <SliderStepperField
+            label="Temperature"
+            value={numberValue(config.temperature, 0)}
+            min={0}
+            max={2}
+            step={0.1}
+            precision={1}
+            onChange={(temperature) => setConfig({ temperature })}
+          />
         </Space>
       </section>
       <FixedOutputSection params={[
@@ -345,9 +394,9 @@ function LlmConfigV2({ node, setConfig, modelProviders }: { node: WorkflowNode; 
   );
 }
 
-function KnowledgeConfigV2({ node, setConfig, knowledgeBases }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; knowledgeBases: KnowledgeBase[] }) {
+function KnowledgeConfigV2({ node, setConfig, knowledgeBases, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; knowledgeBases: KnowledgeBase[]; variableOptions: VariableOptionGroup[] }) {
   const config = node.config ?? {};
-  const inputParams = readParams(config.inputParams, [{ name: '', value: 'start.input', type: 'String' }]);
+  const inputParams = readParams(config.inputParams, [{ name: 'input', value: '开始.input', type: 'String' }]);
   const topK = numberValue(config.fetchCount ?? config.topK, 5);
   const similarityThreshold = numberValue(config.similarityThreshold, 0.7);
   return (
@@ -356,7 +405,8 @@ function KnowledgeConfigV2({ node, setConfig, knowledgeBases }: { node: Workflow
         title="变量输入"
         params={inputParams}
         valueMode="select"
-        onAdd={() => setConfig({ inputParams: [...inputParams, { name: '', value: 'start.input', type: 'String' }] })}
+        variableOptions={variableOptions}
+        onAdd={() => setConfig({ inputParams: [...inputParams, { name: 'input', value: '开始.input', type: 'String' }] })}
         onChange={(next) => setConfig({ inputParams: next })}
       />
       <SectionTitle title="知识库配置" />
@@ -375,7 +425,7 @@ function KnowledgeConfigV2({ node, setConfig, knowledgeBases }: { node: Workflow
             aria-label="查询文本"
             placeholder="如何冒泡排序"
             autoSize={{ minRows: 4, maxRows: 7 }}
-            value={String(config.queryText ?? config.keywordTemplate ?? '')}
+            value={String(config.queryText ?? config.keywordTemplate ?? '{input}')}
             onChange={(event) => setConfig({ queryText: event.target.value, keywordTemplate: event.target.value })}
           />
         </Form.Item>
@@ -408,7 +458,51 @@ function KnowledgeConfigV2({ node, setConfig, knowledgeBases }: { node: Workflow
   );
 }
 
-function ParamSectionV2({ title, params, emptyText = '暂无变量输入', valueMode = 'input', onAdd, onChange }: { title: string; params: ParamRow[]; emptyText?: string; valueMode?: 'input' | 'select'; onAdd: () => void; onChange: (params: ParamRow[]) => void }) {
+function QuestionClassifierConfig({ node, setConfig, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; variableOptions: VariableOptionGroup[] }) {
+  const config = node.config ?? {};
+  const categories = readCategories(config.categories);
+  return (
+    <>
+      <SectionTitle title="分类配置" />
+      <Form layout="vertical" size="small">
+        <Form.Item label="输入变量">
+          <Select
+            showSearch
+            optionFilterProp="label"
+            popupMatchSelectWidth={320}
+            value={String(config.inputKey ?? '开始.input')}
+            options={variableOptions}
+            onChange={(inputKey) => setConfig({ inputKey })}
+          />
+        </Form.Item>
+        <Form.Item label="输出变量">
+          <Input value={String(config.outputKey ?? 'questionCategory')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
+        </Form.Item>
+      </Form>
+      <section style={sectionStyle}>
+        <SectionTitle title="分类项" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setConfig({ categories: [...categories, defaultCategory()] })}>添加</Button>} />
+        <Space direction="vertical" style={{ width: '100%' }} size={10}>
+          {categories.map((category, index) => (
+            <div key={`${category.id}-${index}`} style={stepCardStyle}>
+              <Input placeholder="分类 ID" value={category.id} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { id: event.target.value }) })} />
+              <Input placeholder="分类名称" value={category.name} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { name: event.target.value }) })} />
+              <Input placeholder="关键词，英文逗号分隔" value={category.keywords.join(',')} onChange={(event) => setConfig({ categories: updateCategory(categories, index, { keywords: splitKeywords(event.target.value) }) })} />
+              <Select value={category.matchMode} options={[{ value: 'CONTAINS', label: '包含' }, { value: 'EQUALS', label: '等于' }]} onChange={(matchMode) => setConfig({ categories: updateCategory(categories, index, { matchMode }) })} />
+              <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setConfig({ categories: categories.filter((_, itemIndex) => itemIndex !== index) })}>删除</Button>
+            </div>
+          ))}
+        </Space>
+      </section>
+      <FixedOutputSection params={[
+        { name: String(config.outputKey ?? 'questionCategory'), type: 'String' },
+        { name: 'categoryName', type: 'String' },
+        { name: 'categoryMatched', type: 'Boolean' }
+      ]} />
+    </>
+  );
+}
+
+function ParamSectionV2({ title, params, emptyText = '暂无变量输入', valueMode = 'input', variableOptions = [], onAdd, onChange }: { title: string; params: ParamRow[]; emptyText?: string; valueMode?: 'input' | 'select'; variableOptions?: VariableOptionGroup[]; onAdd: () => void; onChange: (params: ParamRow[]) => void }) {
   return (
     <section style={sectionStyle}>
       <SectionTitle title={title} action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={onAdd}>添加</Button>} />
@@ -420,7 +514,15 @@ function ParamSectionV2({ title, params, emptyText = '暂无变量输入', value
             <div key={`${param.name}-${index}`} style={paramGridStyle}>
               <Input aria-label={`变量名 ${index + 1}`} placeholder="变量名" value={param.name} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
               {valueMode === 'select' ? (
-                <Select aria-label={`变量值 ${index + 1}`} value={param.value} options={variableReferenceOptions} onChange={(value) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item))} />
+                <Select
+                  aria-label={`变量值 ${index + 1}`}
+                  showSearch
+                  optionFilterProp="label"
+                  popupMatchSelectWidth={320}
+                  value={param.value}
+                  options={variableOptions}
+                  onChange={(value) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item))}
+                />
               ) : (
                 <Input aria-label={`变量值 ${index + 1}`} placeholder="变量值" value={param.value} onChange={(event) => onChange(params.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} />
               )}
@@ -694,7 +796,63 @@ function OutputSection({ params, format, onFormatChange, onChange, onRemove }: {
   );
 }
 
-function GenericConfig({ node, setConfig, promptTemplates }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; promptTemplates: PromptTemplate[] }) {
+function StartConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
+  const config = node.config ?? {};
+  const params = readParams(config.inputParams, [{ name: 'input', type: 'String', required: false }]);
+  function updateParams(next: ParamRow[]) {
+    setConfig({ inputParams: next, inputKeys: next.map((param) => param.name).filter(Boolean) });
+  }
+  return (
+    <>
+      <section style={sectionStyle}>
+        <SectionTitle title="变量列表" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateParams([...params, { name: 'input', type: 'String', required: false }])}>添加</Button>} />
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {params.map((param, index) => (
+            <div key={`${param.name}-${index}`} style={startParamGridStyle}>
+              <Input placeholder="变量名" value={param.name} onChange={(event) => updateParams(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
+              <Select value={param.type} options={paramTypeOptions} onChange={(type) => updateParams(params.map((item, itemIndex) => itemIndex === index ? { ...item, type } : item))} />
+              <Switch checkedChildren="必填" unCheckedChildren="选填" checked={Boolean(param.required)} onChange={(required) => updateParams(params.map((item, itemIndex) => itemIndex === index ? { ...item, required } : item))} />
+              <Button icon={<DeleteOutlined />} size="small" onClick={() => updateParams(params.filter((_, itemIndex) => itemIndex !== index))} />
+            </div>
+          ))}
+        </Space>
+      </section>
+    </>
+  );
+}
+
+function EndConfig({ node, setConfig, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; variableOptions: VariableOptionGroup[] }) {
+  const config = node.config ?? {};
+  const params = readParams(config.outputParams, [{ name: 'result', value: 'content', type: 'String' }]);
+  function updateParams(next: ParamRow[]) {
+    setConfig({ outputParams: next, outputKeys: next.map((param) => param.name).filter(Boolean) });
+  }
+  return (
+    <section style={sectionStyle}>
+      <SectionTitle title="输出变量" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateParams([...params, { name: 'result', value: 'content', type: 'String' }])}>添加输出</Button>} />
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        {params.map((param, index) => (
+          <div key={`${param.name}-${index}`} style={endParamGridStyle}>
+            <Input placeholder="输出名" value={param.name} onChange={(event) => updateParams(params.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
+            <Select
+              aria-label={`来源变量 ${index + 1}`}
+              showSearch
+              optionFilterProp="label"
+              popupMatchSelectWidth={320}
+              value={param.value}
+              options={variableOptions}
+              onChange={(value) => updateParams(params.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item))}
+            />
+            <Select value={param.type} options={paramTypeOptions} onChange={(type) => updateParams(params.map((item, itemIndex) => itemIndex === index ? { ...item, type } : item))} />
+            <Button icon={<DeleteOutlined />} size="small" onClick={() => updateParams(params.filter((_, itemIndex) => itemIndex !== index))} />
+          </div>
+        ))}
+      </Space>
+    </section>
+  );
+}
+
+function GenericConfig({ node, setConfig, promptTemplates, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; promptTemplates: PromptTemplate[]; variableOptions: VariableOptionGroup[] }) {
   const config = node.config ?? {};
   if (node.type === 'PROMPT') {
     return (
@@ -722,27 +880,11 @@ function GenericConfig({ node, setConfig, promptTemplates }: { node: WorkflowNod
   }
 
   if (node.type === 'START') {
-    const params = readParams(config.inputParams, [{ name: 'question', type: 'String' }]);
-    return <ParamSection title="输入参数" params={params} onAdd={() => setConfig({ inputParams: [...params, { name: 'question', type: 'String' }] })} onChange={(inputParams) => setConfig({ inputParams })} />;
+    return <StartConfig node={node} setConfig={setConfig} />;
   }
 
   if (node.type === 'END') {
-    const params = readParams(config.outputParams, [{ name: 'output', type: 'String' }]);
-    return (
-      <OutputSection
-        params={params}
-        format={stringValue(config.outputFormat, 'JSON') ?? 'JSON'}
-        onFormatChange={(outputFormat) => setConfig({ outputFormat })}
-        onChange={(patch, index) => {
-          const next = params.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param);
-          setConfig({ outputParams: next, outputKeys: next.map((param) => param.name) });
-        }}
-        onRemove={(index) => {
-          const next = params.filter((_, itemIndex) => itemIndex !== index);
-          setConfig({ outputParams: next, outputKeys: next.map((param) => param.name) });
-        }}
-      />
-    );
+    return <EndConfig node={node} setConfig={setConfig} variableOptions={variableOptions} />;
   }
 
   return (
@@ -784,7 +926,8 @@ function readParams(value: unknown, fallback: ParamRow[] = []): ParamRow[] {
     .map((item) => ({
       name: String(item.name ?? ''),
       value: item.value === undefined ? undefined : String(item.value),
-      type: String(item.type ?? 'String')
+      type: String(item.type ?? 'String'),
+      required: Boolean(item.required)
     }));
 }
 
@@ -795,6 +938,20 @@ function readKeyValues(value: unknown, fallback: KeyValueRow[] = []): KeyValueRo
   return value
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
     .map((item) => ({ key: String(item.key ?? ''), value: String(item.value ?? '') }));
+}
+
+function readCategories(value: unknown): CategoryRow[] {
+  if (!Array.isArray(value)) {
+    return [defaultCategory()];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item) => ({
+      id: String(item.id ?? ''),
+      name: String(item.name ?? ''),
+      keywords: Array.isArray(item.keywords) ? item.keywords.map(String) : splitKeywords(String(item.keyword ?? '')),
+      matchMode: String(item.matchMode ?? 'CONTAINS')
+    }));
 }
 
 function readLoopSteps(value: unknown): LoopStep[] {
@@ -820,8 +977,20 @@ function updateLoopStep(steps: LoopStep[], index: number, patch: Partial<LoopSte
   return steps.map((step, itemIndex) => itemIndex === index ? { ...step, ...patch } : step);
 }
 
+function updateCategory(categories: CategoryRow[], index: number, patch: Partial<CategoryRow>) {
+  return categories.map((category, itemIndex) => itemIndex === index ? { ...category, ...patch } : category);
+}
+
 function defaultLoopStep(): LoopStep {
   return { type: 'CONTENT_TEMPLATE', name: '模板处理', template: '第 {{index}} 项：{{loopItem}}', outputKey: 'text' };
+}
+
+function defaultCategory(): CategoryRow {
+  return { id: 'category', name: '分类', keywords: [], matchMode: 'CONTAINS' };
+}
+
+function splitKeywords(value: string) {
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
 }
 
 function stringValue(value: unknown, fallback: string | undefined) {
@@ -833,7 +1002,88 @@ function numberValue(value: unknown, fallback: number) {
 }
 
 function firstTemplateVar(value: string) {
-  return value.match(/\{\{\s*([A-Za-z0-9_.-]+)\s*}}/)?.[1] ?? '';
+  return value.match(/\{\{\s*([^{}\s]+)\s*\}\}|\$\{\s*([^{}\s]+)\s*\}|\{\s*([\p{L}\p{N}_.\-\[\]]+)\s*\}/u)?.slice(1).find(Boolean) ?? '';
+}
+
+function buildVariableReferenceOptions(currentNode: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): VariableOptionGroup[] {
+  const allNodes = nodes.length > 0 ? nodes : [currentNode];
+  const nodeById = new Map(allNodes.map((node) => [node.id, node]));
+  const startOptions = uniqueOptions(allNodes
+    .filter((node) => node.type === 'START')
+    .flatMap((node) => startVariableOptions(node)));
+  const previousNodes = connectedPreviousNodes(currentNode, nodeById, edges);
+  const previousOptions = uniqueOptions(previousNodes.flatMap((node) => nodeOutputOptions(node)));
+  return [
+    startOptions.length > 0 ? { label: '开始', options: startOptions } : null,
+    previousOptions.length > 0 ? { label: '上一节点输出', options: previousOptions } : null,
+    { label: '系统变量', options: systemVariableOptions }
+  ].filter((group): group is VariableOptionGroup => Boolean(group));
+}
+
+function connectedPreviousNodes(currentNode: WorkflowNode, nodeById: Map<string, WorkflowNode>, edges: WorkflowEdge[]) {
+  const incomingNodes = edges
+    .filter((edge) => edge.targetNodeId === currentNode.id)
+    .map((edge) => nodeById.get(edge.sourceNodeId))
+    .filter((node): node is WorkflowNode => node !== undefined && node.type !== 'START');
+  if (incomingNodes.length > 0) {
+    return incomingNodes;
+  }
+  return edges
+    .filter((edge) => edge.sourceNodeId === currentNode.id)
+    .map((edge) => nodeById.get(edge.targetNodeId))
+    .filter((node): node is WorkflowNode => node !== undefined && node.type !== 'START' && node.type !== 'END');
+}
+
+function startVariableOptions(node: WorkflowNode): VariableOption[] {
+  return readParams(node.config?.inputParams, [{ name: 'input', type: 'String' }])
+    .filter((param) => param.name)
+    .map((param) => typedOption(`${node.name}.${param.name}`, param.type));
+}
+
+function nodeOutputOptions(node: WorkflowNode): VariableOption[] {
+  const config = node.config ?? {};
+  const nodeName = node.name || node.id;
+  const options: VariableOption[] = [];
+  if (node.type === 'KNOWLEDGE_RETRIEVAL') {
+    options.push(typedOption(`${nodeName}.content`, 'String'));
+    options.push(typedOption(`${nodeName}.sources`, 'Array[String]'));
+    options.push(typedOption(`${nodeName}.query`, 'String'));
+  } else if (node.type === 'LLM') {
+    options.push(typedOption(`${nodeName}.content`, 'String'));
+    options.push(typedOption(`${nodeName}.reasoning_content`, 'String'));
+  } else if (node.type === 'HTTP_TOOL') {
+    const outputKey = stringValue(config.outputKey, 'toolResult') ?? 'toolResult';
+    options.push(typedOption(`${nodeName}.${outputKey}`, 'Object'));
+    options.push(typedOption(`${nodeName}.${outputKey}.body`, 'String'));
+    options.push(typedOption(`${nodeName}.${outputKey}.rawBody`, 'String'));
+    options.push(typedOption(`${nodeName}.${outputKey}.statusCode`, 'Number'));
+    options.push(typedOption(`${nodeName}.${outputKey}.headers`, 'Object'));
+    options.push(typedOption(`${nodeName}.${outputKey}.success`, 'Boolean'));
+  } else if (node.type === 'QUESTION_CLASSIFIER') {
+    options.push(typedOption(`${nodeName}.${stringValue(config.outputKey, 'questionCategory') ?? 'questionCategory'}`, 'String'));
+    options.push(typedOption(`${nodeName}.categoryName`, 'String'));
+    options.push(typedOption(`${nodeName}.categoryMatched`, 'Boolean'));
+  } else {
+    readParams(config.outputParams)
+      .filter((param) => param.name)
+      .forEach((param) => options.push(typedOption(`${nodeName}.${param.name}`, param.type)));
+  }
+  return uniqueOptions(options);
+}
+
+function typedOption(value: string, type: string): VariableOption {
+  return { value, label: `${value}  ${type}` };
+}
+
+function uniqueOptions(options: VariableOption[]) {
+  const seen = new Set<string>();
+  return options.filter((option) => {
+    if (seen.has(option.value)) {
+      return false;
+    }
+    seen.add(option.value);
+    return true;
+  });
 }
 
 const paramTypeOptions = [
@@ -858,11 +1108,12 @@ const bodyTypeOptions = [
   { value: 'FORM_DATA', label: 'Form Data' },
   { value: 'NONE', label: 'None' }
 ];
-const variableReferenceOptions = [
-  { value: 'start.input', label: '开始.input' },
-  { value: 'input', label: 'input' },
-  { value: 'question', label: 'question' },
-  { value: 'content', label: 'content' }
+const systemVariableOptions = [
+  typedOption('系统变量.datetime', 'String'),
+  typedOption('系统变量.date', 'String'),
+  typedOption('系统变量.time', 'String'),
+  typedOption('系统变量.timestamp', 'Number'),
+  typedOption('系统变量.userId', 'String')
 ];
 
 const panelStyle: React.CSSProperties = { background: '#fff', borderLeft: '0', height: '100%', overflow: 'auto', padding: 0, width: '100%' };
@@ -875,6 +1126,8 @@ const sectionStyle: React.CSSProperties = { padding: '10px 16px' };
 const sectionTitleStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', marginBottom: 10 };
 const emptyParamStyle: React.CSSProperties = { background: '#f7f7f8', borderRadius: 6, color: '#8c8c8c', lineHeight: '44px', textAlign: 'center' };
 const paramGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(78px, 1fr) minmax(96px, 1.15fr) 90px 30px' };
+const startParamGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(90px, 1fr) 96px 70px 30px' };
+const endParamGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(78px, 0.8fr) minmax(120px, 1.2fr) 90px 30px' };
 const keyValueGridStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(140px, 1.4fr)' };
 const outputHeaderStyle: React.CSSProperties = { display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px', marginBottom: 6 };
 const outputGridStyle: React.CSSProperties = { alignItems: 'center', display: 'grid', gap: 6, gridTemplateColumns: 'minmax(100px, 1fr) minmax(100px, 1fr) 30px' };

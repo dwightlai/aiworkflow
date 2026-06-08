@@ -372,10 +372,21 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations' }: Ident
 
       <Drawer title={userDrawer?.mode === 'edit' ? '编辑用户' : '新增用户'} open={Boolean(userDrawer)} width={520} onClose={() => setUserDrawer(null)} footer={<DrawerFooter onCancel={() => setUserDrawer(null)} onSubmit={() => userForm.submit()} loading={saveUserMutation.isPending} />}>
         <Form form={userForm} layout="vertical" onFinish={(values) => saveUserMutation.mutate(values)}>
-          {userDrawer?.mode === 'create' ? <Form.Item name="username" label="登录名" rules={[{ required: true, message: '请输入登录名' }]}><Input /></Form.Item> : null}
-          <Form.Item name="displayName" label="显示名" rules={[{ required: true, message: '请输入显示名' }]}><Input /></Form.Item>
-          {userDrawer?.mode === 'edit' ? <Form.Item name="password" label="新密码"><Input.Password placeholder="留空则不修改" /></Form.Item> : null}
-          {userDrawer?.mode === 'create' ? <Form.Item name="password" label="初始密码" rules={[{ required: true, message: '请输入初始密码' }]}><Input.Password /></Form.Item> : null}
+          <Form.Item
+            name="username"
+            label="登录名"
+            rules={[{ required: true, message: '请输入登录名' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label={userDrawer?.mode === 'edit' ? '新密码' : '初始密码'}
+            rules={userDrawer?.mode === 'create' ? [{ required: true, message: '请输入初始密码' }] : undefined}
+          >
+            <Input.Password placeholder={userDrawer?.mode === 'edit' ? '留空则不修改' : undefined} />
+          </Form.Item>
+          <Form.Item name="displayName" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}><Input /></Form.Item>
           <Form.Item name="mobile" label="手机号"><Input /></Form.Item>
           <Form.Item name="email" label="邮箱"><Input /></Form.Item>
           <Form.Item name="sortOrder" label="排序"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
@@ -497,7 +508,8 @@ function UserManagementPanel({ organizations, expandedOrganizationIds, selectedO
 
 function UserTable({ users, loading, onEdit, onStatus, onResetPassword, onDelete }: { users: IdentityUser[]; loading: boolean; onEdit: (user: IdentityUser) => void; onStatus: (user: IdentityUser, status: string) => void; onResetPassword: (user: IdentityUser) => void; onDelete: (user: IdentityUser) => void }) {
   const columns: ColumnsType<IdentityUser> = [
-    { title: '用户', dataIndex: 'username', render: (_, user) => <Space direction="vertical" size={0}><Typography.Text strong>{user.displayName}</Typography.Text><Typography.Text type="secondary">{user.username}</Typography.Text></Space> },
+    { title: '姓名', dataIndex: 'displayName', render: (_, user) => <Typography.Text strong>{user.displayName}</Typography.Text> },
+    { title: '登录名', dataIndex: 'username', render: (_, user) => <Typography.Text type="secondary">{user.username}</Typography.Text> },
     { title: '类型', dataIndex: 'userType', width: 100, render: tag },
     { title: '排序', dataIndex: 'sortOrder', width: 90, render: (value?: number) => value ?? 0 },
     { title: '组织', dataIndex: 'organizationIds', render: (values: string[]) => (values ?? []).join(', ') },

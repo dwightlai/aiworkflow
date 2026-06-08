@@ -4,6 +4,9 @@ import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @Component
 public class StartNodeExecutor implements WorkflowNodeExecutor {
     @Override
@@ -13,6 +16,8 @@ public class StartNodeExecutor implements WorkflowNodeExecutor {
 
     @Override
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
-        return NodeExecutionResult.output(context.input());
+        Map<String, Object> output = new LinkedHashMap<>(context.input());
+        output.put("start", context.input());
+        return NodeExecutionResult.output(output);
     }
 }

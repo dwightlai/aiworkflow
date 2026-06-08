@@ -714,6 +714,7 @@ function nodeToneStyle(type: WorkflowNode['type']): React.CSSProperties {
     KNOWLEDGE_RETRIEVAL: '#f0fdf4',
     LLM: '#fff7ed',
     LOOP: '#f0f9ff',
+    QUESTION_CLASSIFIER: '#fdf2f8',
     PROMPT: '#eef6ff',
     START: '#ecfdf3',
     CONTENT_TEMPLATE: '#f5f3ff',

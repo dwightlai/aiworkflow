@@ -4,6 +4,7 @@ public enum WorkflowNodeType {
     START,
     END,
     LLM,
+    QUESTION_CLASSIFIER,
     PROMPT,
     KNOWLEDGE_RETRIEVAL,
     HTTP_TOOL,

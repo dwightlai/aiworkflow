@@ -413,6 +413,8 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
       >
         <NodeConfigPanel
           node={selectedNode}
+          nodes={definition.nodes}
+          edges={definition.edges}
           onChange={handleUpdateNode}
           modelProviders={modelProvidersQuery.data?.items ?? []}
           promptTemplates={promptTemplatesQuery.data?.items ?? []}
@@ -530,6 +532,9 @@ function calculateConfigCompleteness(definition: WorkflowDefinition) {
     }
     if (node.type === 'CONDITION') {
       return Boolean(node.config.contextKey && node.config.operator);
+    }
+    if (node.type === 'QUESTION_CLASSIFIER') {
+      return Boolean(node.config.inputKey && node.config.outputKey && node.config.categories);
     }
     return true;
   }).length;

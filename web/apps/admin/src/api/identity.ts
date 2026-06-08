@@ -131,6 +131,7 @@ export interface UpdateRoleRequest {
 }
 
 export interface UpdateUserRequest {
+  username: string;
   password?: string;
   displayName: string;
   mobile?: string | null;

@@ -63,6 +63,7 @@ describe('identity api', () => {
     });
     await updateUserStatus('user_new', 'LOCKED');
     await updateUser('user_new', {
+      username: 'new-user',
       displayName: 'New User Updated',
       mobile: null,
       email: null,

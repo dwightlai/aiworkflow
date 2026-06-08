@@ -1,7 +1,16 @@
 export function createEmptyWorkflowDefinition() {
     return {
         nodes: [
-            { id: 'start_1', type: 'START', name: 'Start', config: {} }
+            {
+                id: 'start_1',
+                type: 'START',
+                name: '开始',
+                config: {
+                    inputParams: [{ name: 'input', type: 'String', required: false }],
+                    inputKeys: ['input'],
+                    defaultInputJson: '{\n  "input": "请介绍退款政策"\n}'
+                }
+            }
         ],
         edges: [],
         variables: []

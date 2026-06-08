@@ -314,6 +314,7 @@ public class AuthAdminService {
 
     public AuthUserPrincipal updateLocalUser(
             String userId,
+            String username,
             String password,
             String displayName,
             String mobile,
@@ -324,6 +325,9 @@ public class AuthAdminService {
     ) {
         UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
                 .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        if (!"LOCAL".equals(user.getUserType())) {
+            throw new AuthException("USER_UPDATE_UNSUPPORTED", HttpStatus.BAD_REQUEST, "Only local users can be updated.");
+        }
         LambdaUpdateWrapper<UserEntity> updateWrapper = new LambdaUpdateWrapper<UserEntity>()
                 .eq(UserEntity::getId, user.getId())
                 .set(UserEntity::getDisplayName, displayName)
@@ -331,10 +335,16 @@ public class AuthAdminService {
                 .set(UserEntity::getEmail, email)
                 .set(UserEntity::getSortOrder, sortOrder == null ? 0 : sortOrder)
                 .set(UserEntity::getUpdatedAt, Instant.now());
+        if (username != null && !username.isBlank() && !username.equals(user.getUsername())) {
+            Optional.ofNullable(userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
+                            .eq(UserEntity::getTenantId, user.getTenantId())
+                            .eq(UserEntity::getUsername, username)))
+                    .ifPresent(existing -> {
+                        throw new AuthException("USERNAME_EXISTS", HttpStatus.BAD_REQUEST, "Username already exists.");
+                    });
+            updateWrapper.set(UserEntity::getUsername, username.trim());
+        }
         if (password != null && !password.isBlank()) {
-            if (!"LOCAL".equals(user.getUserType())) {
-                throw new AuthException("USER_PASSWORD_UNSUPPORTED", HttpStatus.BAD_REQUEST, "Only local users can update password.");
-            }
             updateWrapper.set(UserEntity::getPasswordHash, passwordEncoder.encode(password));
         }
         userMapper.update(null, updateWrapper);

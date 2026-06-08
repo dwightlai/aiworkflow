@@ -2,6 +2,7 @@ export type WorkflowNodeType =
   | 'START'
   | 'END'
   | 'LLM'
+  | 'QUESTION_CLASSIFIER'
   | 'PROMPT'
   | 'KNOWLEDGE_RETRIEVAL'
   | 'HTTP_TOOL'
@@ -76,7 +77,16 @@ export interface WorkflowValidationIssue {
 export function createEmptyWorkflowDefinition(): WorkflowDefinition {
   return {
     nodes: [
-      { id: 'start_1', type: 'START', name: 'Start', config: {} }
+      {
+        id: 'start_1',
+        type: 'START',
+        name: '开始',
+        config: {
+          inputParams: [{ name: 'input', type: 'String', required: false }],
+          inputKeys: ['input'],
+          defaultInputJson: '{\n  "input": "请介绍退款政策"\n}'
+        }
+      }
     ],
     edges: [],
     variables: []
