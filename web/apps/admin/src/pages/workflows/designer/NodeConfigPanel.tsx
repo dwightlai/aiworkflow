@@ -71,7 +71,6 @@ export function NodeConfigPanel({
   if (!node) {
     return (
       <aside style={panelStyle}>
-        <TinyHeader />
         <Empty description="请选择画布上的节点" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </aside>
     );
@@ -130,7 +129,7 @@ export function NodeConfigPanel({
 
   return (
     <Panel node={node} title={node.name} description={node.type} onChange={onChange}>
-      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} variableOptions={variableOptions} />
+      <GenericConfig node={node} setConfig={setConfig} promptTemplates={promptTemplates} variableOptions={variableOptions} onChange={onChange} />
     </Panel>
   );
 }
@@ -152,15 +151,10 @@ function Panel({
 }) {
   return (
     <aside style={panelStyle}>
-      <TinyHeader />
       <NodeTitle icon={icon} title={title} description={description} node={node} onChange={onChange} />
       {children}
     </aside>
   );
-}
-
-function TinyHeader() {
-  return <div style={tinyHeaderStyle}>TinyFlow.ai</div>;
 }
 
 function NodeTitle({
@@ -180,7 +174,13 @@ function NodeTitle({
     <div style={nodeTitleStyle}>
       <div style={nodeTitleMainStyle}>
         {icon ? <span style={nodeIconStyle}>{icon}</span> : null}
-        <Input value={node.name || title} style={nodeNameInputStyle} onChange={(event) => onChange(node.id, { name: event.target.value })} />
+        <Input
+          aria-label="节点名称"
+          placeholder="请输入节点名称"
+          value={node.name || title}
+          style={nodeNameInputStyle}
+          onChange={(event) => onChange(node.id, { name: event.target.value })}
+        />
       </div>
       <Typography.Text type="secondary">{description}</Typography.Text>
     </div>
@@ -915,7 +915,7 @@ function EndConfig({ node, setConfig, variableOptions }: { node: WorkflowNode; s
   );
 }
 
-function GenericConfig({ node, setConfig, promptTemplates, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; promptTemplates: PromptTemplate[]; variableOptions: VariableOptionGroup[] }) {
+function GenericConfig({ node, setConfig, promptTemplates, variableOptions, onChange }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; promptTemplates: PromptTemplate[]; variableOptions: VariableOptionGroup[]; onChange: (nodeId: string, patch: Partial<WorkflowNode>) => void }) {
   const config = node.config ?? {};
   if (node.type === 'PROMPT') {
     return (
@@ -953,7 +953,7 @@ function GenericConfig({ node, setConfig, promptTemplates, variableOptions }: { 
   return (
     <Form layout="vertical" size="small">
       <Form.Item label="节点名称">
-        <Input value={node.name} readOnly />
+        <Input aria-label="节点名称" value={node.name} onChange={(event) => onChange(node.id, { name: event.target.value })} />
       </Form.Item>
       <Form.Item label="配置 JSON">
         <Input.TextArea autoSize={{ minRows: 8, maxRows: 16 }} value={JSON.stringify(config, null, 2)} readOnly />
@@ -1181,11 +1181,10 @@ const systemVariableOptions = [
 ];
 
 const panelStyle: React.CSSProperties = { background: '#fff', borderLeft: '0', height: '100%', overflow: 'auto', padding: 0, width: '100%' };
-const tinyHeaderStyle: React.CSSProperties = { background: '#f5f6f8', borderBottom: '1px solid #e5e7eb', color: '#c1c7d0', fontSize: 12, lineHeight: '34px', padding: '0 14px' };
 const nodeTitleStyle: React.CSSProperties = { padding: '14px 16px 8px' };
 const nodeTitleMainStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', gap: 10, marginBottom: 8 };
 const nodeIconStyle: React.CSSProperties = { alignItems: 'center', background: '#eef3ff', borderRadius: 8, color: '#3b82f6', display: 'flex', fontSize: 22, height: 32, justifyContent: 'center', width: 32 };
-const nodeNameInputStyle: React.CSSProperties = { border: 0, boxShadow: 'none', fontSize: 16, fontWeight: 700, paddingLeft: 0 };
+const nodeNameInputStyle: React.CSSProperties = { flex: 1, fontSize: 16, fontWeight: 700 };
 const sectionStyle: React.CSSProperties = { padding: '10px 16px' };
 const sectionTitleStyle: React.CSSProperties = { alignItems: 'center', display: 'flex', justifyContent: 'space-between', marginBottom: 10 };
 const emptyParamStyle: React.CSSProperties = { background: '#f7f7f8', borderRadius: 6, color: '#8c8c8c', lineHeight: '44px', textAlign: 'center' };

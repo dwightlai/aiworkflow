@@ -50,7 +50,7 @@ describe('NodeConfigPanel', () => {
       />
     );
 
-    expect(screen.getByText('TinyFlow.ai')).toBeInTheDocument();
+    expect(screen.getByLabelText('节点名称')).toBeInTheDocument();
     expect(screen.getByText('使用大模型处理问题')).toBeInTheDocument();
     expect(screen.getByText('输入参数')).toBeInTheDocument();
     expect(screen.getByText('无输入参数')).toBeInTheDocument();
