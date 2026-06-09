@@ -10,6 +10,7 @@ import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
 import { IdentityOrganizationPage } from './pages/system/IdentityOrganizationPage';
 import { AssetGrantsPage } from './pages/system/AssetGrantsPage';
+import { OpenApiDocsPage } from './pages/system/OpenApiDocsPage';
 import { IntegrationAppsPage } from './pages/system/IntegrationAppsPage';
 import { TenantsPage } from './pages/system/TenantsPage';
 import { TenantWorkspacePage } from './pages/system/TenantWorkspacePage';
@@ -151,6 +152,14 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     };
   }
 
+  if (pathname === '/system/open-api-docs') {
+    return {
+      title: '开放 API 文档',
+      breadcrumb: ['首页', '系统管理', '开放 API 文档'],
+      element: <OpenApiDocsPage />
+    };
+  }
+
   if (pathname === '/system/integration-apps') {
     return {
       title: '第三方应用',
@@ -214,6 +223,7 @@ const routeTitleByPath: Record<string, string> = {
   '/system/roles': '组织用户',
   '/system/asset-grants': '资产授权',
   '/system/integration-apps': '第三方应用',
+  '/system/open-api-docs': '开放 API 文档',
   '/system/departments': '组织用户',
   '/system/dictionary': '数据字典',
   '/system/jobs': '定时任务',

@@ -39,8 +39,12 @@ mybatis-plus:
 springdoc:
   api-docs:
     path: /v3/api-docs
+  override-with-generic-response: false
   swagger-ui:
     path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+    disable-swagger-default-url: true
 
 third-party:
   organization:

@@ -6,6 +6,7 @@ import com.mw.ai.agi.auth.service.RuntimeIdentityContext;
 import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.model.domain.ModelProvider;
 import com.mw.ai.agi.model.service.ModelProviderService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/open/model-providers")
+@Tag(name = "大模型", description = "大模型 Provider 列表（不含敏感配置）")
 public class OpenModelProviderController {
     private final ModelProviderService modelProviderService;
     private final IntegrationAppScopeService scopeService;

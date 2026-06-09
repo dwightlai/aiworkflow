@@ -9,6 +9,7 @@ import com.mw.ai.agi.workflow.domain.WorkflowStatus;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionRequest;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionService;
 import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +24,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/open")
+@Tag(name = "工作流", description = "工作流列表、运行与执行查询")
 public class OpenWorkflowController {
     private final WorkflowApplicationService workflowService;
     private final WorkflowExecutionService executionService;

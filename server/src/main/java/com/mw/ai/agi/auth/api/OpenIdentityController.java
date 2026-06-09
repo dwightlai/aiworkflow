@@ -5,6 +5,7 @@ import com.mw.ai.agi.auth.service.IntegrationAppAuthenticator;
 import com.mw.ai.agi.auth.service.RequestAuditContext;
 import com.mw.ai.agi.auth.service.RuntimeIdentityContext;
 import com.mw.ai.agi.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -18,6 +19,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/open/identity")
+@Tag(name = "身份", description = "开放 API 身份解析")
 public class OpenIdentityController {
     private static final String APP_CODE_HEADER = "X-AGI-App-Code";
     private static final String API_KEY_HEADER = "X-AGI-Api-Key";

@@ -7,6 +7,7 @@ import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.knowledge.domain.KnowledgeBase;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.service.KnowledgeBaseService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -21,6 +22,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/open/knowledge-bases")
+@Tag(name = "知识库", description = "知识库列表与检索")
 public class OpenKnowledgeBaseController {
     private final KnowledgeBaseService knowledgeBaseService;
     private final IntegrationAppScopeService scopeService;

@@ -31,6 +31,7 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'identity', label: '组织用户', path: '/system/identity' },
       { key: 'asset-grants', label: '资产授权', path: '/system/asset-grants' },
       { key: 'integration-apps', label: '第三方应用', path: '/system/integration-apps' },
+      { key: 'open-api-docs', label: '开放 API 文档', path: '/system/open-api-docs' },
       { key: 'menus', label: '菜单管理', path: '/system/menus' },
       { key: 'dictionary', label: '数据字典', path: '/system/dictionary' },
       { key: 'logs', label: '日志管理', path: '/system/logs' }

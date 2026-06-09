@@ -13,6 +13,7 @@ import com.mw.ai.agi.bot.domain.BotStatus;
 import com.mw.ai.agi.bot.service.BotService;
 import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.workflow.api.WorkflowExecutionResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +28,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/open/bots")
+@Tag(name = "智能体", description = "智能体列表、运行与对话")
 public class OpenBotController {
     private final BotService botService;
     private final IntegrationAppScopeService scopeService;

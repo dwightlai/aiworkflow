@@ -1,0 +1,574 @@
+openapi: 3.0.3
+info:
+  title: AGI 开放 API
+  version: v1
+  description: |
+    供数字档案馆等第三方业务系统调用的 AGI 平台开放接口。
+
+    - 认证：`X-AGI-App-Code` + `X-AGI-Api-Key`
+    - 上下文（可选）：`X-AGI-User-Id`、`X-AGI-Unit-Id`、`X-AGI-Department-Ids`、`X-AGI-Role-Ids`
+    - 响应格式：统一 `ApiResponse` 信封
+
+servers:
+  - url: /
+    description: 当前环境
+
+tags:
+  - name: 智能体
+    description: 智能体列表、运行与对话
+  - name: 知识库
+    description: 知识库列表与检索
+  - name: 工作流
+    description: 工作流列表、运行与执行查询
+  - name: 大模型
+    description: 大模型 Provider 列表
+  - name: 身份
+    description: 开放 API 身份解析
+
+security:
+  - AppCode: []
+    ApiKey: []
+
+paths:
+  /api/open/bots:
+    get:
+      tags: [智能体]
+      summary: 列出可调智能体
+      operationId: listBots
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotPageResponse'
+
+  /api/open/bots/{id}:
+    get:
+      tags: [智能体]
+      summary: 获取智能体详情
+      operationId: getBot
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotResponse'
+
+  /api/open/bots/{id}/run:
+    post:
+      tags: [智能体]
+      summary: 运行智能体
+      operationId: runBot
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenBotRunRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotRunResponse'
+
+  /api/open/bots/{id}/chat:
+    post:
+      tags: [智能体]
+      summary: 智能体对话
+      operationId: chatBot
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenBotChatRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotChatResponse'
+
+  /api/open/knowledge-bases:
+    get:
+      tags: [知识库]
+      summary: 列出可调知识库
+      operationId: listKnowledgeBases
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBasePageResponse'
+
+  /api/open/knowledge-bases/{id}:
+    get:
+      tags: [知识库]
+      summary: 获取知识库详情
+      operationId: getKnowledgeBase
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseResponse'
+
+  /api/open/knowledge-bases/{id}/search:
+    post:
+      tags: [知识库]
+      summary: 知识库检索
+      operationId: searchKnowledgeBase
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenSearchKnowledgeBaseRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSearchResponse'
+
+  /api/open/workflows:
+    get:
+      tags: [工作流]
+      summary: 列出已发布工作流
+      operationId: listWorkflows
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPageResponse'
+
+  /api/open/workflows/{id}:
+    get:
+      tags: [工作流]
+      summary: 获取工作流详情
+      operationId: getWorkflow
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+
+  /api/open/workflows/{id}/runs:
+    post:
+      tags: [工作流]
+      summary: 运行工作流
+      operationId: runWorkflow
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenRunWorkflowRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionResponse'
+
+  /api/open/workflow-runs/{executionId}:
+    get:
+      tags: [工作流]
+      summary: 查询工作流执行详情
+      operationId: getWorkflowRun
+      parameters:
+        - name: executionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionResponse'
+
+  /api/open/model-providers:
+    get:
+      tags: [大模型]
+      summary: 列出可用大模型
+      operationId: listModelProviders
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelProviderPageResponse'
+
+  /api/open/model-providers/{id}:
+    get:
+      tags: [大模型]
+      summary: 获取大模型详情
+      operationId: getModelProvider
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelProviderResponse'
+
+  /api/open/identity/resolve:
+    post:
+      tags: [身份]
+      summary: 解析调用身份上下文
+      operationId: resolveIdentity
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveIdentityRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityResponse'
+
+components:
+  securitySchemes:
+    AppCode:
+      type: apiKey
+      in: header
+      name: X-AGI-App-Code
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-AGI-Api-Key
+    UserId:
+      type: apiKey
+      in: header
+      name: X-AGI-User-Id
+    UnitId:
+      type: apiKey
+      in: header
+      name: X-AGI-Unit-Id
+    DepartmentIds:
+      type: apiKey
+      in: header
+      name: X-AGI-Department-Ids
+    RoleIds:
+      type: apiKey
+      in: header
+      name: X-AGI-Role-Ids
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data: {}
+        error:
+          $ref: '#/components/schemas/ErrorResponse'
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requestId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    PageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {}
+        total:
+          type: integer
+          format: int64
+
+    OpenBotView:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        avatar: { type: string }
+        workflowId: { type: string }
+        knowledgeBaseIds:
+          type: array
+          items: { type: string }
+        openingMessage: { type: string }
+        status: { type: string }
+
+    OpenBotRunRequest:
+      type: object
+      properties:
+        message: { type: string }
+        userId: { type: string }
+        unitId: { type: string }
+        departmentIds:
+          type: array
+          items: { type: string }
+        roleIds:
+          type: array
+          items: { type: string }
+        input:
+          type: object
+          additionalProperties: true
+
+    OpenBotChatRequest:
+      allOf:
+        - $ref: '#/components/schemas/OpenBotRunRequest'
+        - type: object
+          properties:
+            sessionId: { type: string }
+
+    OpenKnowledgeBaseView:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        retrievalMode: { type: string }
+        topK: { type: integer }
+
+    OpenSearchKnowledgeBaseRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string }
+        topK: { type: integer }
+        userId: { type: string }
+        unitId: { type: string }
+        departmentIds:
+          type: array
+          items: { type: string }
+        roleIds:
+          type: array
+          items: { type: string }
+
+    KnowledgeSearchResult:
+      type: object
+      properties:
+        id: { type: string }
+        documentName: { type: string }
+        content: { type: string }
+        score: { type: integer }
+
+    OpenWorkflowView:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        status: { type: string }
+
+    OpenRunWorkflowRequest:
+      type: object
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+        userId: { type: string }
+        unitId: { type: string }
+        departmentIds:
+          type: array
+          items: { type: string }
+        roleIds:
+          type: array
+          items: { type: string }
+
+    WorkflowExecutionResponse:
+      type: object
+      properties:
+        id: { type: string }
+        workflowId: { type: string }
+        workflowVersionId: { type: string }
+        status: { type: string }
+        input:
+          type: object
+          additionalProperties: true
+        output:
+          type: object
+          additionalProperties: true
+        errorMessage: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+
+    OpenModelProviderView:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        modelType: { type: string }
+        modelUsage: { type: string }
+        description: { type: string }
+        visionSupport: { type: boolean }
+        model: { type: string }
+        enabled: { type: boolean }
+
+    ResolveIdentityRequest:
+      type: object
+      properties:
+        unitId: { type: string }
+        departmentIds:
+          type: array
+          items: { type: string }
+        roleIds:
+          type: array
+          items: { type: string }
+        userId: { type: string }
+
+    RuntimeIdentityContext:
+      type: object
+      properties:
+        tenantId: { type: string }
+        appId: { type: string }
+        userId: { type: string }
+        unitIds:
+          type: array
+          items: { type: string }
+        activeUnitId: { type: string }
+        departmentIds:
+          type: array
+          items: { type: string }
+        roleIds:
+          type: array
+          items: { type: string }
+        authType: { type: string }
+        source: { type: string }
+
+    BotPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageResponse'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/OpenBotView'
+
+    BotResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OpenBotView'
+
+    BotRunResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+
+    BotChatResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+
+    KnowledgeBasePageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+
+    KnowledgeBaseResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OpenKnowledgeBaseView'
+
+    KnowledgeSearchResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSearchResult'
+
+    WorkflowPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+
+    WorkflowResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OpenWorkflowView'
+
+    WorkflowExecutionResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkflowExecutionResponse'
+
+    ModelProviderPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+
+    ModelProviderResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OpenModelProviderView'
+
+    IdentityResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/RuntimeIdentityContext'
