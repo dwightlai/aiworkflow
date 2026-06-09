@@ -86,6 +86,7 @@ public class MybatisWorkflowStore implements WorkflowStore {
         WorkflowEntity entity = new WorkflowEntity();
         entity.setId(workflow.id());
         entity.setTenantId(workflow.tenantId());
+        entity.setOwnerUnitId(workflow.ownerUnitId());
         entity.setName(workflow.name());
         entity.setDescription(workflow.description());
         entity.setStatus(workflow.status().name());
@@ -100,6 +101,7 @@ public class MybatisWorkflowStore implements WorkflowStore {
         return new Workflow(
                 entity.getId(),
                 entity.getTenantId(),
+                entity.getOwnerUnitId(),
                 entity.getName(),
                 entity.getDescription(),
                 WorkflowStatus.valueOf(entity.getStatus()),

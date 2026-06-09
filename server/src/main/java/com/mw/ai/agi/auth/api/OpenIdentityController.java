@@ -7,7 +7,6 @@ import com.mw.ai.agi.auth.service.RuntimeIdentityContext;
 import com.mw.ai.agi.common.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,7 +45,7 @@ public class OpenIdentityController {
     }
 
     public record ResolveIdentityRequest(
-            @NotBlank String unitId,
+            String unitId,
             List<String> departmentIds,
             List<String> roleIds,
             String userId

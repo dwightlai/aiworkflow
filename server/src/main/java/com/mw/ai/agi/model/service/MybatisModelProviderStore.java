@@ -55,6 +55,7 @@ public class MybatisModelProviderStore implements ModelProviderStore {
         ModelProviderEntity entity = new ModelProviderEntity();
         entity.setId(provider.id());
         entity.setTenantId(provider.tenantId());
+        entity.setOwnerUnitId(provider.ownerUnitId());
         entity.setName(provider.name());
         entity.setModelType(provider.modelType());
         entity.setModelUsage(provider.modelUsage());
@@ -74,6 +75,7 @@ public class MybatisModelProviderStore implements ModelProviderStore {
         return new ModelProvider(
                 entity.getId(),
                 entity.getTenantId(),
+                entity.getOwnerUnitId(),
                 entity.getName(),
                 entity.getModelType(),
                 entity.getModelUsage(),

@@ -45,6 +45,7 @@ class WorkflowControllerTest {
         Workflow workflow = new Workflow(
                 "workflow-1",
                 "tenant-default",
+                null,
                 "售后处理流程",
                 "售后自动化",
                 WorkflowStatus.DRAFT,

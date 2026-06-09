@@ -9,6 +9,8 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
 import { IdentityOrganizationPage } from './pages/system/IdentityOrganizationPage';
+import { AssetGrantsPage } from './pages/system/AssetGrantsPage';
+import { IntegrationAppsPage } from './pages/system/IntegrationAppsPage';
 import { TenantsPage } from './pages/system/TenantsPage';
 import { TenantWorkspacePage } from './pages/system/TenantWorkspacePage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
@@ -101,10 +103,10 @@ export function resolveRoute(pathname: string): ResolvedRoute {
   if (tenantWorkspaceMatch) {
     const tenantId = tenantWorkspaceMatch[1] ?? '';
     const tab = tenantWorkspaceMatch[2];
-    const defaultTab = tab === 'users' ? 'users' : tab === 'roles' ? 'roles' : tab === 'apps' ? 'apps' : 'organizations';
+    const defaultTab = tab === 'users' ? 'users' : tab === 'roles' ? 'roles' : tab === 'apps' || tab === 'integration-apps' ? 'integration-apps' : 'organizations';
     return {
-      title: '租户工作台',
-      breadcrumb: ['首页', '系统管理', '租户管理', '租户工作台'],
+      title: defaultTab === 'integration-apps' ? '租户第三方应用' : '租户工作台',
+      breadcrumb: ['首页', '系统管理', '租户管理', defaultTab === 'integration-apps' ? '第三方应用' : '租户工作台'],
       element: <TenantWorkspacePage tenantId={tenantId} defaultTab={defaultTab} />
     };
   }
@@ -151,9 +153,17 @@ export function resolveRoute(pathname: string): ResolvedRoute {
 
   if (pathname === '/system/integration-apps') {
     return {
-      title: '组织用户',
-      breadcrumb: ['首页', '系统管理', '组织用户'],
-      element: <IdentityOrganizationPage defaultTab="apps" />
+      title: '第三方应用',
+      breadcrumb: ['首页', '系统管理', '第三方应用'],
+      element: <IntegrationAppsPage />
+    };
+  }
+
+  if (pathname === '/system/asset-grants') {
+    return {
+      title: '资产授权',
+      breadcrumb: ['首页', '系统管理', '资产授权'],
+      element: <AssetGrantsPage />
     };
   }
 
@@ -202,7 +212,8 @@ const routeTitleByPath: Record<string, string> = {
   '/system/tenants': '租户管理',
   '/system/users': '组织用户',
   '/system/roles': '组织用户',
-  '/system/menus': '菜单管理',
+  '/system/asset-grants': '资产授权',
+  '/system/integration-apps': '第三方应用',
   '/system/departments': '组织用户',
   '/system/dictionary': '数据字典',
   '/system/jobs': '定时任务',

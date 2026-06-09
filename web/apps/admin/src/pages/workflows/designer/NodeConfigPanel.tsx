@@ -418,6 +418,11 @@ function KnowledgeConfigV2({ node, setConfig, knowledgeBases, variableOptions }:
             <Select
               aria-label="选择知识库"
               mode="multiple"
+              showSearch
+              maxTagCount="responsive"
+              optionLabelProp="label"
+              optionFilterProp="label"
+              listHeight={320}
               placeholder="请选择知识库"
               value={selectedKnowledgeBaseIds}
               options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}

@@ -42,6 +42,7 @@ public class WorkflowApplicationService {
         Workflow workflow = new Workflow(
                 UUID.randomUUID().toString(),
                 tenantId,
+                null,
                 name,
                 description,
                 WorkflowStatus.DRAFT,
@@ -113,6 +114,7 @@ public class WorkflowApplicationService {
         store.saveWorkflow(new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
+                workflow.ownerUnitId(),
                 workflow.name(),
                 workflow.description(),
                 WorkflowStatus.PUBLISHED,
@@ -133,6 +135,7 @@ public class WorkflowApplicationService {
         Workflow updated = new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
+                workflow.ownerUnitId(),
                 name,
                 description,
                 workflow.status(),
@@ -149,6 +152,7 @@ public class WorkflowApplicationService {
         Workflow archived = new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
+                workflow.ownerUnitId(),
                 workflow.name(),
                 workflow.description(),
                 WorkflowStatus.ARCHIVED,
@@ -169,6 +173,7 @@ public class WorkflowApplicationService {
         store.saveWorkflow(new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
+                workflow.ownerUnitId(),
                 workflow.name(),
                 workflow.description(),
                 WorkflowStatus.DELETED,

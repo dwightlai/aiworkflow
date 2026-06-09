@@ -13,6 +13,7 @@ export interface PageResponse<T> {
 
 export interface ModelProvider {
   id: string;
+  ownerUnitId?: string | null;
   name: string;
   modelType: string;
   modelUsage: string;

@@ -1,6 +1,6 @@
 import { requestJson } from './auth';
 
-export type AssetType = 'KNOWLEDGE_BASE' | 'BOT';
+export type AssetType = 'KNOWLEDGE_BASE' | 'BOT' | 'WORKFLOW' | 'MODEL_PROVIDER';
 export type UnitScope = 'SELF' | 'SUBTREE';
 export type DepartmentScope = 'SELF' | 'SUBTREE';
 

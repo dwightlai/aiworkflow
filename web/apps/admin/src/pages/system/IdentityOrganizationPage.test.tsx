@@ -57,11 +57,22 @@ const identityApiMock = vi.hoisted(() => ({
   createRole: vi.fn(async () => ({ id: 'role_ops', code: 'ops_role', name: '运营角色', status: 'ACTIVE' })),
   updateRole: vi.fn(async () => ({ id: 'role_app_user', status: 'DISABLED' })),
   deleteRole: vi.fn(async () => ({ id: 'role_app_user', status: 'DELETED' })),
-  createIntegrationApp: vi.fn(async () => ({ id: 'app_oa', code: 'oa-system' })),
+  createIntegrationApp: vi.fn(async () => ({ id: 'app_oa', code: 'oa-system', name: 'OA 系统', appType: 'BUSINESS_SYSTEM', authType: 'API_KEY', status: 'ACTIVE' })),
   createIntegrationAppSecret: vi.fn(async () => ({ id: 'secret_1', secretPrefix: 'agi_demo', apiKey: 'agi_demo_full' })),
-  createIntegrationAppScope: vi.fn(async () => ({ id: 'scope_1', scopeType: 'ORGANIZATION', scopeId: 'org_default_unit' })),
+  createIntegrationAppScope: vi.fn(async () => ({ id: 'scope_1', scopeType: 'BOT', scopeId: 'bot_1', permission: 'USE', enabled: true, appId: 'app_archive' })),
+  listIntegrationAppScopes: vi.fn(async () => ({ items: [{ id: 'scope_1', scopeType: 'BOT', scopeId: 'bot_1', permission: 'USE', enabled: true, appId: 'app_archive' }], total: 1 })),
+  listIntegrationAppSecrets: vi.fn(async () => ({ items: [{ id: 'secret_1', secretPrefix: 'agi_demo', enabled: true }], total: 1 })),
+  deleteIntegrationAppScope: vi.fn(async () => undefined),
   updateIntegrationAppStatus: vi.fn(async () => ({ id: 'app_archive', status: 'DISABLED' })),
   deleteIntegrationApp: vi.fn(async () => ({ id: 'app_archive', status: 'DELETED' }))
+}));
+
+vi.mock('../../api/bots', () => ({
+  listBots: vi.fn(async () => ({ items: [{ id: 'bot_1', name: '客服助手', status: 'ENABLED' }], total: 1 }))
+}));
+
+vi.mock('../../api/knowledge', () => ({
+  listKnowledgeBases: vi.fn(async () => ({ items: [{ id: 'kb_1', name: 'FAQ 库', status: 'ACTIVE' }], total: 1 }))
 }));
 
 Object.defineProperty(window, 'matchMedia', {
@@ -106,7 +117,6 @@ describe('IdentityOrganizationPage', () => {
     expect(screen.getByRole('tab', { name: '组织架构' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '用户' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '角色' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '第三方应用' })).toBeInTheDocument();
   });
 
   it('creates an organization and edits a user', async () => {
@@ -127,7 +137,7 @@ describe('IdentityOrganizationPage', () => {
     await userEvent.click(getTreeNode(container, '默认单位'));
     const editButtons = await screen.findAllByRole('button', { name: /编辑/ });
     await userEvent.click(editButtons[0]);
-    const displayName = await screen.findByLabelText('显示名');
+    const displayName = await screen.findByLabelText('姓名');
     await userEvent.clear(displayName);
     await userEvent.type(displayName, '平台管理员2');
     expect(await screen.findByLabelText('排序')).toBeInTheDocument();
@@ -216,14 +226,6 @@ describe('IdentityOrganizationPage', () => {
     await waitFor(() => expect(screen.queryByText('默认部门')).not.toBeInTheDocument());
   });
 
-  it('generates an integration app api key and displays the one-time key', async () => {
-    renderPage('apps');
-
-    await userEvent.click(await screen.findByRole('button', { name: /生成 Key/ }));
-
-    expect(await screen.findByText('agi_demo_full')).toBeInTheDocument();
-    expect(identityApiMock.createIntegrationAppSecret).toHaveBeenCalledWith('app_archive', TENANT);
-  });
 });
 
 function renderPage(defaultTab = 'organizations') {

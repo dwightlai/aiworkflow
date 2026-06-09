@@ -3,8 +3,6 @@ package com.mw.ai.agi.auth.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppMapper;
-import com.mw.ai.agi.auth.persistence.IntegrationAppScopeEntity;
-import com.mw.ai.agi.auth.persistence.IntegrationAppScopeMapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppSecretEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppSecretMapper;
 import org.springframework.beans.factory.ObjectProvider;
@@ -19,20 +17,20 @@ import java.util.Optional;
 public class IntegrationAppAuthenticator {
     private final ObjectProvider<IntegrationAppMapper> integrationAppMapperProvider;
     private final ObjectProvider<IntegrationAppSecretMapper> integrationAppSecretMapperProvider;
-    private final ObjectProvider<IntegrationAppScopeMapper> integrationAppScopeMapperProvider;
+    private final IntegrationAppScopeService scopeService;
     private final SecretHasher secretHasher;
     private final AuthService authService;
 
     public IntegrationAppAuthenticator(
             ObjectProvider<IntegrationAppMapper> integrationAppMapperProvider,
             ObjectProvider<IntegrationAppSecretMapper> integrationAppSecretMapperProvider,
-            ObjectProvider<IntegrationAppScopeMapper> integrationAppScopeMapperProvider,
+            IntegrationAppScopeService scopeService,
             SecretHasher secretHasher,
             AuthService authService
     ) {
         this.integrationAppMapperProvider = integrationAppMapperProvider;
         this.integrationAppSecretMapperProvider = integrationAppSecretMapperProvider;
-        this.integrationAppScopeMapperProvider = integrationAppScopeMapperProvider;
+        this.scopeService = scopeService;
         this.secretHasher = secretHasher;
         this.authService = authService;
     }
@@ -53,27 +51,30 @@ public class IntegrationAppAuthenticator {
             auditDenied(app, callerContext, auditContext, "APP_SECRET_INVALID");
             throw new AuthException("APP_SECRET_INVALID", HttpStatus.UNAUTHORIZED, "API key is invalid.");
         }
-        if (callerContext.unitId() == null || callerContext.unitId().isBlank()) {
+        boolean unitProvided = callerContext.unitId() != null && !callerContext.unitId().isBlank();
+        String activeUnitId = unitProvided ? callerContext.unitId() : app.getTenantId();
+        if (unitProvided) {
+            if (!scopeService.hasOrganizationScope(app.getId(), app.getTenantId(), activeUnitId)) {
+                auditDenied(app, callerContext, auditContext, "APP_UNIT_SCOPE_DENIED");
+                throw new AuthException("APP_UNIT_SCOPE_DENIED", HttpStatus.FORBIDDEN, "App cannot represent this unit.");
+            }
+        } else if (!scopeService.allowsAllAssets(app.getId()) && !scopeService.hasAnyAssetScope(app.getId())) {
             auditDenied(app, callerContext, auditContext, "IDENTITY_CONTEXT_MISSING");
             throw new AuthException("IDENTITY_CONTEXT_MISSING", HttpStatus.BAD_REQUEST, "Unit context is required.");
-        }
-        if (!hasOrganizationScope(app.getId(), app.getTenantId(), callerContext.unitId())) {
-            auditDenied(app, callerContext, auditContext, "APP_UNIT_SCOPE_DENIED");
-            throw new AuthException("APP_UNIT_SCOPE_DENIED", HttpStatus.FORBIDDEN, "App cannot represent this unit.");
         }
 
         RuntimeIdentityContext context = new RuntimeIdentityContext(
                 app.getTenantId(),
                 app.getId(),
                 callerContext.userId(),
-                List.of(callerContext.unitId()),
-                callerContext.unitId(),
+                List.of(activeUnitId),
+                activeUnitId,
                 callerContext.departmentIds(),
                 callerContext.roleIds(),
                 "API_KEY",
                 app.getCode()
         );
-        authService.audit("API_KEY_USED", app.getTenantId(), callerContext.userId(), app.getId(), callerContext.unitId(),
+        authService.audit("API_KEY_USED", app.getTenantId(), callerContext.userId(), app.getId(), activeUnitId,
                 callerContext.departmentIds(), callerContext.roleIds(), auditContext, "SUCCESS", null);
         return context;
     }
@@ -96,22 +97,6 @@ public class IntegrationAppAuthenticator {
                 .anyMatch(secret -> secretHasher.matches(apiKey, secret.getSecretHash()));
     }
 
-    private boolean hasOrganizationScope(String appId, String tenantId, String organizationId) {
-        return integrationAppScopeMapper().selectList(new LambdaQueryWrapper<IntegrationAppScopeEntity>()
-                        .eq(IntegrationAppScopeEntity::getAppId, appId)
-                        .eq(IntegrationAppScopeEntity::getEnabled, true)
-                        .in(IntegrationAppScopeEntity::getPermission, List.of("USE", "MANAGE"))
-                        .and(wrapper -> wrapper
-                                .in(IntegrationAppScopeEntity::getScopeType, List.of("ORGANIZATION", "UNIT"))
-                                .eq(IntegrationAppScopeEntity::getScopeId, organizationId)
-                                .or(nested -> nested
-                                        .eq(IntegrationAppScopeEntity::getScopeType, "TENANT")
-                                        .eq(IntegrationAppScopeEntity::getScopeId, tenantId))))
-                .stream()
-                .findAny()
-                .isPresent();
-    }
-
     private void auditDenied(IntegrationAppEntity app, ExternalCallerContext callerContext, RequestAuditContext auditContext, String errorCode) {
         authService.audit("APP_DENIED", app.getTenantId(), callerContext.userId(), app.getId(), callerContext.unitId(),
                 callerContext.departmentIds(), callerContext.roleIds(), auditContext, "FAILED", errorCode);
@@ -123,10 +108,6 @@ public class IntegrationAppAuthenticator {
 
     private IntegrationAppSecretMapper integrationAppSecretMapper() {
         return required(integrationAppSecretMapperProvider, IntegrationAppSecretMapper.class);
-    }
-
-    private IntegrationAppScopeMapper integrationAppScopeMapper() {
-        return required(integrationAppScopeMapperProvider, IntegrationAppScopeMapper.class);
     }
 
     private <T> T required(ObjectProvider<T> provider, Class<T> type) {

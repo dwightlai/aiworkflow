@@ -31,6 +31,7 @@ export interface WorkflowVersion {
 export interface Workflow {
   id: string;
   tenantId?: string;
+  ownerUnitId?: string | null;
   name: string;
   description: string | null;
   status: WorkflowStatus;

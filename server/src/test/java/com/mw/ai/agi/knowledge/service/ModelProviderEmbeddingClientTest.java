@@ -44,6 +44,7 @@ class ModelProviderEmbeddingClientTest {
         store.save(new ModelProvider(
                 "provider-1",
                 "tenant_default",
+                null,
                 "ollama",
                 "Ollama",
                 "EMBEDDING",
@@ -98,6 +99,7 @@ class ModelProviderEmbeddingClientTest {
         store.save(new ModelProvider(
                 "provider-1",
                 "tenant_default",
+                null,
                 "ollama",
                 "Ollama",
                 "EMBEDDING",

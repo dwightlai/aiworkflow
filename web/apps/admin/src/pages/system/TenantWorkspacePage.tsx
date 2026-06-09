@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Space, Tag, Typography } from 'antd';
 import { getTenant } from '../../api/identity';
 import { IdentityOrganizationPage } from './IdentityOrganizationPage';
+import { IntegrationAppsPage } from './IntegrationAppsPage';
 
 interface TenantWorkspacePageProps {
   tenantId: string;
@@ -44,7 +45,11 @@ export function TenantWorkspacePage({ tenantId, defaultTab = 'organizations' }: 
           <Alert type="error" showIcon message="租户信息加载失败" />
         ) : null}
 
-        <IdentityOrganizationPage tenantId={tenantId} defaultTab={defaultTab} />
+        {defaultTab === 'integration-apps' ? (
+          <IntegrationAppsPage tenantId={tenantId} />
+        ) : (
+          <IdentityOrganizationPage tenantId={tenantId} defaultTab={defaultTab} />
+        )}
       </Space>
     </section>
   );

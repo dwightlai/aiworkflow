@@ -5,6 +5,7 @@ import java.time.Instant;
 public record Workflow(
         String id,
         String tenantId,
+        String ownerUnitId,
         String name,
         String description,
         WorkflowStatus status,

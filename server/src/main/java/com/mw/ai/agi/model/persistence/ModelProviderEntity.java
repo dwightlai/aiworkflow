@@ -11,6 +11,7 @@ public class ModelProviderEntity {
     @TableId
     private String id;
     private String tenantId;
+    private String ownerUnitId;
     private String name;
     private String modelType;
     private String modelUsage;
@@ -28,6 +29,8 @@ public class ModelProviderEntity {
     public void setId(String id) { this.id = id; }
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
+    public String getOwnerUnitId() { return ownerUnitId; }
+    public void setOwnerUnitId(String ownerUnitId) { this.ownerUnitId = ownerUnitId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getModelType() { return modelType; }

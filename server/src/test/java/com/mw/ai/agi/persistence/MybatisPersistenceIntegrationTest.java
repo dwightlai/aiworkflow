@@ -69,6 +69,7 @@ class MybatisPersistenceIntegrationTest {
         modelProviderStore.save(new ModelProvider(
                 "mp_1",
                 "tenant_default",
+                null,
                 "DeepSeek Chat",
                 "DeepSeek",
                 "chat",
@@ -151,6 +152,7 @@ class MybatisPersistenceIntegrationTest {
         workflowStore.saveWorkflow(new Workflow(
                 "wf_1",
                 "tenant_default",
+                null,
                 "测试工作流",
                 "Smoke",
                 WorkflowStatus.DRAFT,
@@ -172,6 +174,7 @@ class MybatisPersistenceIntegrationTest {
         workflowStore.saveWorkflow(new Workflow(
                 "wf_1",
                 "tenant_default",
+                null,
                 "测试工作流",
                 "Smoke",
                 WorkflowStatus.DRAFT,

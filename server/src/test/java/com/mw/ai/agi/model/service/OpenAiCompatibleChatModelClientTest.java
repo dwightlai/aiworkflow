@@ -55,6 +55,7 @@ class OpenAiCompatibleChatModelClientTest {
         store.save(new ModelProvider(
                 "provider-1",
                 "tenant_default",
+                null,
                 "deepseek-chat",
                 "DeepSeek",
                 "CHAT",

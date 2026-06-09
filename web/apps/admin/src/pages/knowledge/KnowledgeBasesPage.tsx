@@ -35,7 +35,6 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { AssetGrantDrawer } from '../../components/AssetGrantDrawer';
 import {
   addManualKnowledgeDataset,
   addKnowledgeDocument,
@@ -135,7 +134,6 @@ export function KnowledgeBasesPage() {
   const [dataDrawerType, setDataDrawerType] = useState<'manual' | 'text' | 'table' | null>(null);
   const [editingBase, setEditingBase] = useState<KnowledgeBase | null>(null);
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null);
-  const [grantBase, setGrantBase] = useState<KnowledgeBase | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null);
   const [editingChunk, setEditingChunk] = useState<KnowledgeChunk | null>(null);
   const [editingChunkContent, setEditingChunkContent] = useState('');
@@ -507,10 +505,6 @@ export function KnowledgeBasesPage() {
     setDocumentOpen(true);
   }
 
-  function openGrantDrawer(base: KnowledgeBase) {
-    setGrantBase(base);
-  }
-
   function openDataDrawer(type: 'manual' | 'text' | 'table') {
     setChunkPreviews([]);
     setDataDrawerType(type);
@@ -620,13 +614,12 @@ export function KnowledgeBasesPage() {
     },
     {
       title: '操作',
-      width: 340,
+      width: 280,
       render: (_, base) => (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
           <Button size="small" icon={<EditOutlined />} aria-label="编辑知识库" onClick={() => openEditDrawer(base)}>
             编辑
           </Button>
-          <Button size="small" onClick={() => openGrantDrawer(base)}>授权</Button>
           <Button
             size="small"
             icon={<FileAddOutlined />}
@@ -876,20 +869,6 @@ export function KnowledgeBasesPage() {
           </Form.Item>
         </Form>
       </Drawer>
-
-      <AssetGrantDrawer
-        open={Boolean(grantBase)}
-        assetType="KNOWLEDGE_BASE"
-        assetId={grantBase?.id}
-        assetName={grantBase?.name}
-        ownerUnitId={grantBase?.ownerUnitId}
-        onSaved={(savedOwnerUnitId) => {
-          if (grantBase && savedOwnerUnitId) {
-            setGrantBase({ ...grantBase, ownerUnitId: savedOwnerUnitId });
-          }
-        }}
-        onClose={() => setGrantBase(null)}
-      />
 
       <Drawer
         title={selectedBase ? `管理文档 - ${selectedBase.name}` : '管理文档'}

@@ -84,6 +84,14 @@ export interface GeneratedApiKey {
   apiKey: string;
 }
 
+export interface IntegrationAppSecret {
+  id: string;
+  secretPrefix: string;
+  enabled: boolean;
+  expiresAt?: string | null;
+  createdAt?: string;
+}
+
 export interface SaveUserRequest {
   username: string;
   password: string;
@@ -333,5 +341,25 @@ export async function createIntegrationAppScope(
   return requestJson<IntegrationAppScope>(`${tenantAdminBase(tenantId)}/integration-apps/${appId}/scopes`, {
     method: 'POST',
     body: JSON.stringify(request)
+  });
+}
+
+export async function listIntegrationAppScopes(appId: string, tenantId?: string): Promise<PageResponse<IntegrationAppScope>> {
+  return requestJson<PageResponse<IntegrationAppScope>>(`${tenantAdminBase(tenantId)}/integration-apps/${appId}/scopes`);
+}
+
+export async function deleteIntegrationAppScope(appId: string, scopeId: string, tenantId?: string): Promise<void> {
+  await requestJson<void>(`${tenantAdminBase(tenantId)}/integration-apps/${appId}/scopes/${scopeId}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function listIntegrationAppSecrets(appId: string, tenantId?: string): Promise<PageResponse<IntegrationAppSecret>> {
+  return requestJson<PageResponse<IntegrationAppSecret>>(`${tenantAdminBase(tenantId)}/integration-apps/${appId}/secrets`);
+}
+
+export async function deleteIntegrationAppSecret(appId: string, secretId: string, tenantId?: string): Promise<void> {
+  await requestJson<void>(`${tenantAdminBase(tenantId)}/integration-apps/${appId}/secrets/${secretId}`, {
+    method: 'DELETE'
   });
 }

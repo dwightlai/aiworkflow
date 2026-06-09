@@ -10,6 +10,7 @@ public class WorkflowEntity {
     @TableId
     private String id;
     private String tenantId;
+    private String ownerUnitId;
     private String name;
     private String description;
     private String status;
@@ -32,6 +33,14 @@ public class WorkflowEntity {
 
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public String getOwnerUnitId() {
+        return ownerUnitId;
+    }
+
+    public void setOwnerUnitId(String ownerUnitId) {
+        this.ownerUnitId = ownerUnitId;
     }
 
     public String getName() {

@@ -102,6 +102,12 @@ export function AssetGrantDrawer({
       if (assetType === 'BOT') {
         await queryClient.invalidateQueries({ queryKey: ['bots'] });
       }
+      if (assetType === 'WORKFLOW') {
+        await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+      }
+      if (assetType === 'MODEL_PROVIDER') {
+        await queryClient.invalidateQueries({ queryKey: ['model-providers'] });
+      }
       onSaved?.(response.ownerUnitId);
       onClose();
     },

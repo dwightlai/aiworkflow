@@ -60,6 +60,10 @@ function WorkflowDesignerReact(props, ref) {
     startScrollTop: number;
   } | null>(null);
   const layout = useMemo(() => createWorkflowDesignerLayout(props.value), [props.value]);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const draggingEdgeRef = useRef(draggingEdge);
+  draggingEdgeRef.current = draggingEdge;
   const effectiveSelectedNodeId = props.selectedNodeId === undefined ? selectedNodeId : props.selectedNodeId;
   const selectedEdge = layout.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
@@ -147,7 +151,18 @@ function WorkflowDesignerReact(props, ref) {
     }
 
     function handleMouseMove(event: MouseEvent) {
-      const point = resolveCanvasPoint(event.clientX, event.clientY, zoom);
+      const activeDrag = draggingEdgeRef.current;
+      if (!activeDrag) {
+        return;
+      }
+      const snap = findConnectionSnapAtPoint(
+        event.clientX,
+        event.clientY,
+        layoutRef.current,
+        zoom,
+        activeDrag.sourceNodeId
+      );
+      const point = snap ?? resolveCanvasPoint(event.clientX, event.clientY, zoom);
       setDraggingEdge((current) => current ? {
         ...current,
         currentX: point.x,
@@ -155,8 +170,34 @@ function WorkflowDesignerReact(props, ref) {
       } : null);
     }
 
-    function handleMouseUp() {
+    function handleMouseUp(event: MouseEvent) {
+      const activeDrag = draggingEdgeRef.current;
+      if (activeDrag && !props.readonly) {
+        const snap = findConnectionSnapAtPoint(
+          event.clientX,
+          event.clientY,
+          layoutRef.current,
+          zoom,
+          activeDrag.sourceNodeId
+        );
+        const targetNodeId = snap?.nodeId ?? resolveConnectionTargetNodeId(
+          event.clientX,
+          event.clientY,
+          layoutRef.current,
+          zoom,
+          activeDrag.sourceNodeId
+        );
+        if (targetNodeId && targetNodeId !== activeDrag.sourceNodeId) {
+          designerRef.current?.connectNodes(
+            createEdgeId(activeDrag.sourceNodeId, targetNodeId),
+            activeDrag.sourceNodeId,
+            targetNodeId
+          );
+        }
+      }
       setDraggingEdge(null);
+      setConnectingFromNodeId(null);
+      setSelectedEdgeId(null);
     }
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -165,7 +206,7 @@ function WorkflowDesignerReact(props, ref) {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingEdge, zoom]);
+  }, [draggingEdge, zoom, props.readonly]);
 
   useEffect(() => {
     if (!panningCanvas) {
@@ -394,6 +435,7 @@ function WorkflowDesignerReact(props, ref) {
         }}
       >
         <div
+          data-workflow-canvas="true"
           style={{
             ...canvasStyle,
             minWidth: layout.bounds.width,
@@ -406,11 +448,37 @@ function WorkflowDesignerReact(props, ref) {
             width={layout.bounds.width}
             height={layout.bounds.height}
             viewBox={`0 0 ${layout.bounds.width} ${layout.bounds.height}`}
-            style={edgeLayerStyle}
+            style={{
+              ...edgeLayerStyle,
+              pointerEvents: draggingEdge ? 'none' : 'auto'
+            }}
           >
             <defs>
-              <marker id="aiworkflow-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="#98a2b3" />
+              <marker
+                id="aiworkflow-arrow"
+                viewBox="0 0 12 12"
+                refX="10"
+                refY="6"
+                markerWidth="14"
+                markerHeight="14"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+                overflow="visible"
+              >
+                <path d="M1.5,2 L10,6 L1.5,10 Z" fill="#667085" />
+              </marker>
+              <marker
+                id="aiworkflow-arrow-active"
+                viewBox="0 0 12 12"
+                refX="10"
+                refY="6"
+                markerWidth="14"
+                markerHeight="14"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+                overflow="visible"
+              >
+                <path d="M1.5,2 L10,6 L1.5,10 Z" fill="#1677ff" />
               </marker>
             </defs>
             {layout.edges.map((edge) => (
@@ -430,9 +498,10 @@ function WorkflowDesignerReact(props, ref) {
                   aria-hidden="true"
                   d={edge.path}
                   fill="none"
-                  stroke={selectedEdgeId === edge.id ? '#1677ff' : '#7f90a8'}
-                  strokeWidth={selectedEdgeId === edge.id ? 4 : 2.5}
-                  markerEnd="url(#aiworkflow-arrow)"
+                  stroke={selectedEdgeId === edge.id ? '#1677ff' : '#667085'}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  markerEnd={selectedEdgeId === edge.id ? 'url(#aiworkflow-arrow-active)' : 'url(#aiworkflow-arrow)'}
                   style={{ pointerEvents: 'none' }}
                 />
               </g>
@@ -442,9 +511,10 @@ function WorkflowDesignerReact(props, ref) {
                 aria-label="正在拖拽连线"
                 d={createPreviewPath(draggingEdge.startX, draggingEdge.startY, draggingEdge.currentX, draggingEdge.currentY)}
                 fill="none"
-                markerEnd="url(#aiworkflow-arrow)"
+                markerEnd="url(#aiworkflow-arrow-active)"
                 stroke="#1677ff"
                 strokeDasharray="6 5"
+                strokeLinecap="round"
                 strokeWidth={2.5}
                 style={{ pointerEvents: 'none' }}
               />
@@ -462,6 +532,7 @@ function WorkflowDesignerReact(props, ref) {
                 key={node.id}
                 type="button"
                 data-workflow-interactive="true"
+                data-workflow-node-id={node.id}
                 aria-label={`节点 ${node.name}`}
                 style={{
                   ...nodeStyle,
@@ -513,6 +584,8 @@ function WorkflowDesignerReact(props, ref) {
                 <span
                   role="button"
                   data-workflow-interactive="true"
+                  data-workflow-port="input"
+                  data-workflow-node-id={node.id}
                   aria-label={`连接到 ${node.name}`}
                   title="连接到此节点"
                   style={{ ...handleStyle, ...inputHandleStyle(connectingFromNodeId !== null) }}
@@ -529,6 +602,8 @@ function WorkflowDesignerReact(props, ref) {
                 <span
                   role="button"
                   data-workflow-interactive="true"
+                  data-workflow-port="output"
+                  data-workflow-node-id={node.id}
                   aria-label={`从 ${node.name} 连线`}
                   title="从此节点连线"
                   style={{ ...handleStyle, ...outputHandleStyle(connectingFromNodeId === node.id) }}
@@ -659,7 +734,7 @@ const handleStyle: React.CSSProperties = {
   top: '50%',
   transform: 'translateY(-50%)',
   width: 14,
-  zIndex: 2
+  zIndex: 4
 };
 
 function inputHandleStyle(active: boolean): React.CSSProperties {
@@ -747,6 +822,73 @@ function isInteractiveCanvasTarget(target: EventTarget) {
     return false;
   }
   return Boolean(target.closest('[data-workflow-interactive="true"], input, label, textarea, select'));
+}
+
+const CONNECTION_SNAP_RADIUS = 28;
+const PORT_OFFSET = 7;
+
+function resolveCanvasClientPoint(clientX: number, clientY: number, currentZoom: number) {
+  const canvasElement = document.querySelector('[data-workflow-canvas="true"]');
+  if (!(canvasElement instanceof HTMLElement)) {
+    return null;
+  }
+  const canvasRect = canvasElement.getBoundingClientRect();
+  return {
+    canvasElement,
+    x: (clientX - canvasRect.left) / currentZoom,
+    y: (clientY - canvasRect.top) / currentZoom
+  };
+}
+
+function findConnectionSnapAtPoint(
+  clientX: number,
+  clientY: number,
+  layout: ReturnType<typeof createWorkflowDesignerLayout>,
+  currentZoom: number,
+  excludeNodeId?: string | null
+): { nodeId: string; x: number; y: number } | null {
+  const canvasPoint = resolveCanvasClientPoint(clientX, clientY, currentZoom);
+  if (!canvasPoint) {
+    return null;
+  }
+
+  let nearest: { nodeId: string; x: number; y: number; distance: number } | null = null;
+  for (const node of layout.nodes) {
+    if (node.id === excludeNodeId) {
+      continue;
+    }
+    const inputX = node.x - PORT_OFFSET;
+    const inputY = node.y + node.height / 2;
+    const distance = Math.hypot(canvasPoint.x - inputX, canvasPoint.y - inputY);
+    if (!nearest || distance < nearest.distance) {
+      nearest = { nodeId: node.id, x: inputX, y: inputY, distance };
+    }
+  }
+  if (!nearest || nearest.distance > CONNECTION_SNAP_RADIUS) {
+    return null;
+  }
+  return { nodeId: nearest.nodeId, x: nearest.x, y: nearest.y };
+}
+
+function resolveConnectionTargetNodeId(
+  clientX: number,
+  clientY: number,
+  layout: ReturnType<typeof createWorkflowDesignerLayout>,
+  currentZoom: number,
+  excludeNodeId?: string | null
+): string | null {
+  const snap = findConnectionSnapAtPoint(clientX, clientY, layout, currentZoom, excludeNodeId);
+  if (snap) {
+    return snap.nodeId;
+  }
+
+  const hitTarget = document.elementFromPoint(clientX, clientY);
+  const nodeElement = hitTarget?.closest('[data-workflow-node-id]');
+  const nodeIdFromDom = nodeElement?.getAttribute('data-workflow-node-id');
+  if (nodeIdFromDom && nodeIdFromDom !== excludeNodeId) {
+    return nodeIdFromDom;
+  }
+  return null;
 }
 
 function statusToneStyle(status: string): React.CSSProperties {

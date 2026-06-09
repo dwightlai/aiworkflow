@@ -267,4 +267,42 @@ public class TenantScopedAdminController {
                 request.permission()
         ));
     }
+
+    @GetMapping("/integration-apps/{appId}/scopes")
+    public ApiResponse<AuthAdminController.PageResponse<IntegrationAppScopeEntity>> listIntegrationAppScopes(
+            @PathVariable String tenantId,
+            @PathVariable String appId
+    ) {
+        List<IntegrationAppScopeEntity> scopes = authAdminService.listIntegrationAppScopesForTenant(tenantId, appId);
+        return ApiResponse.success(new AuthAdminController.PageResponse<>(scopes, scopes.size()));
+    }
+
+    @DeleteMapping("/integration-apps/{appId}/scopes/{scopeId}")
+    public ApiResponse<Void> deleteIntegrationAppScope(
+            @PathVariable String tenantId,
+            @PathVariable String appId,
+            @PathVariable String scopeId
+    ) {
+        authAdminService.deleteIntegrationAppScopeForTenant(tenantId, appId, scopeId);
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/integration-apps/{appId}/secrets")
+    public ApiResponse<AuthAdminController.PageResponse<AuthAdminService.IntegrationAppSecretView>> listIntegrationAppSecrets(
+            @PathVariable String tenantId,
+            @PathVariable String appId
+    ) {
+        List<AuthAdminService.IntegrationAppSecretView> secrets = authAdminService.listIntegrationAppSecretsForTenant(tenantId, appId);
+        return ApiResponse.success(new AuthAdminController.PageResponse<>(secrets, secrets.size()));
+    }
+
+    @DeleteMapping("/integration-apps/{appId}/secrets/{secretId}")
+    public ApiResponse<Void> deleteIntegrationAppSecret(
+            @PathVariable String tenantId,
+            @PathVariable String appId,
+            @PathVariable String secretId
+    ) {
+        authAdminService.deleteIntegrationAppSecretForTenant(tenantId, appId, secretId);
+        return ApiResponse.success(null);
+    }
 }

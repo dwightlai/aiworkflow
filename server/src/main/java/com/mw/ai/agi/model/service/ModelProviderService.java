@@ -46,6 +46,7 @@ public class ModelProviderService {
         ModelProvider provider = new ModelProvider(
                 "model_provider_" + UUID.randomUUID(),
                 currentTenantId(),
+                null,
                 name,
                 modelType,
                 normalizeUsage(modelUsage),
@@ -79,6 +80,7 @@ public class ModelProviderService {
         return store.save(new ModelProvider(
                 current.id(),
                 current.tenantId(),
+                current.ownerUnitId(),
                 name,
                 modelType,
                 normalizeUsage(modelUsage),

@@ -1,6 +1,7 @@
 package com.mw.ai.agi.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.mw.ai.agi.common.asset.AssetReferenceSupport;
 import com.mw.ai.agi.asset.domain.AssetGrant;
 import com.mw.ai.agi.asset.persistence.AssetGrantEntity;
 import com.mw.ai.agi.asset.persistence.AssetGrantMapper;
@@ -8,6 +9,10 @@ import com.mw.ai.agi.bot.persistence.AiBotEntity;
 import com.mw.ai.agi.bot.persistence.AiBotMapper;
 import com.mw.ai.agi.knowledge.persistence.KnowledgeBaseEntity;
 import com.mw.ai.agi.knowledge.persistence.KnowledgeBaseMapper;
+import com.mw.ai.agi.model.persistence.ModelProviderEntity;
+import com.mw.ai.agi.model.persistence.ModelProviderMapper;
+import com.mw.ai.agi.workflow.persistence.WorkflowEntity;
+import com.mw.ai.agi.workflow.persistence.WorkflowMapper;
 import com.mw.ai.agi.auth.persistence.OrganizationEntity;
 import com.mw.ai.agi.auth.persistence.OrganizationMapper;
 import org.springframework.http.HttpStatus;
@@ -27,6 +32,8 @@ import java.util.UUID;
 public class AssetGrantService {
     public static final String KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
     public static final String BOT = "BOT";
+    public static final String WORKFLOW = "WORKFLOW";
+    public static final String MODEL_PROVIDER = "MODEL_PROVIDER";
     public static final String USE = "USE";
     public static final String MANAGE = "MANAGE";
     public static final String SELF = "SELF";
@@ -36,17 +43,23 @@ public class AssetGrantService {
     private final OrganizationMapper organizationMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final AiBotMapper aiBotMapper;
+    private final WorkflowMapper workflowMapper;
+    private final ModelProviderMapper modelProviderMapper;
 
     public AssetGrantService(
             AssetGrantMapper grantMapper,
             OrganizationMapper organizationMapper,
             KnowledgeBaseMapper knowledgeBaseMapper,
-            AiBotMapper aiBotMapper
+            AiBotMapper aiBotMapper,
+            WorkflowMapper workflowMapper,
+            ModelProviderMapper modelProviderMapper
     ) {
         this.grantMapper = grantMapper;
         this.organizationMapper = organizationMapper;
         this.knowledgeBaseMapper = knowledgeBaseMapper;
         this.aiBotMapper = aiBotMapper;
+        this.workflowMapper = workflowMapper;
+        this.modelProviderMapper = modelProviderMapper;
     }
 
     public String ensureOwnerUnitId(String assetType, String assetId, String requestedOwnerUnitId, String operatorUnitId) {
@@ -114,7 +127,7 @@ public class AssetGrantService {
         AssetGrantEntity entity = new AssetGrantEntity();
         entity.setId("grant_" + UUID.randomUUID());
         entity.setAssetType(assetType);
-        entity.setAssetId(assetId);
+        entity.setAssetId(AssetReferenceSupport.requireAssetId(assetId));
         entity.setPermission(USE);
         entity.setUnitId(blankToNull(unitId));
         entity.setUnitScope(normalize(unitScope, SELF));
@@ -346,6 +359,14 @@ public class AssetGrantService {
             AiBotEntity entity = aiBotMapper.selectById(assetId);
             return entity == null ? null : entity.getOwnerUnitId();
         }
+        if (WORKFLOW.equals(assetType)) {
+            WorkflowEntity entity = workflowMapper.selectById(assetId);
+            return entity == null ? null : entity.getOwnerUnitId();
+        }
+        if (MODEL_PROVIDER.equals(assetType)) {
+            ModelProviderEntity entity = modelProviderMapper.selectById(assetId);
+            return entity == null ? null : entity.getOwnerUnitId();
+        }
         return null;
     }
 
@@ -363,6 +384,22 @@ public class AssetGrantService {
             if (entity != null && (entity.getOwnerUnitId() == null || entity.getOwnerUnitId().isBlank())) {
                 entity.setOwnerUnitId(ownerUnitId);
                 aiBotMapper.updateById(entity);
+            }
+            return;
+        }
+        if (WORKFLOW.equals(assetType)) {
+            WorkflowEntity entity = workflowMapper.selectById(assetId);
+            if (entity != null && (entity.getOwnerUnitId() == null || entity.getOwnerUnitId().isBlank())) {
+                entity.setOwnerUnitId(ownerUnitId);
+                workflowMapper.updateById(entity);
+            }
+            return;
+        }
+        if (MODEL_PROVIDER.equals(assetType)) {
+            ModelProviderEntity entity = modelProviderMapper.selectById(assetId);
+            if (entity != null && (entity.getOwnerUnitId() == null || entity.getOwnerUnitId().isBlank())) {
+                entity.setOwnerUnitId(ownerUnitId);
+                modelProviderMapper.updateById(entity);
             }
         }
     }

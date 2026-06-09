@@ -8,6 +8,7 @@ import com.mw.ai.agi.bot.domain.BotRunResult;
 import com.mw.ai.agi.bot.domain.BotSession;
 import com.mw.ai.agi.bot.domain.BotStatus;
 import com.mw.ai.agi.asset.service.AssetGrantService;
+import com.mw.ai.agi.common.asset.AssetReferenceSupport;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
@@ -90,7 +91,7 @@ public class BotService {
             String openingMessage,
             BotStatus status
     ) {
-        List<String> effectiveKnowledgeBaseIds = normalizeKnowledgeBaseIds(knowledgeBaseIds);
+        List<String> effectiveKnowledgeBaseIds = AssetReferenceSupport.requireAssetIds(knowledgeBaseIds);
         ensureRunnable(workflowId, modelProviderId, effectiveKnowledgeBaseIds);
         Instant now = Instant.now();
         BotStatus effectiveStatus = status == null ? BotStatus.ENABLED : status;
@@ -130,7 +131,7 @@ public class BotService {
             BotStatus status
     ) {
         AiBot current = get(id);
-        List<String> effectiveKnowledgeBaseIds = normalizeKnowledgeBaseIds(knowledgeBaseIds);
+        List<String> effectiveKnowledgeBaseIds = AssetReferenceSupport.requireAssetIds(knowledgeBaseIds);
         ensureRunnable(workflowId, modelProviderId, effectiveKnowledgeBaseIds);
         BotStatus effectiveStatus = status == null ? current.status() : status;
         Instant now = Instant.now();
@@ -396,16 +397,7 @@ public class BotService {
     }
 
     private List<String> normalizeKnowledgeBaseIds(List<String> knowledgeBaseIds) {
-        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
-            return List.of();
-        }
-        Set<String> normalized = new LinkedHashSet<>();
-        for (String knowledgeBaseId : knowledgeBaseIds) {
-            if (knowledgeBaseId != null && !knowledgeBaseId.isBlank()) {
-                normalized.add(knowledgeBaseId.trim());
-            }
-        }
-        return new ArrayList<>(normalized);
+        return AssetReferenceSupport.requireAssetIds(knowledgeBaseIds);
     }
 
     private String directPrompt(

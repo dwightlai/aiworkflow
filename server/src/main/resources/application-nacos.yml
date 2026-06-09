@@ -4,5 +4,10 @@ spring:
       on-profile: nacos
   cloud:
     nacos:
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
       discovery:
         enabled: true
+        server-addr: ${NACOS_SERVER_ADDR:192.168.10.126:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}

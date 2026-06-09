@@ -77,6 +77,10 @@ class AuthAdminListAndStatusIntegrationTest {
                 .getResponse()
                 .getContentAsString();
         String apiKey = extract(secretResponse, "apiKey");
+        mockMvc.perform(get("/api/auth/admin/integration-apps/app_scope_system/secrets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].secretPrefix").isNotEmpty());
         mockMvc.perform(post("/api/auth/admin/integration-apps/app_scope_system/scopes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -196,6 +200,50 @@ class AuthAdminListAndStatusIntegrationTest {
         mockMvc.perform(get("/api/auth/admin/roles"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[?(@.code=='edited_role')]").isNotEmpty());
+    }
+
+    @Test
+    void createsLongBotScopeAndListsIt() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/integration-apps")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"archive-system","name":"Archive System","appType":"BUSINESS_SYSTEM","authType":"API_KEY"}
+                                """))
+                .andExpect(status().isOk());
+        String botId = "bot_8110bba5-7ec5-496a-bd25-28aff829bd9c";
+        mockMvc.perform(post("/api/auth/admin/integration-apps/app_archive_system/scopes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"scopeType":"BOT","scopeId":"%s","permission":"USE"}
+                                """.formatted(botId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/auth/admin/integration-apps/app_archive_system/scopes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].scopeType").value("BOT"))
+                .andExpect(jsonPath("$.data.items[0].scopeId").value(botId));
+    }
+
+    @Test
+    void createsManyBotScopesAndListsThem() throws Exception {
+        mockMvc.perform(post("/api/auth/admin/integration-apps")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"bulk-scope-app","name":"Bulk Scope App","appType":"BUSINESS_SYSTEM","authType":"API_KEY"}
+                                """))
+                .andExpect(status().isOk());
+        for (int index = 0; index < 25; index++) {
+            String botId = "bot_" + java.util.UUID.randomUUID();
+            mockMvc.perform(post("/api/auth/admin/integration-apps/app_bulk_scope_app/scopes")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"scopeType":"BOT","scopeId":"%s","permission":"USE"}
+                                    """.formatted(botId)))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(get("/api/auth/admin/integration-apps/app_bulk_scope_app/scopes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(25));
     }
 
     private String extract(String json, String name) {

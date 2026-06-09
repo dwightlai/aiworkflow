@@ -1,5 +1,6 @@
 package com.mw.ai.agi.auth.service;
 
+import com.mw.ai.agi.common.asset.AssetReferenceSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppEntity;
@@ -25,7 +26,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Comparator;
@@ -689,19 +693,94 @@ public class AuthAdminService {
     public IntegrationAppScopeEntity createIntegrationAppScopeForTenant(String tenantId, String appId, String scopeType, String scopeId, String permission) {
         ensureTenantAccess(tenantId);
         IntegrationAppEntity app = requireIntegrationAppForTenant(tenantId, appId);
+        String normalizedScopeId = AssetReferenceSupport.requireAssetId(scopeId);
+        IntegrationAppScopeEntity existing = integrationAppScopeMapper.selectOne(new LambdaQueryWrapper<IntegrationAppScopeEntity>()
+                .eq(IntegrationAppScopeEntity::getAppId, appId)
+                .eq(IntegrationAppScopeEntity::getScopeType, scopeType)
+                .eq(IntegrationAppScopeEntity::getScopeId, normalizedScopeId)
+                .last("LIMIT 1"));
+        if (existing != null) {
+            return existing;
+        }
         Instant now = Instant.now();
         IntegrationAppScopeEntity entity = new IntegrationAppScopeEntity();
-        entity.setId("scope_" + normalize(app.getCode()) + "_" + normalize(scopeType) + "_" + normalize(scopeId));
+        entity.setId(buildScopeRecordId(app.getCode(), scopeType, normalizedScopeId));
         entity.setTenantId(app.getTenantId());
         entity.setAppId(appId);
         entity.setScopeType(scopeType);
-        entity.setScopeId(scopeId);
+        entity.setScopeId(normalizedScopeId);
         entity.setPermission(permission == null || permission.isBlank() ? "USE" : permission);
         entity.setEnabled(true);
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         integrationAppScopeMapper.insert(entity);
         return entity;
+    }
+
+    public List<IntegrationAppScopeEntity> listIntegrationAppScopes(String appId) {
+        return listIntegrationAppScopesForTenant(tenantAdminGuard.currentTenantId(), appId);
+    }
+
+    public List<IntegrationAppScopeEntity> listIntegrationAppScopesForTenant(String tenantId, String appId) {
+        ensureTenantAccess(tenantId);
+        requireIntegrationAppForTenant(tenantId, appId);
+        return integrationAppScopeMapper.selectList(new LambdaQueryWrapper<IntegrationAppScopeEntity>()
+                .eq(IntegrationAppScopeEntity::getAppId, appId)
+                .eq(IntegrationAppScopeEntity::getEnabled, true)
+                .orderByAsc(IntegrationAppScopeEntity::getScopeType)
+                .orderByAsc(IntegrationAppScopeEntity::getScopeId));
+    }
+
+    public void deleteIntegrationAppScope(String appId, String scopeId) {
+        deleteIntegrationAppScopeForTenant(tenantAdminGuard.currentTenantId(), appId, scopeId);
+    }
+
+    public void deleteIntegrationAppScopeForTenant(String tenantId, String appId, String scopeId) {
+        ensureTenantAccess(tenantId);
+        requireIntegrationAppForTenant(tenantId, appId);
+        IntegrationAppScopeEntity scope = Optional.ofNullable(integrationAppScopeMapper.selectById(scopeId))
+                .orElseThrow(() -> new AuthException("APP_SCOPE_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app scope does not exist."));
+        if (!appId.equals(scope.getAppId())) {
+            throw new AuthException("APP_SCOPE_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app scope does not exist.");
+        }
+        integrationAppScopeMapper.deleteById(scopeId);
+    }
+
+    public List<IntegrationAppSecretView> listIntegrationAppSecrets(String appId) {
+        return listIntegrationAppSecretsForTenant(tenantAdminGuard.currentTenantId(), appId);
+    }
+
+    public List<IntegrationAppSecretView> listIntegrationAppSecretsForTenant(String tenantId, String appId) {
+        ensureTenantAccess(tenantId);
+        requireIntegrationAppForTenant(tenantId, appId);
+        return integrationAppSecretMapper.selectList(new LambdaQueryWrapper<IntegrationAppSecretEntity>()
+                        .eq(IntegrationAppSecretEntity::getTenantId, tenantId)
+                        .eq(IntegrationAppSecretEntity::getAppId, appId)
+                        .orderByDesc(IntegrationAppSecretEntity::getCreatedAt))
+                .stream()
+                .map(secret -> new IntegrationAppSecretView(
+                        secret.getId(),
+                        secret.getSecretPrefix(),
+                        Boolean.TRUE.equals(secret.getEnabled()),
+                        secret.getExpiresAt(),
+                        secret.getCreatedAt()
+                ))
+                .toList();
+    }
+
+    public void deleteIntegrationAppSecret(String appId, String secretId) {
+        deleteIntegrationAppSecretForTenant(tenantAdminGuard.currentTenantId(), appId, secretId);
+    }
+
+    public void deleteIntegrationAppSecretForTenant(String tenantId, String appId, String secretId) {
+        ensureTenantAccess(tenantId);
+        requireIntegrationAppForTenant(tenantId, appId);
+        IntegrationAppSecretEntity secret = Optional.ofNullable(integrationAppSecretMapper.selectById(secretId))
+                .orElseThrow(() -> new AuthException("APP_SECRET_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app secret does not exist."));
+        if (!tenantId.equals(secret.getTenantId()) || !appId.equals(secret.getAppId())) {
+            throw new AuthException("APP_SECRET_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app secret does not exist.");
+        }
+        integrationAppSecretMapper.deleteById(secretId);
     }
 
     public IntegrationAppEntity updateIntegrationAppStatus(String appId, String status) {
@@ -944,6 +1023,21 @@ public class AuthAdminService {
         return value == null ? "default" : value.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
     }
 
+    private String buildScopeRecordId(String appCode, String scopeType, String scopeId) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            String material = normalize(appCode) + "\0" + normalize(scopeType) + "\0" + scopeId;
+            byte[] hash = digest.digest(material.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(32);
+            for (int i = 0; i < 16; i++) {
+                hex.append(String.format("%02x", hash[i]));
+            }
+            return "scope_" + hex;
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 not available", ex);
+        }
+    }
+
     private OrganizationEntity findParentOrganization(String parentId) {
         return findParentOrganizationForTenant(defaultTenantId, parentId);
     }
@@ -962,6 +1056,15 @@ public class AuthAdminService {
             throw new AuthException(errorCode, HttpStatus.BAD_REQUEST, "Status must be ACTIVE or DISABLED.");
         }
         return normalizedStatus;
+    }
+
+    public record IntegrationAppSecretView(
+            String id,
+            String secretPrefix,
+            boolean enabled,
+            java.time.Instant expiresAt,
+            java.time.Instant createdAt
+    ) {
     }
 
     public record GeneratedApiKey(String id, String secretPrefix, String apiKey) {

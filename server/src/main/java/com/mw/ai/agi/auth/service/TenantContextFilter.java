@@ -26,10 +26,17 @@ public class TenantContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
-            identitySupport.resolveAuthContext(request).ifPresentOrElse(holder -> {
+            OpenApiRequestContext.get(request).ifPresentOrElse(identity -> {
+                TenantContext.set(TenantContext.normalize(identity.tenantId()));
+                AuthRequestContext.set(new AuthRequestContext.Holder(
+                        identity.userId(),
+                        identity.tenantId(),
+                        identity.roleIds()
+                ));
+            }, () -> identitySupport.resolveAuthContext(request).ifPresentOrElse(holder -> {
                 TenantContext.set(TenantContext.normalize(holder.tenantId()));
                 AuthRequestContext.set(holder);
-            }, () -> TenantContext.set(identitySupport.resolveTenantId(request)));
+            }, () -> TenantContext.set(identitySupport.resolveTenantId(request))));
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();

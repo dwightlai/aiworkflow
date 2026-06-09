@@ -12,6 +12,7 @@ import com.mw.ai.agi.bot.persistence.BotMessageMapper;
 import com.mw.ai.agi.bot.persistence.BotSessionEntity;
 import com.mw.ai.agi.bot.persistence.BotSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.mw.ai.agi.common.asset.AssetReferenceSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.mw.ai.agi.persistence.JsonSupport;
 
@@ -179,16 +180,7 @@ public class MybatisBotStore implements BotStore {
     }
 
     private List<String> normalizeKnowledgeBaseIds(List<String> knowledgeBaseIds) {
-        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
-            return List.of();
-        }
-        Set<String> normalized = new LinkedHashSet<>();
-        for (String knowledgeBaseId : knowledgeBaseIds) {
-            if (knowledgeBaseId != null && !knowledgeBaseId.isBlank()) {
-                normalized.add(knowledgeBaseId.trim());
-            }
-        }
-        return new ArrayList<>(normalized);
+        return AssetReferenceSupport.requireAssetIds(knowledgeBaseIds);
     }
 
     private BotSessionEntity toEntity(BotSession session) {

@@ -1,5 +1,4 @@
 import {
-  ApiOutlined,
   ApartmentOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -18,32 +17,24 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { resolveIdentityTenantId } from '../../api/auth';
 import {
-  createIntegrationApp,
-  createIntegrationAppScope,
-  createIntegrationAppSecret,
   createOrganization,
   createRole,
   createUser,
-  deleteIntegrationApp,
   deleteOrganization,
   deleteRole,
   deleteUser,
-  listIntegrationApps,
   listOrganizations,
   listRoles,
   listUsers,
   resetUserPassword,
-  updateIntegrationAppStatus,
   updateOrganization,
   updateRole,
   updateUser,
   updateUserSortOrders,
   updateUserStatus,
   type IdentityUser,
-  type IntegrationApp,
   type Organization,
   type Role,
-  type SaveIntegrationAppRequest,
   type SaveOrganizationRequest,
   type SaveRoleRequest,
   type SaveUserRequest,
@@ -67,13 +58,6 @@ type UserFormValues = SaveUserRequest & { id?: string };
 type NormalizedUserRequest = SaveUserRequest | UpdateUserRequest;
 type BatchSortItem = UserSortOrderUpdate & { username: string; displayName: string };
 
-const appInitialValues: SaveIntegrationAppRequest = {
-  code: '',
-  name: '',
-  appType: 'BUSINESS_SYSTEM',
-  authType: 'API_KEY'
-};
-
 export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantId }: IdentityOrganizationPageProps) {
   const queryClient = useQueryClient();
   const effectiveTenantId = resolveIdentityTenantId(tenantId);
@@ -83,16 +67,11 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
   const [orgForm] = Form.useForm<SaveOrganizationRequest & UpdateOrganizationRequest>();
   const [userForm] = Form.useForm<UserFormValues>();
   const [roleForm] = Form.useForm<SaveRoleRequest & UpdateRoleRequest>();
-  const [appForm] = Form.useForm<SaveIntegrationAppRequest>();
-  const [scopeForm] = Form.useForm<{ scopeType: string; scopeId: string; permission: string }>();
   const [passwordForm] = Form.useForm<{ newPassword: string }>();
   const [orgDrawer, setOrgDrawer] = useState<OrgDrawerState | null>(null);
   const [userDrawer, setUserDrawer] = useState<UserDrawerState | null>(null);
   const [roleDrawer, setRoleDrawer] = useState<RoleDrawerState | null>(null);
-  const [appDrawerOpen, setAppDrawerOpen] = useState(false);
-  const [scopeApp, setScopeApp] = useState<IntegrationApp | null>(null);
   const [passwordUser, setPasswordUser] = useState<IdentityUser | null>(null);
-  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [selectedUserOrganizationId, setSelectedUserOrganizationId] = useState<string>('ALL');
   const [expandedUserOrganizationIds, setExpandedUserOrganizationIds] = useState<React.Key[]>(['ALL']);
   const [userOrganizationTreeTouched, setUserOrganizationTreeTouched] = useState(false);
@@ -102,12 +81,10 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
   const organizationsQuery = useQuery({ queryKey: ['identity', scopeKey, 'organizations'], queryFn: () => listOrganizations(effectiveTenantId) });
   const rolesQuery = useQuery({ queryKey: ['identity', scopeKey, 'roles'], queryFn: () => listRoles(effectiveTenantId) });
   const usersQuery = useQuery({ queryKey: ['identity', scopeKey, 'users'], queryFn: () => listUsers(effectiveTenantId) });
-  const appsQuery = useQuery({ queryKey: ['identity', scopeKey, 'integration-apps'], queryFn: () => listIntegrationApps(effectiveTenantId) });
 
   const organizations = organizationsQuery.data?.items ?? [];
   const roles = rolesQuery.data?.items ?? [];
   const users = usersQuery.data?.items ?? [];
-  const apps = appsQuery.data?.items ?? [];
   const organizationOptions = organizations.map((org) => ({ value: org.id, label: `${org.name} / ${org.code}` }));
   const roleOptions = roles.map((role) => ({ value: role.code, label: `${role.name} / ${role.code}` }));
   const visibleUsers = sortUsers(selectedUserOrganizationId === 'ALL'
@@ -215,42 +192,6 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
     }
   });
 
-  const createAppMutation = useMutation({
-    mutationFn: (request: SaveIntegrationAppRequest) => createIntegrationApp(request, effectiveTenantId),
-    onSuccess: async () => {
-      setAppDrawerOpen(false);
-      appForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'integration-apps'] });
-    }
-  });
-
-  const updateAppStatusMutation = useMutation({
-    mutationFn: ({ appId, status }: { appId: string; status: string }) => updateIntegrationAppStatus(appId, status, effectiveTenantId),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'integration-apps'] })
-  });
-
-  const deleteAppMutation = useMutation({
-    mutationFn: (appId: string) => deleteIntegrationApp(appId, effectiveTenantId),
-    onSuccess: async () => {
-      message.success('第三方应用已删除');
-      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'integration-apps'] });
-    }
-  });
-
-  const createSecretMutation = useMutation({
-    mutationFn: (appId: string) => createIntegrationAppSecret(appId, effectiveTenantId),
-    onSuccess: (secret) => setGeneratedKey(secret.apiKey)
-  });
-
-  const createScopeMutation = useMutation({
-    mutationFn: ({ appId, values }: { appId: string; values: { scopeType: string; scopeId: string; permission: string } }) =>
-      createIntegrationAppScope(appId, values, effectiveTenantId),
-    onSuccess: () => {
-      setScopeApp(null);
-      scopeForm.resetFields();
-    }
-  });
-
   const openCreateOrg = () => {
     setOrgDrawer({ mode: 'create' });
     orgForm.setFieldsValue({ code: '', name: '', orgType: 'DEPARTMENT', parentId: null, externalOrgId: null, sortOrder: 0 });
@@ -300,7 +241,7 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
       <div style={headerStyle}>
         <Space direction="vertical" size={4}>
           <Typography.Title level={3} style={{ margin: 0 }}>{workspaceMode ? '租户组织用户' : '组织用户'}</Typography.Title>
-          <Typography.Text type="secondary">{workspaceMode ? '管理当前租户下的组织、用户、角色和第三方应用。' : '管理本租户下的组织、用户、角色和第三方应用。'}</Typography.Text>
+          <Typography.Text type="secondary">{workspaceMode ? '管理当前租户下的组织、用户与角色。' : '管理本租户下的组织、用户与角色。'}</Typography.Text>
         </Space>
         <Button icon={<ReloadOutlined />} onClick={invalidateIdentity}>刷新</Button>
       </div>
@@ -309,10 +250,9 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
         <Metric title="组织" value={organizations.length} icon={<ApartmentOutlined />} />
         <Metric title="用户" value={users.length} icon={<UserOutlined />} />
         <Metric title="角色" value={roles.length} icon={<SafetyCertificateOutlined />} />
-        <Metric title="第三方应用" value={apps.length} icon={<ApiOutlined />} />
       </div>
 
-      {hasError([organizationsQuery, rolesQuery, usersQuery, appsQuery]) ? (
+      {hasError([organizationsQuery, rolesQuery, usersQuery]) ? (
         <Alert type="error" showIcon message="组织用户数据加载失败" style={{ marginBottom: 12 }} />
       ) : null}
 
@@ -347,16 +287,6 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
                 <>
                   <Toolbar><Button type="primary" icon={<PlusOutlined />} onClick={openCreateRole}>新增角色</Button></Toolbar>
                   <RoleTable roles={roles} loading={rolesQuery.isLoading} onEdit={openEditRole} onToggleStatus={(role) => saveRoleMutation.mutate({ ...role, status: role.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' })} onDelete={(role) => deleteRoleMutation.mutate(role.id)} />
-                </>
-              )
-            },
-            {
-              key: 'apps',
-              label: '第三方应用',
-              children: (
-                <>
-                  <Toolbar><Button type="primary" icon={<PlusOutlined />} onClick={() => { appForm.setFieldsValue(appInitialValues); setAppDrawerOpen(true); }}>新增应用</Button></Toolbar>
-                  <IntegrationAppTable apps={apps} loading={appsQuery.isLoading} onStatus={(app, status) => updateAppStatusMutation.mutate({ appId: app.id, status })} onSecret={(app) => createSecretMutation.mutate(app.id)} onScope={setScopeApp} onDelete={(app) => deleteAppMutation.mutate(app.id)} />
                 </>
               )
             }
@@ -410,15 +340,6 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
         </Form>
       </Drawer>
 
-      <Drawer title="新增第三方应用" open={appDrawerOpen} width={500} onClose={() => setAppDrawerOpen(false)} footer={<DrawerFooter onCancel={() => setAppDrawerOpen(false)} onSubmit={() => appForm.submit()} loading={createAppMutation.isPending} />}>
-        <Form form={appForm} layout="vertical" initialValues={appInitialValues} onFinish={(values) => createAppMutation.mutate(values)}>
-          <Form.Item name="code" label="应用编码" rules={[{ required: true, message: '请输入应用编码' }]}><Input /></Form.Item>
-          <Form.Item name="name" label="应用名称" rules={[{ required: true, message: '请输入应用名称' }]}><Input /></Form.Item>
-          <Form.Item name="appType" label="应用类型"><Select options={[{ value: 'ARCHIVE_SYSTEM', label: '数字档案馆' }, { value: 'OA_SYSTEM', label: 'OA 系统' }, { value: 'BUSINESS_SYSTEM', label: '业务系统' }, { value: 'OTHER', label: '其他' }]} /></Form.Item>
-          <Form.Item name="authType" label="认证方式"><Select options={[{ value: 'API_KEY', label: 'API Key' }]} /></Form.Item>
-        </Form>
-      </Drawer>
-
       <Modal title={`重置密码：${passwordUser?.username ?? ''}`} open={Boolean(passwordUser)} onCancel={() => setPasswordUser(null)} okText="确认重置" onOk={async () => {
         const values = await passwordForm.validateFields();
         if (passwordUser) resetPasswordMutation.mutate({ userId: passwordUser.id, password: values.newPassword });
@@ -453,19 +374,6 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
           ))}
           {batchSortItems.length === 0 ? <Typography.Text type="secondary">当前组织暂无用户</Typography.Text> : null}
         </Space>
-      </Modal>
-
-      <Modal title={`添加调用范围：${scopeApp?.name ?? ''}`} open={Boolean(scopeApp)} onCancel={() => setScopeApp(null)} okText="添加范围" onOk={() => scopeForm.submit()}>
-        <Form form={scopeForm} layout="vertical" initialValues={{ scopeType: 'ORGANIZATION', scopeId: organizations[0]?.id ?? '', permission: 'USE' }} onFinish={(values) => scopeApp && createScopeMutation.mutate({ appId: scopeApp.id, values })}>
-          <Form.Item name="scopeType" label="范围类型"><Select options={[{ value: 'TENANT', label: '租户' }, { value: 'ORGANIZATION', label: '组织' }, { value: 'BOT', label: '智能体' }, { value: 'KNOWLEDGE_BASE', label: '知识库' }, { value: 'TEMPLATE', label: '模板' }]} /></Form.Item>
-          <Form.Item name="scopeId" label="范围标识" rules={[{ required: true, message: '请输入范围标识' }]}><Input /></Form.Item>
-          <Form.Item name="permission" label="权限"><Select options={[{ value: 'USE', label: '使用' }, { value: 'MANAGE', label: '管理' }]} /></Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal title="一次性 API Key" open={Boolean(generatedKey)} onCancel={() => setGeneratedKey(null)} footer={<Button type="primary" onClick={() => setGeneratedKey(null)}>我已保存</Button>}>
-        <Alert type="warning" showIcon message="密钥只展示一次，请立即复制保存。" style={{ marginBottom: 12 }} />
-        <Typography.Text code style={{ userSelect: 'all' }}>{generatedKey}</Typography.Text>
       </Modal>
     </section>
   );
@@ -534,17 +442,6 @@ function RoleTable({ roles, loading, onEdit, onToggleStatus, onDelete }: { roles
     { title: '操作', width: 250, render: (_, role) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => onEdit(role)}>编辑</Button><Button size="small" onClick={() => onToggleStatus(role)}>{role.status === 'ACTIVE' ? '停用' : '启用'}</Button><ConfirmDelete onConfirm={() => onDelete(role)} /></Space> }
   ];
   return <Table rowKey="id" columns={columns} dataSource={roles} loading={loading} pagination={false} size="middle" />;
-}
-
-function IntegrationAppTable({ apps, loading, onStatus, onSecret, onScope, onDelete }: { apps: IntegrationApp[]; loading: boolean; onStatus: (app: IntegrationApp, status: string) => void; onSecret: (app: IntegrationApp) => void; onScope: (app: IntegrationApp) => void; onDelete: (app: IntegrationApp) => void }) {
-  const columns: ColumnsType<IntegrationApp> = [
-    { title: '应用', dataIndex: 'name', render: (_, app) => <Space direction="vertical" size={0}><Typography.Text strong>{app.name}</Typography.Text><Typography.Text type="secondary">{app.code}</Typography.Text></Space> },
-    { title: '类型', dataIndex: 'appType', render: tag },
-    { title: '认证', dataIndex: 'authType', render: tag },
-    { title: '状态', dataIndex: 'status', render: statusTag },
-    { title: '操作', width: 400, render: (_, app) => <Space wrap><Button size="small" onClick={() => onStatus(app, app.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE')}>{app.status === 'ACTIVE' ? '停用' : '启用'}</Button><Button size="small" icon={<KeyOutlined />} onClick={() => onSecret(app)}>生成 Key</Button><Button size="small" icon={<SafetyCertificateOutlined />} onClick={() => onScope(app)}>添加范围</Button><ConfirmDelete onConfirm={() => onDelete(app)} /></Space> }
-  ];
-  return <Table rowKey="id" columns={columns} dataSource={apps} loading={loading} pagination={false} size="middle" />;
 }
 
 function Metric({ title, value, icon }: { title: string; value: number; icon: React.ReactNode }) {
@@ -664,7 +561,7 @@ function hasError(queries: Array<{ isError: boolean }>) {
 
 const pageStyle: React.CSSProperties = { background: '#f5f7fb', minHeight: '100%', padding: 24 };
 const headerStyle: React.CSSProperties = { alignItems: 'center', background: '#fff', border: '1px solid #e7ecf3', borderRadius: 8, display: 'flex', justifyContent: 'space-between', marginBottom: 16, padding: '18px 20px' };
-const metricRowStyle: React.CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', marginBottom: 16 };
+const metricRowStyle: React.CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 16 };
 const metricCardStyle: React.CSSProperties = { border: '1px solid #e7ecf3' };
 const toolbarStyle: React.CSSProperties = { display: 'flex', justifyContent: 'flex-end', marginBottom: 12 };
 const userManagementStyle: React.CSSProperties = { display: 'grid', gap: 16, gridTemplateColumns: '260px minmax(0, 1fr)' };

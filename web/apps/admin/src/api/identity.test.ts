@@ -8,6 +8,8 @@ import {
   deleteOrganization,
   deleteRole,
   deleteUser,
+  listIntegrationAppScopes,
+  listIntegrationAppSecrets,
   listIntegrationApps,
   listOrganizations,
   listRoles,
@@ -28,13 +30,17 @@ describe('identity api', () => {
       [`${TENANT_BASE}/organizations`]: { items: [{ id: 'org_default_unit', code: 'default_unit' }], total: 1 },
       [`${TENANT_BASE}/roles`]: { items: [{ id: 'role_app_user', code: 'app_user' }], total: 1 },
       [`${TENANT_BASE}/users`]: { items: [{ id: 'user_admin', username: 'admin' }], total: 1 },
-      [`${TENANT_BASE}/integration-apps`]: { items: [{ id: 'app_archive', code: 'archive' }], total: 1 }
+      [`${TENANT_BASE}/integration-apps`]: { items: [{ id: 'app_archive', code: 'archive' }], total: 1 },
+      [`${TENANT_BASE}/integration-apps/app_archive/scopes`]: { items: [], total: 0 },
+      [`${TENANT_BASE}/integration-apps/app_archive/secrets`]: { items: [], total: 0 }
     });
 
     await expect(listOrganizations()).resolves.toEqual({ items: [{ id: 'org_default_unit', code: 'default_unit' }], total: 1 });
     await expect(listRoles()).resolves.toEqual({ items: [{ id: 'role_app_user', code: 'app_user' }], total: 1 });
     await expect(listUsers()).resolves.toEqual({ items: [{ id: 'user_admin', username: 'admin' }], total: 1 });
     await expect(listIntegrationApps()).resolves.toEqual({ items: [{ id: 'app_archive', code: 'archive' }], total: 1 });
+    await expect(listIntegrationAppScopes('app_archive')).resolves.toEqual({ items: [], total: 0 });
+    await expect(listIntegrationAppSecrets('app_archive')).resolves.toEqual({ items: [], total: 0 });
 
     expect(fetchMock).toHaveBeenCalledWith(`${TENANT_BASE}/organizations`);
     expect(fetchMock).toHaveBeenCalledWith(`${TENANT_BASE}/integration-apps`);

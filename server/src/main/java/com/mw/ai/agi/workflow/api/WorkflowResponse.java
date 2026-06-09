@@ -9,6 +9,7 @@ import java.time.Instant;
 public record WorkflowResponse(
         String id,
         String tenantId,
+        String ownerUnitId,
         String name,
         String description,
         WorkflowStatus status,
@@ -22,6 +23,7 @@ public record WorkflowResponse(
         return new WorkflowResponse(
                 workflow.id(),
                 workflow.tenantId(),
+                workflow.ownerUnitId(),
                 workflow.name(),
                 workflow.description(),
                 workflow.status(),
