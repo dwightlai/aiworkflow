@@ -9,6 +9,7 @@ import java.time.Instant;
 public class KnowledgeBaseEntity {
     @TableId
     private String id;
+    private String tenantId;
     private String name;
     private String description;
     private String ownerUnitId;
@@ -28,6 +29,8 @@ public class KnowledgeBaseEntity {
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }

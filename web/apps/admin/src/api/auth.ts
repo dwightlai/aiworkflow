@@ -1,6 +1,7 @@
 import type { ApiEnvelope } from './identity';
 
 export const AUTH_STORAGE_KEY = 'agi_admin_auth';
+export const DEFAULT_TENANT_ID = 'tenant_default';
 
 export interface AuthUser {
   id: string;
@@ -25,6 +26,17 @@ export interface AuthSession {
 }
 
 const memoryStorage = new Map<string, string>();
+
+export function isPlatformOperator(user?: AuthUser | null): boolean {
+  return user?.tenantId === DEFAULT_TENANT_ID && (user.roleIds?.includes('platform_admin') ?? false);
+}
+
+export function resolveIdentityTenantId(explicitTenantId?: string): string {
+  if (explicitTenantId) {
+    return explicitTenantId;
+  }
+  return getAuthSession()?.user.tenantId ?? DEFAULT_TENANT_ID;
+}
 
 export function getAuthSession(): AuthSession | null {
   const raw = getStorageItem(AUTH_STORAGE_KEY);
@@ -52,10 +64,10 @@ export function clearAuthSession() {
   removeStorageItem(AUTH_STORAGE_KEY);
 }
 
-export async function login(username: string, password: string): Promise<AuthSession> {
+export async function login(username: string, password: string, tenantCode?: string): Promise<AuthSession> {
   const session = await requestJson<AuthSession>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ username, password, tenantCode: tenantCode || undefined })
   }, { skipAuth: true });
   setAuthSession(session);
   return session;

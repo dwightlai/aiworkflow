@@ -10,7 +10,7 @@ import java.util.Optional;
 public interface BotStore {
     AiBot save(AiBot bot);
 
-    List<AiBot> list();
+    List<AiBot> list(String tenantId);
 
     Optional<AiBot> findById(String id);
 

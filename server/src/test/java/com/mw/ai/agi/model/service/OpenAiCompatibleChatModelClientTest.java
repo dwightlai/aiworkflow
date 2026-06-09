@@ -54,6 +54,7 @@ class OpenAiCompatibleChatModelClientTest {
         InMemoryModelProviderStore store = new InMemoryModelProviderStore();
         store.save(new ModelProvider(
                 "provider-1",
+                "tenant_default",
                 "deepseek-chat",
                 "DeepSeek",
                 "CHAT",

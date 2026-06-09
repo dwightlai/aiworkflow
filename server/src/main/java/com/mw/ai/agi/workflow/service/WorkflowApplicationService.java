@@ -1,10 +1,13 @@
 package com.mw.ai.agi.workflow.service;
 
+import com.mw.ai.agi.auth.service.TenantBusinessGuard;
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.workflow.domain.Workflow;
 import com.mw.ai.agi.workflow.domain.WorkflowDefinition;
 import com.mw.ai.agi.workflow.domain.WorkflowStatus;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 import com.mw.ai.agi.workflow.domain.WorkflowVersionStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -15,10 +18,17 @@ import java.util.UUID;
 public class WorkflowApplicationService {
     private final WorkflowStore store;
     private final DagValidator dagValidator;
+    private final TenantBusinessGuard tenantGuard;
 
     public WorkflowApplicationService(WorkflowStore store, DagValidator dagValidator) {
+        this(store, dagValidator, null);
+    }
+
+    @Autowired
+    public WorkflowApplicationService(WorkflowStore store, DagValidator dagValidator, TenantBusinessGuard tenantGuard) {
         this.store = store;
         this.dagValidator = dagValidator;
+        this.tenantGuard = tenantGuard;
     }
 
     public synchronized Workflow createWorkflow(
@@ -115,7 +125,7 @@ public class WorkflowApplicationService {
     }
 
     public List<Workflow> listWorkflows() {
-        return store.listWorkflows();
+        return store.listWorkflows(listTenantId());
     }
 
     public synchronized Workflow updateWorkflowMetadata(String workflowId, String name, String description) {
@@ -175,6 +185,7 @@ public class WorkflowApplicationService {
         if (workflow.status() == WorkflowStatus.DELETED) {
             throw new WorkflowNotFoundException(workflowId);
         }
+        assertTenantAccessible(workflow.tenantId());
         return workflow;
     }
 
@@ -190,6 +201,20 @@ public class WorkflowApplicationService {
         }
         return store.findVersionById(workflow.currentVersionId())
                 .orElseThrow(() -> WorkflowNotFoundException.publishedVersionNotFound(workflowId));
+    }
+
+    private String currentTenantId() {
+        return tenantGuard == null ? TenantContext.requireTenantId() : tenantGuard.currentTenantId();
+    }
+
+    private String listTenantId() {
+        return currentTenantId();
+    }
+
+    private void assertTenantAccessible(String resourceTenantId) {
+        if (tenantGuard != null) {
+            tenantGuard.assertAccessible(resourceTenantId);
+        }
     }
 
     private java.util.Optional<WorkflowVersion> findDraftVersion(String workflowId) {

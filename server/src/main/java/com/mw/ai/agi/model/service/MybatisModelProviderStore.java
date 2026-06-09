@@ -8,9 +8,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
 import java.util.Optional;
 
-public class MybatisModelProviderStore implements ModelProviderStore {
-    private static final String DEFAULT_TENANT_ID = "default";
+import com.mw.ai.agi.auth.service.TenantContext;
 
+public class MybatisModelProviderStore implements ModelProviderStore {
     private final ModelProviderMapper mapper;
 
     public MybatisModelProviderStore(ModelProviderMapper mapper) {
@@ -34,9 +34,13 @@ public class MybatisModelProviderStore implements ModelProviderStore {
     }
 
     @Override
-    public List<ModelProvider> list() {
-        return mapper.selectList(new LambdaQueryWrapper<ModelProviderEntity>()
-                        .orderByAsc(ModelProviderEntity::getCreatedAt))
+    public List<ModelProvider> list(String tenantId) {
+        LambdaQueryWrapper<ModelProviderEntity> wrapper = new LambdaQueryWrapper<ModelProviderEntity>()
+                .orderByAsc(ModelProviderEntity::getCreatedAt);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(ModelProviderEntity::getTenantId, tenantId);
+        }
+        return mapper.selectList(wrapper)
                 .stream()
                 .map(this::toDomain)
                 .toList();
@@ -50,7 +54,7 @@ public class MybatisModelProviderStore implements ModelProviderStore {
     private ModelProviderEntity toEntity(ModelProvider provider) {
         ModelProviderEntity entity = new ModelProviderEntity();
         entity.setId(provider.id());
-        entity.setTenantId(DEFAULT_TENANT_ID);
+        entity.setTenantId(provider.tenantId());
         entity.setName(provider.name());
         entity.setModelType(provider.modelType());
         entity.setModelUsage(provider.modelUsage());
@@ -69,6 +73,7 @@ public class MybatisModelProviderStore implements ModelProviderStore {
     private ModelProvider toDomain(ModelProviderEntity entity) {
         return new ModelProvider(
                 entity.getId(),
+                entity.getTenantId(),
                 entity.getName(),
                 entity.getModelType(),
                 entity.getModelUsage(),

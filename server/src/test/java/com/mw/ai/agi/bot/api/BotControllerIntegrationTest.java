@@ -44,7 +44,7 @@ class BotControllerIntegrationTest {
                                   "avatar": "robot",
                                   "workflowId": "%s",
                                   "modelProviderId": "model_chat",
-                                  "knowledgeBaseId": "kb_support",
+                                  "knowledgeBaseIds": ["kb_support"],
                                   "systemPrompt": "Use the support handbook.",
                                   "openingMessage": "Hi, how can I help?",
                                   "status": "ENABLED"
@@ -83,7 +83,7 @@ class BotControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.execution.status").value("SUCCEEDED"))
                 .andExpect(jsonPath("$.data.execution.output.message").value("Hello Ada"))
                 .andExpect(jsonPath("$.data.execution.input.botName").value("Support Bot"))
-                .andExpect(jsonPath("$.data.execution.input.knowledgeBaseId").value("kb_support"));
+                .andExpect(jsonPath("$.data.execution.input.knowledgeBaseIds[0]").value("kb_support"));
 
         mockMvc.perform(put("/api/bots/{botId}", botId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -94,7 +94,7 @@ class BotControllerIntegrationTest {
                                   "avatar": "assistant",
                                   "workflowId": "%s",
                                   "modelProviderId": "model_chat",
-                                  "knowledgeBaseId": null,
+                                  "knowledgeBaseIds": [],
                                   "systemPrompt": "Be concise.",
                                   "openingMessage": "Ask me anything.",
                                   "status": "DISABLED"
@@ -179,7 +179,7 @@ class BotControllerIntegrationTest {
                                   "avatar": "robot",
                                   "workflowId": null,
                                   "modelProviderId": "%s",
-                                  "knowledgeBaseId": null,
+                                  "knowledgeBaseIds": [],
                                   "systemPrompt": "Be helpful.",
                                   "openingMessage": "Hello.",
                                   "status": "ENABLED"
@@ -218,7 +218,7 @@ class BotControllerIntegrationTest {
                                   "avatar": "robot",
                                   "workflowId": "%s",
                                   "modelProviderId": "model_chat",
-                                  "knowledgeBaseId": "kb_support",
+                                  "knowledgeBaseIds": ["kb_support"],
                                   "systemPrompt": "Use the support handbook.",
                                   "openingMessage": "Hi, how can I help?",
                                   "status": "ENABLED"

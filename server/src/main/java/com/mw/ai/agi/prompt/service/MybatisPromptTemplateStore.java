@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Optional;
 
 public class MybatisPromptTemplateStore implements PromptTemplateStore {
-    private static final String DEFAULT_TENANT_ID = "default";
-
     private final PromptTemplateMapper mapper;
 
     public MybatisPromptTemplateStore(PromptTemplateMapper mapper) {
@@ -34,12 +32,13 @@ public class MybatisPromptTemplateStore implements PromptTemplateStore {
     }
 
     @Override
-    public List<PromptTemplate> list() {
-        return mapper.selectList(new LambdaQueryWrapper<PromptTemplateEntity>()
-                        .orderByAsc(PromptTemplateEntity::getCreatedAt))
-                .stream()
-                .map(this::toDomain)
-                .toList();
+    public List<PromptTemplate> list(String tenantId) {
+        LambdaQueryWrapper<PromptTemplateEntity> wrapper = new LambdaQueryWrapper<PromptTemplateEntity>()
+                .orderByAsc(PromptTemplateEntity::getCreatedAt);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(PromptTemplateEntity::getTenantId, tenantId);
+        }
+        return mapper.selectList(wrapper).stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -50,7 +49,7 @@ public class MybatisPromptTemplateStore implements PromptTemplateStore {
     private PromptTemplateEntity toEntity(PromptTemplate template) {
         PromptTemplateEntity entity = new PromptTemplateEntity();
         entity.setId(template.id());
-        entity.setTenantId(DEFAULT_TENANT_ID);
+        entity.setTenantId(template.tenantId());
         entity.setName(template.name());
         entity.setTemplate(template.template());
         entity.setDescription(template.description());
@@ -62,6 +61,7 @@ public class MybatisPromptTemplateStore implements PromptTemplateStore {
     private PromptTemplate toDomain(PromptTemplateEntity entity) {
         return new PromptTemplate(
                 entity.getId(),
+                entity.getTenantId(),
                 entity.getName(),
                 entity.getTemplate(),
                 entity.getDescription(),

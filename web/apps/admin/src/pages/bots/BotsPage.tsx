@@ -38,7 +38,7 @@ const initialBotValues: SaveBotRequest = {
   avatar: 'robot',
   workflowId: null,
   modelProviderId: null,
-  knowledgeBaseId: null,
+  knowledgeBaseIds: [],
   systemPrompt: '',
   openingMessage: '你好，我是你的智能助手。',
   status: 'ENABLED'
@@ -99,7 +99,7 @@ export function BotsPage() {
         description: values.description || null,
         workflowId: values.workflowId || null,
         modelProviderId: values.modelProviderId || null,
-        knowledgeBaseId: values.knowledgeBaseId || null
+        knowledgeBaseIds: values.knowledgeBaseIds ?? []
       };
       return editingBot ? updateBot(editingBot.id, request) : createBot(request);
     },
@@ -175,7 +175,17 @@ export function BotsPage() {
     {
       title: '知识库',
       width: 160,
-      render: (_, bot) => <Tag color={bot.knowledgeBaseId ? 'purple' : 'default'}>{bot.knowledgeBaseId ? knowledgeNameById.get(bot.knowledgeBaseId) ?? bot.knowledgeBaseId : '未绑定'}</Tag>
+      render: (_, bot) => (
+        bot.knowledgeBaseIds.length > 0 ? (
+          <Space size={[0, 4]} wrap>
+            {bot.knowledgeBaseIds.map((id) => (
+              <Tag key={id} color="purple">{knowledgeNameById.get(id) ?? id}</Tag>
+            ))}
+          </Space>
+        ) : (
+          <Tag color="default">未绑定</Tag>
+        )
+      )
     },
     {
       title: '会话',
@@ -270,10 +280,11 @@ export function BotsPage() {
               options={models.filter((model) => model.enabled && model.modelUsage === 'CHAT').map((model) => ({ value: model.id, label: `${model.name} / ${model.model}` }))}
             />
           </Form.Item>
-          <Form.Item name="knowledgeBaseId" label="默认知识库">
+          <Form.Item name="knowledgeBaseIds" label="默认知识库">
             <Select
               allowClear
-              placeholder="可绑定一个常用知识库"
+              mode="multiple"
+              placeholder="可绑定一个或多个常用知识库"
               options={knowledgeBases.map((base) => ({ value: base.id, label: base.name }))}
             />
           </Form.Item>
@@ -382,7 +393,7 @@ export function BotsPage() {
   }
 
   function handleBotSubmit(values: SaveBotRequest) {
-    if (!values.workflowId && !values.modelProviderId && !values.knowledgeBaseId) {
+    if (!values.workflowId && !values.modelProviderId && (!values.knowledgeBaseIds || values.knowledgeBaseIds.length === 0)) {
       message.error('请至少绑定工作流、默认模型或默认知识库中的一项');
       return;
     }
@@ -397,7 +408,7 @@ export function BotsPage() {
       avatar: bot.avatar || 'robot',
       workflowId: bot.workflowId || null,
       modelProviderId: bot.modelProviderId || null,
-      knowledgeBaseId: bot.knowledgeBaseId || null,
+      knowledgeBaseIds: bot.knowledgeBaseIds ?? [],
       systemPrompt: bot.systemPrompt || '',
       openingMessage: bot.openingMessage || '',
       status: bot.status

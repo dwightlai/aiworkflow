@@ -11,7 +11,7 @@ public interface WorkflowStore {
 
     Optional<Workflow> findWorkflowById(String workflowId);
 
-    List<Workflow> listWorkflows();
+    List<Workflow> listWorkflows(String tenantId);
 
     WorkflowVersion saveVersion(WorkflowVersion version);
 

@@ -23,8 +23,9 @@ public class InMemoryBotStore implements BotStore {
     }
 
     @Override
-    public List<AiBot> list() {
-        return new ArrayList<>(bots.values()).stream()
+    public List<AiBot> list(String tenantId) {
+        return bots.values().stream()
+                .filter(bot -> tenantId == null || tenantId.isBlank() || tenantId.equals(bot.tenantId()))
                 .sorted(Comparator.comparing(AiBot::createdAt))
                 .toList();
     }

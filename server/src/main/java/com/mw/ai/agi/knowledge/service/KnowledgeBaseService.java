@@ -8,6 +8,8 @@ import com.mw.ai.agi.knowledge.domain.KnowledgeDocument;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.domain.VectorStoreConfig;
 import com.mw.ai.agi.asset.service.AssetGrantService;
+import com.mw.ai.agi.auth.service.TenantBusinessGuard;
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -43,6 +45,7 @@ public class KnowledgeBaseService {
     private final VectorStoreConfigStore vectorStoreConfigStore;
     private final ElasticsearchVectorStoreClient elasticsearchVectorStoreClient;
     private final AssetGrantService assetGrantService;
+    private final TenantBusinessGuard tenantGuard;
 
     public KnowledgeBaseService() {
         this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient());
@@ -62,6 +65,7 @@ public class KnowledgeBaseService {
                 new TableDocumentParser(),
                 new InMemoryVectorStoreConfigStore(),
                 new ElasticsearchVectorStoreClient(new ObjectMapper()),
+                null,
                 null
         );
     }
@@ -81,6 +85,7 @@ public class KnowledgeBaseService {
                 new TableDocumentParser(),
                 new InMemoryVectorStoreConfigStore(),
                 new ElasticsearchVectorStoreClient(new ObjectMapper()),
+                null,
                 null
         );
     }
@@ -95,7 +100,8 @@ public class KnowledgeBaseService {
             TableDocumentParser tableDocumentParser,
             VectorStoreConfigStore vectorStoreConfigStore,
             ElasticsearchVectorStoreClient elasticsearchVectorStoreClient,
-            AssetGrantService assetGrantService
+            AssetGrantService assetGrantService,
+            TenantBusinessGuard tenantGuard
     ) {
         this.splitter = splitter;
         this.store = store;
@@ -106,6 +112,7 @@ public class KnowledgeBaseService {
         this.vectorStoreConfigStore = vectorStoreConfigStore;
         this.elasticsearchVectorStoreClient = elasticsearchVectorStoreClient;
         this.assetGrantService = assetGrantService;
+        this.tenantGuard = tenantGuard;
     }
 
     public KnowledgeBase create(
@@ -124,6 +131,7 @@ public class KnowledgeBaseService {
         Instant now = Instant.now();
         KnowledgeBase knowledgeBase = new KnowledgeBase(
                 "kb_" + UUID.randomUUID(),
+                currentTenantId(),
                 name,
                 description,
                 blankToNull(ownerUnitId),
@@ -190,7 +198,7 @@ public class KnowledgeBaseService {
     }
 
     public List<KnowledgeBase> list(Map<String, Object> context) {
-        return store.listKnowledgeBases();
+        return store.listKnowledgeBases(listTenantId());
     }
 
     public List<KnowledgeBase> list() {
@@ -214,6 +222,7 @@ public class KnowledgeBaseService {
         KnowledgeBase current = getKnowledgeBase(id);
         KnowledgeBase updated = new KnowledgeBase(
                 current.id(),
+                current.tenantId(),
                 defaultString(name, current.name()),
                 description,
                 blankToNull(ownerUnitId != null && !ownerUnitId.isBlank() ? ownerUnitId : current.ownerUnitId()),
@@ -568,6 +577,38 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    public List<KnowledgeSearchResult> searchMany(List<String> knowledgeBaseIds, String query, int topK) {
+        return searchMany(knowledgeBaseIds, query, topK, Map.of());
+    }
+
+    public List<KnowledgeSearchResult> searchMany(List<String> knowledgeBaseIds, String query, int topK, Map<String, Object> context) {
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
+            return List.of();
+        }
+        int limit = Math.max(topK <= 0 ? 5 : topK, 1);
+        Map<String, KnowledgeSearchResult> merged = new HashMap<>();
+        for (String knowledgeBaseId : knowledgeBaseIds) {
+            if (knowledgeBaseId == null || knowledgeBaseId.isBlank()) {
+                continue;
+            }
+            for (KnowledgeSearchResult result : search(knowledgeBaseId, query, limit, context)) {
+                KnowledgeSearchResult current = merged.get(result.id());
+                merged.put(result.id(), current == null
+                        ? result
+                        : new KnowledgeSearchResult(
+                                current.id(),
+                                current.documentName(),
+                                current.content(),
+                                current.score() + result.score()
+                        ));
+            }
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparingInt(KnowledgeSearchResult::score).reversed())
+                .limit(limit)
+                .toList();
+    }
+
     public List<KnowledgeSearchResult> searchDocument(String knowledgeBaseId, String documentId, String query, int topK) {
         return searchDocument(knowledgeBaseId, documentId, query, topK, Map.of());
     }
@@ -640,8 +681,24 @@ public class KnowledgeBaseService {
     }
 
     private KnowledgeBase getKnowledgeBase(String knowledgeBaseId) {
-        return store.findKnowledgeBaseById(knowledgeBaseId)
+        KnowledgeBase knowledgeBase = store.findKnowledgeBaseById(knowledgeBaseId)
                 .orElseThrow(() -> new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId));
+        assertTenantAccessible(knowledgeBase.tenantId());
+        return knowledgeBase;
+    }
+
+    private String currentTenantId() {
+        return tenantGuard == null ? TenantContext.requireTenantId() : tenantGuard.currentTenantId();
+    }
+
+    private String listTenantId() {
+        return currentTenantId();
+    }
+
+    private void assertTenantAccessible(String resourceTenantId) {
+        if (tenantGuard != null) {
+            tenantGuard.assertAccessible(resourceTenantId);
+        }
     }
 
     private void ensureKnowledgeBaseExists(String knowledgeBaseId) {
@@ -654,6 +711,7 @@ public class KnowledgeBaseService {
         int chunkCount = store.listChunks(knowledgeBaseId).size();
         store.saveKnowledgeBase(new KnowledgeBase(
                 current.id(),
+                current.tenantId(),
                 current.name(),
                 current.description(),
                 current.ownerUnitId(),

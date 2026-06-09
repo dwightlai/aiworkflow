@@ -46,6 +46,7 @@ public class AuthAdminService {
     private final IntegrationAppScopeMapper integrationAppScopeMapper;
     private final PasswordEncoder passwordEncoder;
     private final SecretHasher secretHasher;
+    private final TenantAdminGuard tenantAdminGuard;
     private final String defaultTenantId;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -61,6 +62,7 @@ public class AuthAdminService {
             IntegrationAppScopeMapper integrationAppScopeMapper,
             PasswordEncoder passwordEncoder,
             SecretHasher secretHasher,
+            TenantAdminGuard tenantAdminGuard,
             @Value("${agi.auth.default-tenant-id:tenant_default}") String defaultTenantId
     ) {
         this.tenantMapper = tenantMapper;
@@ -74,15 +76,101 @@ public class AuthAdminService {
         this.integrationAppScopeMapper = integrationAppScopeMapper;
         this.passwordEncoder = passwordEncoder;
         this.secretHasher = secretHasher;
+        this.tenantAdminGuard = tenantAdminGuard;
         this.defaultTenantId = defaultTenantId;
     }
 
     public List<TenantEntity> listTenants() {
+        tenantAdminGuard.assertPlatformOperator();
         return tenantMapper.selectList(new LambdaQueryWrapper<TenantEntity>().orderByAsc(TenantEntity::getCode));
     }
 
+    public TenantEntity createTenant(String code, String name) {
+        tenantAdminGuard.assertPlatformOperator();
+        if (code == null || code.isBlank()) {
+            throw new AuthException("TENANT_CODE_REQUIRED", HttpStatus.BAD_REQUEST, "Tenant code is required.");
+        }
+        if (name == null || name.isBlank()) {
+            throw new AuthException("TENANT_NAME_REQUIRED", HttpStatus.BAD_REQUEST, "Tenant name is required.");
+        }
+        String normalizedCode = code.trim();
+        findTenantByCode(normalizedCode).ifPresent(existing -> {
+            throw new AuthException("TENANT_CODE_EXISTS", HttpStatus.BAD_REQUEST, "Tenant code already exists.");
+        });
+        Instant now = Instant.now();
+        TenantEntity entity = new TenantEntity();
+        entity.setId("tenant_" + normalize(normalizedCode));
+        entity.setCode(normalizedCode);
+        entity.setName(name.trim());
+        entity.setStatus("ACTIVE");
+        entity.setCreatedAt(now);
+        entity.setUpdatedAt(now);
+        tenantMapper.insert(entity);
+        initializeTenantResources(entity.getId(), entity.getName());
+        return entity;
+    }
+
+    public TenantEntity getTenant(String tenantId) {
+        ensureTenantAccess(tenantId);
+        return findTenantOrThrow(tenantId);
+    }
+
+    public TenantEntity updateTenant(String tenantId, String name, String status) {
+        tenantAdminGuard.assertPlatformOperator();
+        ensureTenantAccess(tenantId);
+        TenantEntity tenant = findTenantOrThrow(tenantId);
+        if (name == null || name.isBlank()) {
+            throw new AuthException("TENANT_NAME_REQUIRED", HttpStatus.BAD_REQUEST, "Tenant name is required.");
+        }
+        String normalizedStatus = normalizeActiveStatus(status, "INVALID_TENANT_STATUS");
+        if (defaultTenantId.equals(tenant.getId()) && "DISABLED".equals(normalizedStatus)) {
+            throw new AuthException("DEFAULT_TENANT_PROTECTED", HttpStatus.BAD_REQUEST, "Default tenant cannot be disabled.");
+        }
+        tenantMapper.update(null, new LambdaUpdateWrapper<TenantEntity>()
+                .eq(TenantEntity::getId, tenant.getId())
+                .set(TenantEntity::getName, name.trim())
+                .set(TenantEntity::getStatus, normalizedStatus)
+                .set(TenantEntity::getUpdatedAt, Instant.now()));
+        return tenantMapper.selectById(tenantId);
+    }
+
+    public TenantEntity deleteTenant(String tenantId) {
+        tenantAdminGuard.assertPlatformOperator();
+        ensureTenantAccess(tenantId);
+        TenantEntity tenant = findTenantOrThrow(tenantId);
+        if (defaultTenantId.equals(tenant.getId())) {
+            throw new AuthException("DEFAULT_TENANT_PROTECTED", HttpStatus.BAD_REQUEST, "Default tenant cannot be deleted.");
+        }
+        Instant now = Instant.now();
+        organizationMapper.update(null, new LambdaUpdateWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getTenantId, tenantId)
+                .set(OrganizationEntity::getStatus, "DELETED")
+                .set(OrganizationEntity::getUpdatedAt, now));
+        roleMapper.update(null, new LambdaUpdateWrapper<RoleEntity>()
+                .eq(RoleEntity::getTenantId, tenantId)
+                .set(RoleEntity::getStatus, "DELETED")
+                .set(RoleEntity::getUpdatedAt, now));
+        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                .eq(UserEntity::getTenantId, tenantId)
+                .set(UserEntity::getStatus, "DELETED")
+                .set(UserEntity::getUpdatedAt, now));
+        integrationAppMapper.update(null, new LambdaUpdateWrapper<IntegrationAppEntity>()
+                .eq(IntegrationAppEntity::getTenantId, tenantId)
+                .set(IntegrationAppEntity::getStatus, "DELETED")
+                .set(IntegrationAppEntity::getUpdatedAt, now));
+        tenantMapper.deleteById(tenant.getId());
+        return tenant;
+    }
+
     public List<OrganizationEntity> listOrganizations() {
+        return listOrganizationsForTenant(tenantAdminGuard.currentTenantId());
+    }
+
+    public List<OrganizationEntity> listOrganizationsForTenant(String tenantId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
         return organizationMapper.selectList(new LambdaQueryWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getTenantId, tenantId)
                 .ne(OrganizationEntity::getStatus, "DELETED")
                 .orderByAsc(OrganizationEntity::getPath)
                 .orderByAsc(OrganizationEntity::getSortOrder)
@@ -90,13 +178,27 @@ public class AuthAdminService {
     }
 
     public List<RoleEntity> listRoles() {
+        return listRolesForTenant(tenantAdminGuard.currentTenantId());
+    }
+
+    public List<RoleEntity> listRolesForTenant(String tenantId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
         return roleMapper.selectList(new LambdaQueryWrapper<RoleEntity>()
+                .eq(RoleEntity::getTenantId, tenantId)
                 .ne(RoleEntity::getStatus, "DELETED")
                 .orderByAsc(RoleEntity::getCode));
     }
 
     public List<AuthUserPrincipal> listUsers() {
+        return listUsersForTenant(tenantAdminGuard.currentTenantId());
+    }
+
+    public List<AuthUserPrincipal> listUsersForTenant(String tenantId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
         return userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .eq(UserEntity::getTenantId, tenantId)
                         .ne(UserEntity::getStatus, "DELETED")
                         .orderByAsc(UserEntity::getSortOrder)
                         .orderByAsc(UserEntity::getUsername))
@@ -106,17 +208,30 @@ public class AuthAdminService {
     }
 
     public List<IntegrationAppEntity> listIntegrationApps() {
+        return listIntegrationAppsForTenant(tenantAdminGuard.currentTenantId());
+    }
+
+    public List<IntegrationAppEntity> listIntegrationAppsForTenant(String tenantId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
         return integrationAppMapper.selectList(new LambdaQueryWrapper<IntegrationAppEntity>()
+                .eq(IntegrationAppEntity::getTenantId, tenantId)
                 .ne(IntegrationAppEntity::getStatus, "DELETED")
                 .orderByAsc(IntegrationAppEntity::getCode));
     }
 
     public OrganizationEntity createOrganization(String parentId, String code, String externalOrgId, String name, String orgType, Integer sortOrder) {
+        return createOrganizationForTenant(tenantAdminGuard.currentTenantId(), parentId, code, externalOrgId, name, orgType, sortOrder);
+    }
+
+    public OrganizationEntity createOrganizationForTenant(String tenantId, String parentId, String code, String externalOrgId, String name, String orgType, Integer sortOrder) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
         Instant now = Instant.now();
-        OrganizationEntity parent = findParentOrganization(parentId);
+        OrganizationEntity parent = findParentOrganizationForTenant(tenantId, parentId);
         OrganizationEntity entity = new OrganizationEntity();
-        entity.setId("org_" + normalize(code));
-        entity.setTenantId(defaultTenantId);
+        entity.setId(organizationId(tenantId, code));
+        entity.setTenantId(tenantId);
         entity.setCode(code);
         entity.setExternalOrgId(externalOrgId);
         entity.setName(name);
@@ -141,9 +256,22 @@ public class AuthAdminService {
             Integer sortOrder,
             String status
     ) {
-        OrganizationEntity organization = Optional.ofNullable(organizationMapper.selectById(organizationId))
-                .orElseThrow(() -> new AuthException("ORGANIZATION_NOT_FOUND", HttpStatus.NOT_FOUND, "Organization does not exist."));
-        OrganizationEntity parent = findParentOrganization(parentId);
+        return updateOrganizationForTenant(tenantAdminGuard.currentTenantId(), organizationId, parentId, externalOrgId, name, orgType, sortOrder, status);
+    }
+
+    public OrganizationEntity updateOrganizationForTenant(
+            String tenantId,
+            String organizationId,
+            String parentId,
+            String externalOrgId,
+            String name,
+            String orgType,
+            Integer sortOrder,
+            String status
+    ) {
+        ensureTenantAccess(tenantId);
+        OrganizationEntity organization = requireOrganizationForTenant(tenantId, organizationId);
+        OrganizationEntity parent = findParentOrganizationForTenant(tenantId, parentId);
         String normalizedParentId = parentId == null || parentId.isBlank() ? null : parentId;
         organizationMapper.update(null, new LambdaUpdateWrapper<OrganizationEntity>()
                 .eq(OrganizationEntity::getId, organization.getId())
@@ -160,8 +288,12 @@ public class AuthAdminService {
     }
 
     public OrganizationEntity deleteOrganization(String organizationId) {
-        OrganizationEntity organization = Optional.ofNullable(organizationMapper.selectById(organizationId))
-                .orElseThrow(() -> new AuthException("ORGANIZATION_NOT_FOUND", HttpStatus.NOT_FOUND, "Organization does not exist."));
+        return deleteOrganizationForTenant(tenantAdminGuard.currentTenantId(), organizationId);
+    }
+
+    public OrganizationEntity deleteOrganizationForTenant(String tenantId, String organizationId) {
+        ensureTenantAccess(tenantId);
+        OrganizationEntity organization = requireOrganizationForTenant(tenantId, organizationId);
         long childCount = organizationMapper.selectCount(new LambdaQueryWrapper<OrganizationEntity>()
                 .eq(OrganizationEntity::getParentId, organization.getId())
                 .ne(OrganizationEntity::getStatus, "DELETED"));
@@ -186,10 +318,19 @@ public class AuthAdminService {
     }
 
     public RoleEntity createRole(String organizationId, String code, String name, String roleType, String externalRoleId) {
+        return createRoleForTenant(tenantAdminGuard.currentTenantId(), organizationId, code, name, roleType, externalRoleId);
+    }
+
+    public RoleEntity createRoleForTenant(String tenantId, String organizationId, String code, String name, String roleType, String externalRoleId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
+        findRoleByCode(tenantId, code).ifPresent(existing -> {
+            throw new AuthException("ROLE_CODE_EXISTS", HttpStatus.BAD_REQUEST, "Role code already exists.");
+        });
         Instant now = Instant.now();
         RoleEntity entity = new RoleEntity();
-        entity.setId("role_" + normalize(code));
-        entity.setTenantId(defaultTenantId);
+        entity.setId(roleId(tenantId, code));
+        entity.setTenantId(tenantId);
         entity.setOrganizationId(organizationId);
         entity.setExternalRoleId(externalRoleId);
         entity.setCode(code);
@@ -203,11 +344,15 @@ public class AuthAdminService {
     }
 
     public RoleEntity updateRole(String roleId, String organizationId, String code, String name, String roleType, String externalRoleId, String status) {
-        RoleEntity role = Optional.ofNullable(roleMapper.selectById(roleId))
-                .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.NOT_FOUND, "Role does not exist."));
+        return updateRoleForTenant(tenantAdminGuard.currentTenantId(), roleId, organizationId, code, name, roleType, externalRoleId, status);
+    }
+
+    public RoleEntity updateRoleForTenant(String tenantId, String roleId, String organizationId, String code, String name, String roleType, String externalRoleId, String status) {
+        ensureTenantAccess(tenantId);
+        RoleEntity role = requireRoleForTenant(tenantId, roleId);
         String normalizedCode = code == null || code.isBlank() ? role.getCode() : code.trim();
         if (!normalizedCode.equals(role.getCode())) {
-            findRoleByCode(normalizedCode)
+            findRoleByCode(tenantId, normalizedCode)
                     .filter(existing -> !existing.getId().equals(role.getId()))
                     .ifPresent(existing -> {
                         throw new AuthException("ROLE_CODE_EXISTS", HttpStatus.BAD_REQUEST, "Role code already exists.");
@@ -226,8 +371,12 @@ public class AuthAdminService {
     }
 
     public RoleEntity deleteRole(String roleId) {
-        RoleEntity role = Optional.ofNullable(roleMapper.selectById(roleId))
-                .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.NOT_FOUND, "Role does not exist."));
+        return deleteRoleForTenant(tenantAdminGuard.currentTenantId(), roleId);
+    }
+
+    public RoleEntity deleteRoleForTenant(String tenantId, String roleId) {
+        ensureTenantAccess(tenantId);
+        RoleEntity role = requireRoleForTenant(tenantId, roleId);
         roleMapper.update(null, new LambdaUpdateWrapper<RoleEntity>()
                 .eq(RoleEntity::getId, role.getId())
                 .set(RoleEntity::getStatus, "DELETED")
@@ -245,10 +394,32 @@ public class AuthAdminService {
             List<String> organizationIds,
             List<String> roleCodes
     ) {
+        return createLocalUserForTenant(tenantAdminGuard.currentTenantId(), username, password, displayName, mobile, email, sortOrder, organizationIds, roleCodes);
+    }
+
+    public AuthUserPrincipal createLocalUserForTenant(
+            String tenantId,
+            String username,
+            String password,
+            String displayName,
+            String mobile,
+            String email,
+            Integer sortOrder,
+            List<String> organizationIds,
+            List<String> roleCodes
+    ) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
+        Optional.ofNullable(userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
+                        .eq(UserEntity::getTenantId, tenantId)
+                        .eq(UserEntity::getUsername, username)))
+                .ifPresent(existing -> {
+                    throw new AuthException("USERNAME_EXISTS", HttpStatus.BAD_REQUEST, "Username already exists.");
+                });
         Instant now = Instant.now();
         UserEntity entity = new UserEntity();
-        entity.setId("user_" + normalize(username));
-        entity.setTenantId(defaultTenantId);
+        entity.setId(userId(tenantId, username));
+        entity.setTenantId(tenantId);
         entity.setUsername(username);
         entity.setPasswordHash(passwordEncoder.encode(password));
         entity.setDisplayName(displayName);
@@ -263,9 +434,10 @@ public class AuthAdminService {
 
         List<String> normalizedOrganizationIds = organizationIds == null ? List.of() : organizationIds;
         for (int index = 0; index < normalizedOrganizationIds.size(); index++) {
+            requireOrganizationForTenant(tenantId, normalizedOrganizationIds.get(index));
             UserOrganizationEntity relation = new UserOrganizationEntity();
             relation.setId(entity.getId() + "_org_" + normalize(normalizedOrganizationIds.get(index)));
-            relation.setTenantId(defaultTenantId);
+            relation.setTenantId(tenantId);
             relation.setUserId(entity.getId());
             relation.setOrganizationId(normalizedOrganizationIds.get(index));
             relation.setPrimaryOrganization(index == 0);
@@ -274,11 +446,11 @@ public class AuthAdminService {
         }
 
         for (String roleCode : roleCodes == null ? List.<String>of() : roleCodes) {
-            RoleEntity role = findRoleByCode(roleCode)
+            RoleEntity role = findRoleByCode(tenantId, roleCode)
                     .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.BAD_REQUEST, "Role does not exist."));
             UserRoleEntity relation = new UserRoleEntity();
             relation.setId(entity.getId() + "_role_" + normalize(role.getCode()));
-            relation.setTenantId(defaultTenantId);
+            relation.setTenantId(tenantId);
             relation.setUserId(entity.getId());
             relation.setRoleId(role.getId());
             relation.setCreatedAt(now);
@@ -289,12 +461,16 @@ public class AuthAdminService {
     }
 
     public UserEntity updateUserStatus(String userId, String status) {
+        return updateUserStatusForTenant(tenantAdminGuard.currentTenantId(), userId, status);
+    }
+
+    public UserEntity updateUserStatusForTenant(String tenantId, String userId, String status) {
+        ensureTenantAccess(tenantId);
         String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
         if (!List.of("ACTIVE", "DISABLED", "LOCKED").contains(normalizedStatus)) {
             throw new AuthException("INVALID_USER_STATUS", HttpStatus.BAD_REQUEST, "User status must be ACTIVE, DISABLED, or LOCKED.");
         }
-        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
-                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        UserEntity user = requireUserForTenant(tenantId, userId);
         userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
                 .eq(UserEntity::getId, user.getId())
                 .set(UserEntity::getStatus, normalizedStatus)
@@ -303,8 +479,12 @@ public class AuthAdminService {
     }
 
     public UserEntity deleteUser(String userId) {
-        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
-                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        return deleteUserForTenant(tenantAdminGuard.currentTenantId(), userId);
+    }
+
+    public UserEntity deleteUserForTenant(String tenantId, String userId) {
+        ensureTenantAccess(tenantId);
+        UserEntity user = requireUserForTenant(tenantId, userId);
         userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
                 .eq(UserEntity::getId, user.getId())
                 .set(UserEntity::getStatus, "DELETED")
@@ -323,8 +503,23 @@ public class AuthAdminService {
             List<String> organizationIds,
             List<String> roleCodes
     ) {
-        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
-                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        return updateLocalUserForTenant(tenantAdminGuard.currentTenantId(), userId, username, password, displayName, mobile, email, sortOrder, organizationIds, roleCodes);
+    }
+
+    public AuthUserPrincipal updateLocalUserForTenant(
+            String tenantId,
+            String userId,
+            String username,
+            String password,
+            String displayName,
+            String mobile,
+            String email,
+            Integer sortOrder,
+            List<String> organizationIds,
+            List<String> roleCodes
+    ) {
+        ensureTenantAccess(tenantId);
+        UserEntity user = requireUserForTenant(tenantId, userId);
         if (!"LOCAL".equals(user.getUserType())) {
             throw new AuthException("USER_UPDATE_UNSUPPORTED", HttpStatus.BAD_REQUEST, "Only local users can be updated.");
         }
@@ -354,6 +549,7 @@ public class AuthAdminService {
                 .eq(UserOrganizationEntity::getUserId, user.getId()));
         List<String> normalizedOrganizationIds = organizationIds == null ? List.of() : organizationIds;
         for (int index = 0; index < normalizedOrganizationIds.size(); index++) {
+            requireOrganizationForTenant(tenantId, normalizedOrganizationIds.get(index));
             UserOrganizationEntity relation = new UserOrganizationEntity();
             relation.setId(user.getId() + "_org_" + normalize(normalizedOrganizationIds.get(index)));
             relation.setTenantId(user.getTenantId());
@@ -367,7 +563,7 @@ public class AuthAdminService {
         userRoleMapper.delete(new LambdaQueryWrapper<UserRoleEntity>()
                 .eq(UserRoleEntity::getUserId, user.getId()));
         for (String roleCode : roleCodes == null ? List.<String>of() : roleCodes) {
-            RoleEntity role = findRoleByCode(roleCode)
+            RoleEntity role = findRoleByCode(tenantId, roleCode)
                     .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.BAD_REQUEST, "Role does not exist."));
             UserRoleEntity relation = new UserRoleEntity();
             relation.setId(user.getId() + "_role_" + normalize(role.getCode()));
@@ -381,9 +577,15 @@ public class AuthAdminService {
     }
 
     public List<AuthUserPrincipal> updateUserSortOrders(String organizationId, List<UserSortOrderUpdate> items) {
+        return updateUserSortOrdersForTenant(tenantAdminGuard.currentTenantId(), organizationId, items);
+    }
+
+    public List<AuthUserPrincipal> updateUserSortOrdersForTenant(String tenantId, String organizationId, List<UserSortOrderUpdate> items) {
+        ensureTenantAccess(tenantId);
         if (organizationId == null || organizationId.isBlank()) {
             throw new AuthException("ORGANIZATION_REQUIRED", HttpStatus.BAD_REQUEST, "Organization is required.");
         }
+        requireOrganizationForTenant(tenantId, organizationId);
         List<UserOrganizationEntity> memberships = userOrganizationMapper.selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
                 .eq(UserOrganizationEntity::getOrganizationId, organizationId));
         Set<String> memberUserIds = memberships.stream()
@@ -417,11 +619,15 @@ public class AuthAdminService {
     }
 
     public AuthUserPrincipal resetLocalUserPassword(String userId, String password) {
+        return resetLocalUserPasswordForTenant(tenantAdminGuard.currentTenantId(), userId, password);
+    }
+
+    public AuthUserPrincipal resetLocalUserPasswordForTenant(String tenantId, String userId, String password) {
+        ensureTenantAccess(tenantId);
         if (password == null || password.isBlank()) {
             throw new AuthException("INVALID_PASSWORD", HttpStatus.BAD_REQUEST, "Password cannot be blank.");
         }
-        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
-                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        UserEntity user = requireUserForTenant(tenantId, userId);
         if (!"LOCAL".equals(user.getUserType())) {
             throw new AuthException("USER_PASSWORD_UNSUPPORTED", HttpStatus.BAD_REQUEST, "Only local users can reset password.");
         }
@@ -433,10 +639,16 @@ public class AuthAdminService {
     }
 
     public IntegrationAppEntity createIntegrationApp(String code, String name, String appType, String authType) {
+        return createIntegrationAppForTenant(tenantAdminGuard.currentTenantId(), code, name, appType, authType);
+    }
+
+    public IntegrationAppEntity createIntegrationAppForTenant(String tenantId, String code, String name, String appType, String authType) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
         Instant now = Instant.now();
         IntegrationAppEntity entity = new IntegrationAppEntity();
-        entity.setId("app_" + normalize(code));
-        entity.setTenantId(defaultTenantId);
+        entity.setId(integrationAppId(tenantId, code));
+        entity.setTenantId(tenantId);
         entity.setCode(code);
         entity.setName(name);
         entity.setAppType(appType == null || appType.isBlank() ? "OTHER" : appType);
@@ -449,8 +661,12 @@ public class AuthAdminService {
     }
 
     public GeneratedApiKey createIntegrationAppSecret(String appId) {
-        IntegrationAppEntity app = Optional.ofNullable(integrationAppMapper.selectById(appId))
-                .orElseThrow(() -> new AuthException("APP_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app does not exist."));
+        return createIntegrationAppSecretForTenant(tenantAdminGuard.currentTenantId(), appId);
+    }
+
+    public GeneratedApiKey createIntegrationAppSecretForTenant(String tenantId, String appId) {
+        ensureTenantAccess(tenantId);
+        IntegrationAppEntity app = requireIntegrationAppForTenant(tenantId, appId);
         String apiKey = generateApiKey();
         Instant now = Instant.now();
         IntegrationAppSecretEntity entity = new IntegrationAppSecretEntity();
@@ -467,8 +683,12 @@ public class AuthAdminService {
     }
 
     public IntegrationAppScopeEntity createIntegrationAppScope(String appId, String scopeType, String scopeId, String permission) {
-        IntegrationAppEntity app = Optional.ofNullable(integrationAppMapper.selectById(appId))
-                .orElseThrow(() -> new AuthException("APP_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app does not exist."));
+        return createIntegrationAppScopeForTenant(tenantAdminGuard.currentTenantId(), appId, scopeType, scopeId, permission);
+    }
+
+    public IntegrationAppScopeEntity createIntegrationAppScopeForTenant(String tenantId, String appId, String scopeType, String scopeId, String permission) {
+        ensureTenantAccess(tenantId);
+        IntegrationAppEntity app = requireIntegrationAppForTenant(tenantId, appId);
         Instant now = Instant.now();
         IntegrationAppScopeEntity entity = new IntegrationAppScopeEntity();
         entity.setId("scope_" + normalize(app.getCode()) + "_" + normalize(scopeType) + "_" + normalize(scopeId));
@@ -485,12 +705,16 @@ public class AuthAdminService {
     }
 
     public IntegrationAppEntity updateIntegrationAppStatus(String appId, String status) {
+        return updateIntegrationAppStatusForTenant(tenantAdminGuard.currentTenantId(), appId, status);
+    }
+
+    public IntegrationAppEntity updateIntegrationAppStatusForTenant(String tenantId, String appId, String status) {
+        ensureTenantAccess(tenantId);
         String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
         if (!List.of("ACTIVE", "DISABLED").contains(normalizedStatus)) {
             throw new AuthException("INVALID_APP_STATUS", HttpStatus.BAD_REQUEST, "Integration app status must be ACTIVE or DISABLED.");
         }
-        IntegrationAppEntity app = Optional.ofNullable(integrationAppMapper.selectById(appId))
-                .orElseThrow(() -> new AuthException("APP_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app does not exist."));
+        IntegrationAppEntity app = requireIntegrationAppForTenant(tenantId, appId);
         integrationAppMapper.update(null, new LambdaUpdateWrapper<IntegrationAppEntity>()
                 .eq(IntegrationAppEntity::getId, app.getId())
                 .set(IntegrationAppEntity::getStatus, normalizedStatus)
@@ -499,8 +723,12 @@ public class AuthAdminService {
     }
 
     public IntegrationAppEntity deleteIntegrationApp(String appId) {
-        IntegrationAppEntity app = Optional.ofNullable(integrationAppMapper.selectById(appId))
-                .orElseThrow(() -> new AuthException("APP_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app does not exist."));
+        return deleteIntegrationAppForTenant(tenantAdminGuard.currentTenantId(), appId);
+    }
+
+    public IntegrationAppEntity deleteIntegrationAppForTenant(String tenantId, String appId) {
+        ensureTenantAccess(tenantId);
+        IntegrationAppEntity app = requireIntegrationAppForTenant(tenantId, appId);
         integrationAppMapper.update(null, new LambdaUpdateWrapper<IntegrationAppEntity>()
                 .eq(IntegrationAppEntity::getId, app.getId())
                 .set(IntegrationAppEntity::getStatus, "DELETED")
@@ -534,10 +762,176 @@ public class AuthAdminService {
         );
     }
 
-    private Optional<RoleEntity> findRoleByCode(String roleCode) {
+    private Optional<RoleEntity> findRoleByCode(String tenantId, String roleCode) {
         return Optional.ofNullable(roleMapper.selectOne(new LambdaQueryWrapper<RoleEntity>()
-                .eq(RoleEntity::getTenantId, defaultTenantId)
+                .eq(RoleEntity::getTenantId, tenantId)
                 .eq(RoleEntity::getCode, roleCode)));
+    }
+
+    private void initializeTenantResources(String tenantId, String tenantName) {
+        if (defaultTenantId.equals(tenantId)) {
+            return;
+        }
+        Instant now = Instant.now();
+        String unitOrgId = organizationId(tenantId, "default_unit");
+        OrganizationEntity unit = new OrganizationEntity();
+        unit.setId(unitOrgId);
+        unit.setTenantId(tenantId);
+        unit.setCode("default_unit");
+        unit.setName(tenantName + "默认单位");
+        unit.setOrgType("UNIT");
+        unit.setParentId(null);
+        unit.setPath("/" + unitOrgId);
+        unit.setLevel(1);
+        unit.setSortOrder(0);
+        unit.setStatus("ACTIVE");
+        unit.setCreatedAt(now);
+        unit.setUpdatedAt(now);
+        organizationMapper.insert(unit);
+
+        String deptOrgId = organizationId(tenantId, "default_dept");
+        OrganizationEntity department = new OrganizationEntity();
+        department.setId(deptOrgId);
+        department.setTenantId(tenantId);
+        department.setCode("default_dept");
+        department.setName("默认部门");
+        department.setOrgType("DEPARTMENT");
+        department.setParentId(unitOrgId);
+        department.setPath(unit.getPath() + "/" + deptOrgId);
+        department.setLevel(2);
+        department.setSortOrder(0);
+        department.setStatus("ACTIVE");
+        department.setCreatedAt(now);
+        department.setUpdatedAt(now);
+        organizationMapper.insert(department);
+
+        insertPlatformRole(tenantId, "platform_admin", "Platform Administrator", now);
+        insertPlatformRole(tenantId, "unit_admin", "Unit Administrator", now);
+        insertPlatformRole(tenantId, "asset_manager", "Asset Manager", now);
+        insertPlatformRole(tenantId, "app_user", "Application User", now);
+        insertPlatformRole(tenantId, "integration_admin", "Integration Administrator", now);
+        insertPlatformRole(tenantId, "auditor", "Auditor", now);
+    }
+
+    private void insertPlatformRole(String tenantId, String code, String name, Instant now) {
+        RoleEntity role = new RoleEntity();
+        role.setId(roleId(tenantId, code));
+        role.setTenantId(tenantId);
+        role.setOrganizationId(null);
+        role.setExternalRoleId(null);
+        role.setCode(code);
+        role.setName(name);
+        role.setRoleType("PLATFORM");
+        role.setStatus("ACTIVE");
+        role.setCreatedAt(now);
+        role.setUpdatedAt(now);
+        roleMapper.insert(role);
+    }
+
+    private OrganizationEntity requireOrganizationForTenant(String tenantId, String organizationId) {
+        OrganizationEntity organization = Optional.ofNullable(organizationMapper.selectById(organizationId))
+                .orElseThrow(() -> new AuthException("ORGANIZATION_NOT_FOUND", HttpStatus.NOT_FOUND, "Organization does not exist."));
+        if (!tenantId.equals(organization.getTenantId())) {
+            throw new AuthException("TENANT_MISMATCH", HttpStatus.BAD_REQUEST, "Organization does not belong to tenant.");
+        }
+        return organization;
+    }
+
+    private RoleEntity requireRoleForTenant(String tenantId, String roleId) {
+        RoleEntity role = Optional.ofNullable(roleMapper.selectById(roleId))
+                .orElseThrow(() -> new AuthException("ROLE_NOT_FOUND", HttpStatus.NOT_FOUND, "Role does not exist."));
+        if (!tenantId.equals(role.getTenantId())) {
+            throw new AuthException("TENANT_MISMATCH", HttpStatus.BAD_REQUEST, "Role does not belong to tenant.");
+        }
+        return role;
+    }
+
+    private UserEntity requireUserForTenant(String tenantId, String userId) {
+        UserEntity user = Optional.ofNullable(userMapper.selectById(userId))
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        if (!tenantId.equals(user.getTenantId())) {
+            throw new AuthException("TENANT_MISMATCH", HttpStatus.BAD_REQUEST, "User does not belong to tenant.");
+        }
+        return user;
+    }
+
+    private IntegrationAppEntity requireIntegrationAppForTenant(String tenantId, String appId) {
+        IntegrationAppEntity app = Optional.ofNullable(integrationAppMapper.selectById(appId))
+                .orElseThrow(() -> new AuthException("APP_NOT_FOUND", HttpStatus.NOT_FOUND, "Integration app does not exist."));
+        if (!tenantId.equals(app.getTenantId())) {
+            throw new AuthException("TENANT_MISMATCH", HttpStatus.BAD_REQUEST, "Integration app does not belong to tenant.");
+        }
+        return app;
+    }
+
+    private OrganizationEntity findParentOrganizationForTenant(String tenantId, String parentId) {
+        if (parentId == null || parentId.isBlank()) {
+            return null;
+        }
+        return requireOrganizationForTenant(tenantId, parentId);
+    }
+
+    private String organizationId(String tenantId, String code) {
+        if (defaultTenantId.equals(tenantId)) {
+            return "org_" + normalize(code);
+        }
+        return tenantId + "_org_" + normalize(code);
+    }
+
+    private String roleId(String tenantId, String code) {
+        if (defaultTenantId.equals(tenantId)) {
+            return "role_" + normalize(code);
+        }
+        return tenantId + "_role_" + normalize(code);
+    }
+
+    private String userId(String tenantId, String username) {
+        if (defaultTenantId.equals(tenantId)) {
+            return "user_" + normalize(username);
+        }
+        return tenantId + "_user_" + normalize(username);
+    }
+
+    private String integrationAppId(String tenantId, String code) {
+        if (defaultTenantId.equals(tenantId)) {
+            return "app_" + normalize(code);
+        }
+        return tenantId + "_app_" + normalize(code);
+    }
+
+    private void ensureTenantAccess(String tenantId) {
+        tenantAdminGuard.assertCanAccessTenant(tenantId);
+    }
+
+    private TenantEntity findTenantOrThrow(String tenantId) {
+        return Optional.ofNullable(tenantMapper.selectById(tenantId))
+                .orElseThrow(() -> new AuthException("TENANT_NOT_FOUND", HttpStatus.NOT_FOUND, "Tenant does not exist."));
+    }
+
+    private Optional<TenantEntity> findTenantByCode(String code) {
+        return Optional.ofNullable(tenantMapper.selectOne(new LambdaQueryWrapper<TenantEntity>()
+                .eq(TenantEntity::getCode, code)));
+    }
+
+    private boolean hasTenantDependencies(String tenantId) {
+        if (organizationMapper.selectCount(new LambdaQueryWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getTenantId, tenantId)
+                .ne(OrganizationEntity::getStatus, "DELETED")) > 0) {
+            return true;
+        }
+        if (userMapper.selectCount(new LambdaQueryWrapper<UserEntity>()
+                .eq(UserEntity::getTenantId, tenantId)
+                .ne(UserEntity::getStatus, "DELETED")) > 0) {
+            return true;
+        }
+        if (roleMapper.selectCount(new LambdaQueryWrapper<RoleEntity>()
+                .eq(RoleEntity::getTenantId, tenantId)
+                .ne(RoleEntity::getStatus, "DELETED")) > 0) {
+            return true;
+        }
+        return integrationAppMapper.selectCount(new LambdaQueryWrapper<IntegrationAppEntity>()
+                .eq(IntegrationAppEntity::getTenantId, tenantId)
+                .ne(IntegrationAppEntity::getStatus, "DELETED")) > 0;
     }
 
     private String generateApiKey() {
@@ -551,11 +945,7 @@ public class AuthAdminService {
     }
 
     private OrganizationEntity findParentOrganization(String parentId) {
-        if (parentId == null || parentId.isBlank()) {
-            return null;
-        }
-        return Optional.ofNullable(organizationMapper.selectById(parentId))
-                .orElseThrow(() -> new AuthException("PARENT_ORGANIZATION_NOT_FOUND", HttpStatus.BAD_REQUEST, "Parent organization does not exist."));
+        return findParentOrganizationForTenant(defaultTenantId, parentId);
     }
 
     private String normalizeOrgType(String orgType) {

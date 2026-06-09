@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Drawer, Empty, Input, Popconfirm, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { archiveWorkflow, deleteWorkflow, listWorkflows, runWorkflow, updateWorkflowMetadata, type Workflow } from '../../api/workflows';
+import { archiveWorkflow, deleteWorkflow, getWorkflow, listWorkflows, runWorkflow, updateWorkflowMetadata, buildWorkflowRunInput, type Workflow } from '../../api/workflows';
 
 const demoDescription = '配置节点、Prompt、模型和工具调用，编排可运行的 AI 自动化流程。';
 const statusOptions = [
@@ -302,8 +302,10 @@ export function WorkflowCardsPage() {
 
   function openRunDrawer(workflow: Workflow) {
     setRunningWorkflow(workflow);
-    setRunInput('{\n  "input": "请在这里填写运行参数"\n}');
     setRunInputError(null);
+    void getWorkflow(workflow.id)
+      .then((detail) => setRunInput(buildWorkflowRunInput(detail.latestVersion?.definition ?? null)))
+      .catch(() => setRunInput('{\n  "input": "请在这里填写运行参数"\n}'));
   }
 
   function submitRun() {

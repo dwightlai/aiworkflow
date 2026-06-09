@@ -1,5 +1,7 @@
 package com.mw.ai.agi.model.service;
 
+import com.mw.ai.agi.auth.service.TenantBusinessGuard;
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.model.domain.ModelProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,14 +14,20 @@ import java.util.UUID;
 @Service
 public class ModelProviderService {
     private final ModelProviderStore store;
+    private final TenantBusinessGuard tenantGuard;
 
     public ModelProviderService() {
-        this(new InMemoryModelProviderStore());
+        this(new InMemoryModelProviderStore(), null);
+    }
+
+    public ModelProviderService(ModelProviderStore store) {
+        this(store, null);
     }
 
     @Autowired
-    public ModelProviderService(ModelProviderStore store) {
+    public ModelProviderService(ModelProviderStore store, TenantBusinessGuard tenantGuard) {
         this.store = store;
+        this.tenantGuard = tenantGuard;
     }
 
     public ModelProvider create(
@@ -37,6 +45,7 @@ public class ModelProviderService {
         Instant now = Instant.now();
         ModelProvider provider = new ModelProvider(
                 "model_provider_" + UUID.randomUUID(),
+                currentTenantId(),
                 name,
                 modelType,
                 normalizeUsage(modelUsage),
@@ -69,6 +78,7 @@ public class ModelProviderService {
         ModelProvider current = get(id);
         return store.save(new ModelProvider(
                 current.id(),
+                current.tenantId(),
                 name,
                 modelType,
                 normalizeUsage(modelUsage),
@@ -85,16 +95,33 @@ public class ModelProviderService {
     }
 
     public List<ModelProvider> list() {
-        return store.list();
+        return store.list(listTenantId());
     }
 
     public ModelProvider get(String id) {
-        return store.findById(id)
+        ModelProvider provider = store.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Model provider not found: " + id));
+        assertTenantAccessible(provider.tenantId());
+        return provider;
     }
 
     public void delete(String id) {
+        get(id);
         store.delete(id);
+    }
+
+    private String currentTenantId() {
+        return tenantGuard == null ? TenantContext.requireTenantId() : tenantGuard.currentTenantId();
+    }
+
+    private String listTenantId() {
+        return currentTenantId();
+    }
+
+    private void assertTenantAccessible(String resourceTenantId) {
+        if (tenantGuard != null) {
+            tenantGuard.assertAccessible(resourceTenantId);
+        }
     }
 
     private String normalizeUsage(String modelUsage) {

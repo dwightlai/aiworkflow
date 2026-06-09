@@ -9,6 +9,8 @@ import com.mw.ai.agi.auth.persistence.AuthAuditLogMapper;
 import com.mw.ai.agi.auth.persistence.LoginSessionEntity;
 import com.mw.ai.agi.auth.persistence.LoginSessionMapper;
 import com.mw.ai.agi.auth.persistence.RoleMapper;
+import com.mw.ai.agi.auth.persistence.TenantEntity;
+import com.mw.ai.agi.auth.persistence.TenantMapper;
 import com.mw.ai.agi.auth.persistence.UserEntity;
 import com.mw.ai.agi.auth.persistence.UserMapper;
 import com.mw.ai.agi.auth.persistence.UserOrganizationEntity;
@@ -36,6 +38,7 @@ public class AuthService {
     private final ObjectProvider<RoleMapper> roleMapperProvider;
     private final ObjectProvider<LoginSessionMapper> loginSessionMapperProvider;
     private final ObjectProvider<AuthAuditLogMapper> authAuditLogMapperProvider;
+    private final ObjectProvider<TenantMapper> tenantMapperProvider;
     private final PasswordEncoder passwordEncoder;
     private final SecretHasher secretHasher;
     private final JwtTokenService jwtTokenService;
@@ -49,6 +52,7 @@ public class AuthService {
             ObjectProvider<RoleMapper> roleMapperProvider,
             ObjectProvider<LoginSessionMapper> loginSessionMapperProvider,
             ObjectProvider<AuthAuditLogMapper> authAuditLogMapperProvider,
+            ObjectProvider<TenantMapper> tenantMapperProvider,
             PasswordEncoder passwordEncoder,
             SecretHasher secretHasher,
             JwtTokenService jwtTokenService,
@@ -61,6 +65,7 @@ public class AuthService {
         this.roleMapperProvider = roleMapperProvider;
         this.loginSessionMapperProvider = loginSessionMapperProvider;
         this.authAuditLogMapperProvider = authAuditLogMapperProvider;
+        this.tenantMapperProvider = tenantMapperProvider;
         this.passwordEncoder = passwordEncoder;
         this.secretHasher = secretHasher;
         this.jwtTokenService = jwtTokenService;
@@ -68,8 +73,9 @@ public class AuthService {
         this.refreshTokenSeconds = refreshTokenSeconds;
     }
 
-    public AuthTokenResponse login(String username, String password, RequestAuditContext auditContext) {
-        Optional<UserEntity> user = findUserByUsername(defaultTenantId, username);
+    public AuthTokenResponse login(String username, String password, String tenantCode, RequestAuditContext auditContext) {
+        String tenantId = resolveLoginTenantId(tenantCode);
+        Optional<UserEntity> user = findUserByUsername(tenantId, username);
         if (user.isEmpty() || user.get().getPasswordHash() == null
                 || !passwordEncoder.matches(password, user.get().getPasswordHash())) {
             auditLogin(null, null, auditContext, "FAILED", "AUTH_LOGIN_FAILED");
@@ -195,6 +201,25 @@ public class AuthService {
                 departmentIds,
                 roleIds
         );
+    }
+
+    private String resolveLoginTenantId(String tenantCode) {
+        if (tenantCode == null || tenantCode.isBlank()) {
+            return defaultTenantId;
+        }
+        TenantEntity tenant = tenantMapper().selectOne(new LambdaQueryWrapper<TenantEntity>()
+                .eq(TenantEntity::getCode, tenantCode.trim()));
+        if (tenant == null) {
+            throw new AuthException("TENANT_NOT_FOUND", HttpStatus.BAD_REQUEST, "Tenant does not exist.");
+        }
+        if (!"ACTIVE".equals(tenant.getStatus())) {
+            throw new AuthException("TENANT_DISABLED", HttpStatus.FORBIDDEN, "Tenant is disabled.");
+        }
+        return tenant.getId();
+    }
+
+    private TenantMapper tenantMapper() {
+        return required(tenantMapperProvider, TenantMapper.class);
     }
 
     private Optional<UserEntity> findUserByUsername(String tenantId, String username) {

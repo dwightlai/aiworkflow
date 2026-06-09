@@ -149,3 +149,52 @@ export async function listWorkflowRuns(): Promise<PageResponse<WorkflowExecution
   return requestJson<PageResponse<WorkflowExecution>>('/api/workflow-runs');
 }
 
+export function buildWorkflowRunInput(definition?: WorkflowDefinition | null): string {
+  const startNode = definition?.nodes.find((node) => node.type === 'START');
+  const defaultInputJson = startNode?.config?.defaultInputJson;
+  if (typeof defaultInputJson === 'string' && defaultInputJson.trim()) {
+    try {
+      const parsed = JSON.parse(defaultInputJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return JSON.stringify(parsed, null, 2);
+      }
+    } catch {
+      // fallback below
+    }
+  }
+  const input: Record<string, unknown> = {};
+  const inputParams = startNode?.config?.inputParams;
+  if (Array.isArray(inputParams)) {
+    inputParams.forEach((item) => {
+      if (!item || typeof item !== 'object') {
+        return;
+      }
+      const param = item as Record<string, unknown>;
+      const name = typeof param.name === 'string' ? param.name.trim() : '';
+      if (name) {
+        input[name] = defaultRunInputValue(param.type);
+      }
+    });
+  }
+  if (Object.keys(input).length > 0) {
+    return JSON.stringify(input, null, 2);
+  }
+  return '{\n  "input": "请在这里填写运行参数"\n}';
+}
+
+function defaultRunInputValue(type: unknown) {
+  if (type === 'Number') {
+    return 0;
+  }
+  if (type === 'Boolean') {
+    return false;
+  }
+  if (type === 'Array') {
+    return [];
+  }
+  if (type === 'Object') {
+    return {};
+  }
+  return '';
+}
+

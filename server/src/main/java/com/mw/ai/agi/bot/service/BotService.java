@@ -8,6 +8,8 @@ import com.mw.ai.agi.bot.domain.BotRunResult;
 import com.mw.ai.agi.bot.domain.BotSession;
 import com.mw.ai.agi.bot.domain.BotStatus;
 import com.mw.ai.agi.asset.service.AssetGrantService;
+import com.mw.ai.agi.auth.service.TenantBusinessGuard;
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.knowledge.domain.KnowledgeSearchResult;
 import com.mw.ai.agi.knowledge.service.KnowledgeBaseService;
 import com.mw.ai.agi.model.domain.ModelProvider;
@@ -24,8 +26,10 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -37,6 +41,7 @@ public class BotService {
     private final ChatModelClient chatModelClient;
     private final KnowledgeBaseService knowledgeBaseService;
     private final AssetGrantService assetGrantService;
+    private final TenantBusinessGuard tenantGuard;
 
     public BotService(
             BotStore store,
@@ -45,7 +50,8 @@ public class BotService {
             ModelProviderService modelProviderService,
             ChatModelClient chatModelClient,
             KnowledgeBaseService knowledgeBaseService,
-            AssetGrantService assetGrantService
+            AssetGrantService assetGrantService,
+            TenantBusinessGuard tenantGuard
     ) {
         this.store = store;
         this.workflowService = workflowService;
@@ -54,10 +60,11 @@ public class BotService {
         this.chatModelClient = chatModelClient;
         this.knowledgeBaseService = knowledgeBaseService;
         this.assetGrantService = assetGrantService;
+        this.tenantGuard = tenantGuard;
     }
 
     public List<AiBot> list(Map<String, Object> context) {
-        return store.list().stream()
+        return store.list(listTenantId()).stream()
                 .filter(bot -> assetGrantService.isAllowed(
                         AssetGrantService.BOT,
                         bot.id(),
@@ -78,23 +85,25 @@ public class BotService {
             String avatar,
             String workflowId,
             String modelProviderId,
-            String knowledgeBaseId,
+            List<String> knowledgeBaseIds,
             String systemPrompt,
             String openingMessage,
             BotStatus status
     ) {
-        ensureRunnable(workflowId, modelProviderId, knowledgeBaseId);
+        List<String> effectiveKnowledgeBaseIds = normalizeKnowledgeBaseIds(knowledgeBaseIds);
+        ensureRunnable(workflowId, modelProviderId, effectiveKnowledgeBaseIds);
         Instant now = Instant.now();
         BotStatus effectiveStatus = status == null ? BotStatus.ENABLED : status;
         AiBot saved = store.save(new AiBot(
                 "bot_" + UUID.randomUUID(),
+                currentTenantId(),
                 name,
                 description,
                 blankToNull(ownerUnitId),
                 defaultString(avatar, "robot"),
                 blankToNull(workflowId),
                 blankToNull(modelProviderId),
-                blankToNull(knowledgeBaseId),
+                effectiveKnowledgeBaseIds,
                 defaultString(systemPrompt, ""),
                 defaultString(openingMessage, ""),
                 effectiveStatus,
@@ -115,24 +124,26 @@ public class BotService {
             String avatar,
             String workflowId,
             String modelProviderId,
-            String knowledgeBaseId,
+            List<String> knowledgeBaseIds,
             String systemPrompt,
             String openingMessage,
             BotStatus status
     ) {
         AiBot current = get(id);
-        ensureRunnable(workflowId, modelProviderId, knowledgeBaseId);
+        List<String> effectiveKnowledgeBaseIds = normalizeKnowledgeBaseIds(knowledgeBaseIds);
+        ensureRunnable(workflowId, modelProviderId, effectiveKnowledgeBaseIds);
         BotStatus effectiveStatus = status == null ? current.status() : status;
         Instant now = Instant.now();
         AiBot saved = store.save(new AiBot(
                 current.id(),
+                current.tenantId(),
                 defaultString(name, current.name()),
                 description,
                 blankToNull(ownerUnitId != null && !ownerUnitId.isBlank() ? ownerUnitId : current.ownerUnitId()),
                 defaultString(avatar, current.avatar()),
                 blankToNull(workflowId),
                 blankToNull(modelProviderId),
-                blankToNull(knowledgeBaseId),
+                effectiveKnowledgeBaseIds,
                 defaultString(systemPrompt, ""),
                 defaultString(openingMessage, ""),
                 effectiveStatus,
@@ -160,13 +171,14 @@ public class BotService {
         WorkflowExecutionResult execution = runBotLogic(bot, executionInput, defaultString(message, ""), List.of());
         AiBot updated = store.save(new AiBot(
                 bot.id(),
+                bot.tenantId(),
                 bot.name(),
                 bot.description(),
                 bot.ownerUnitId(),
                 bot.avatar(),
                 bot.workflowId(),
                 bot.modelProviderId(),
-                bot.knowledgeBaseId(),
+                bot.knowledgeBaseIds(),
                 bot.systemPrompt(),
                 bot.openingMessage(),
                 bot.status(),
@@ -238,13 +250,14 @@ public class BotService {
         ));
         store.save(new AiBot(
                 bot.id(),
+                bot.tenantId(),
                 bot.name(),
                 bot.description(),
                 bot.ownerUnitId(),
                 bot.avatar(),
                 bot.workflowId(),
                 bot.modelProviderId(),
-                bot.knowledgeBaseId(),
+                bot.knowledgeBaseIds(),
                 bot.systemPrompt(),
                 bot.openingMessage(),
                 bot.status(),
@@ -257,7 +270,23 @@ public class BotService {
     }
 
     private AiBot get(String id) {
-        return store.findById(id).orElseThrow(() -> new BotNotFoundException(id));
+        AiBot bot = store.findById(id).orElseThrow(() -> new BotNotFoundException(id));
+        assertTenantAccessible(bot.tenantId());
+        return bot;
+    }
+
+    private String currentTenantId() {
+        return tenantGuard == null ? TenantContext.requireTenantId() : tenantGuard.currentTenantId();
+    }
+
+    private String listTenantId() {
+        return currentTenantId();
+    }
+
+    private void assertTenantAccessible(String resourceTenantId) {
+        if (tenantGuard != null) {
+            tenantGuard.assertAccessible(resourceTenantId);
+        }
     }
 
     private void grantOwner(AiBot bot) {
@@ -267,12 +296,12 @@ public class BotService {
         assetGrantService.save(AssetGrantService.BOT, bot.id(), AssetGrantService.USE, bot.ownerUnitId(), AssetGrantService.SELF, null, AssetGrantService.SELF, true, null);
     }
 
-    private void ensureRunnable(String workflowId, String modelProviderId, String knowledgeBaseId) {
+    private void ensureRunnable(String workflowId, String modelProviderId, List<String> knowledgeBaseIds) {
         if (!isBlank(workflowId)) {
             workflowService.getWorkflow(workflowId);
             return;
         }
-        if (isBlank(modelProviderId) && isBlank(knowledgeBaseId)) {
+        if (isBlank(modelProviderId) && knowledgeBaseIds.isEmpty()) {
             throw new IllegalArgumentException("Bot requires a workflow, model provider, or knowledge base");
         }
         if (!isBlank(modelProviderId)) {
@@ -281,7 +310,7 @@ public class BotService {
                 throw new IllegalArgumentException("Model provider is disabled: " + modelProviderId);
             }
         }
-        if (!isBlank(knowledgeBaseId)) {
+        for (String knowledgeBaseId : knowledgeBaseIds) {
             knowledgeBaseService.search(knowledgeBaseId, "__health_check__", 1);
         }
     }
@@ -305,9 +334,9 @@ public class BotService {
             List<BotMessage> history
     ) {
         Instant startedAt = Instant.now();
-        List<KnowledgeSearchResult> documents = isBlank(bot.knowledgeBaseId())
+        List<KnowledgeSearchResult> documents = bot.knowledgeBaseIds().isEmpty()
                 ? List.of()
-                : knowledgeBaseService.search(bot.knowledgeBaseId(), message, 5, executionInput);
+                : knowledgeBaseService.searchMany(bot.knowledgeBaseIds(), message, 5, executionInput);
         String answer;
         if (!isBlank(bot.modelProviderId())) {
             ModelProvider provider = modelProviderService.get(bot.modelProviderId());
@@ -316,7 +345,7 @@ public class BotService {
             }
             answer = chatModelClient.generate(provider.id(), provider.model(), directPrompt(bot, message, history, documents), Map.of(
                     "botId", bot.id(),
-                    "knowledgeBaseId", bot.knowledgeBaseId() == null ? "" : bot.knowledgeBaseId()
+                    "knowledgeBaseIds", bot.knowledgeBaseIds()
             ));
         } else {
             answer = documents.isEmpty()
@@ -360,10 +389,23 @@ public class BotService {
         if (bot.modelProviderId() != null) {
             executionInput.put("modelProviderId", bot.modelProviderId());
         }
-        if (bot.knowledgeBaseId() != null) {
-            executionInput.put("knowledgeBaseId", bot.knowledgeBaseId());
+        if (!bot.knowledgeBaseIds().isEmpty()) {
+            executionInput.put("knowledgeBaseIds", bot.knowledgeBaseIds());
         }
         return executionInput;
+    }
+
+    private List<String> normalizeKnowledgeBaseIds(List<String> knowledgeBaseIds) {
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
+            return List.of();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String knowledgeBaseId : knowledgeBaseIds) {
+            if (knowledgeBaseId != null && !knowledgeBaseId.isBlank()) {
+                normalized.add(knowledgeBaseId.trim());
+            }
+        }
+        return new ArrayList<>(normalized);
     }
 
     private String directPrompt(

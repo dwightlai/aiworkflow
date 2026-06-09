@@ -114,13 +114,14 @@ public class StoreConfig {
     public BotStore botStore(
             ObjectProvider<AiBotMapper> botMapperProvider,
             ObjectProvider<BotSessionMapper> sessionMapperProvider,
-            ObjectProvider<BotMessageMapper> messageMapperProvider
+            ObjectProvider<BotMessageMapper> messageMapperProvider,
+            ObjectMapper objectMapper
     ) {
         AiBotMapper botMapper = botMapperProvider.getIfAvailable();
         BotSessionMapper sessionMapper = sessionMapperProvider.getIfAvailable();
         BotMessageMapper messageMapper = messageMapperProvider.getIfAvailable();
         return botMapper == null || sessionMapper == null || messageMapper == null
                 ? new InMemoryBotStore()
-                : new MybatisBotStore(botMapper, sessionMapper, messageMapper);
+                : new MybatisBotStore(botMapper, sessionMapper, messageMapper, new JsonSupport(objectMapper));
     }
 }

@@ -60,9 +60,13 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
     }
 
     @Override
-    public List<KnowledgeBase> listKnowledgeBases() {
-        return knowledgeBaseMapper.selectList(new LambdaQueryWrapper<KnowledgeBaseEntity>()
-                        .orderByAsc(KnowledgeBaseEntity::getCreatedAt))
+    public List<KnowledgeBase> listKnowledgeBases(String tenantId) {
+        LambdaQueryWrapper<KnowledgeBaseEntity> wrapper = new LambdaQueryWrapper<KnowledgeBaseEntity>()
+                .orderByAsc(KnowledgeBaseEntity::getCreatedAt);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(KnowledgeBaseEntity::getTenantId, tenantId);
+        }
+        return knowledgeBaseMapper.selectList(wrapper)
                 .stream()
                 .map(this::toDomain)
                 .toList();
@@ -194,6 +198,7 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
     private KnowledgeBaseEntity toEntity(KnowledgeBase knowledgeBase) {
         KnowledgeBaseEntity entity = new KnowledgeBaseEntity();
         entity.setId(knowledgeBase.id());
+        entity.setTenantId(knowledgeBase.tenantId());
         entity.setName(knowledgeBase.name());
         entity.setDescription(knowledgeBase.description());
         entity.setOwnerUnitId(knowledgeBase.ownerUnitId());
@@ -216,6 +221,7 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
     private KnowledgeBase toDomain(KnowledgeBaseEntity entity) {
         return new KnowledgeBase(
                 entity.getId(),
+                entity.getTenantId(),
                 entity.getName(),
                 entity.getDescription(),
                 entity.getOwnerUnitId(),

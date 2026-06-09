@@ -32,6 +32,7 @@ public class AuthController {
         return ApiResponse.success(authService.login(
                 request.username(),
                 request.password(),
+                request.tenantCode(),
                 auditContext(servletRequest)
         ));
     }
@@ -76,7 +77,8 @@ public class AuthController {
 
     public record LoginRequest(
             @NotBlank String username,
-            @NotBlank String password
+            @NotBlank String password,
+            String tenantCode
     ) {
     }
 

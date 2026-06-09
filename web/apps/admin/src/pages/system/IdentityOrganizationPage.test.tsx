@@ -84,6 +84,14 @@ Object.defineProperty(window, 'getComputedStyle', {
 
 vi.mock('../../api/identity', () => identityApiMock);
 
+vi.mock('../../api/auth', () => ({
+  resolveIdentityTenantId: (tenantId?: string) => tenantId ?? 'tenant_default',
+  DEFAULT_TENANT_ID: 'tenant_default',
+  isPlatformOperator: () => true
+}));
+
+const TENANT = 'tenant_default';
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -113,7 +121,7 @@ describe('IdentityOrganizationPage', () => {
       code: 'ops',
       name: '运营组织',
       orgType: 'DEPARTMENT'
-    })));
+    }), TENANT));
 
     await userEvent.click(screen.getByRole('tab', { name: '用户' }));
     await userEvent.click(getTreeNode(container, '默认单位'));
@@ -129,7 +137,7 @@ describe('IdentityOrganizationPage', () => {
       displayName: '平台管理员2',
       sortOrder: 20,
       organizationIds: ['org_default_unit']
-    })));
+    }), TENANT));
   }, 16000);
 
   it('filters users by the selected organization without including child organizations and deletes users', async () => {
@@ -151,7 +159,7 @@ describe('IdentityOrganizationPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /删除/ }));
 
-    await waitFor(() => expect(identityApiMock.deleteUser).toHaveBeenCalledWith('user_dept', expect.anything()));
+    await waitFor(() => expect(identityApiMock.deleteUser).toHaveBeenCalledWith('user_dept', TENANT));
   }, 16000);
 
   it('edits user password in the user drawer', async () => {
@@ -166,7 +174,7 @@ describe('IdentityOrganizationPage', () => {
 
     await waitFor(() => expect(identityApiMock.updateUser).toHaveBeenCalledWith('user_admin', expect.objectContaining({
       password: 'editpass123'
-    })));
+    }), TENANT));
   }, 16000);
 
   it('batch updates user sort orders for the selected organization', async () => {
@@ -181,7 +189,7 @@ describe('IdentityOrganizationPage', () => {
 
     await waitFor(() => expect(identityApiMock.updateUserSortOrders).toHaveBeenCalledWith('org_default_unit', expect.arrayContaining([
       expect.objectContaining({ userId: 'user_admin', sortOrder: 1 })
-    ])));
+    ]), TENANT));
   }, 16000);
 
   it('allows role code to be edited', async () => {
@@ -195,7 +203,7 @@ describe('IdentityOrganizationPage', () => {
 
     await waitFor(() => expect(identityApiMock.updateRole).toHaveBeenCalledWith('role_app_user', expect.objectContaining({
       code: 'app_user_new'
-    })));
+    }), TENANT));
   }, 16000);
 
   it('allows the organization tree to collapse and expand', async () => {
@@ -214,7 +222,7 @@ describe('IdentityOrganizationPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /生成 Key/ }));
 
     expect(await screen.findByText('agi_demo_full')).toBeInTheDocument();
-    expect(identityApiMock.createIntegrationAppSecret).toHaveBeenCalledWith('app_archive', expect.anything());
+    expect(identityApiMock.createIntegrationAppSecret).toHaveBeenCalledWith('app_archive', TENANT);
   });
 });
 

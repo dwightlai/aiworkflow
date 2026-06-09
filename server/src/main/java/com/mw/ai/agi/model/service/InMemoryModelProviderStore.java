@@ -25,8 +25,13 @@ public class InMemoryModelProviderStore implements ModelProviderStore {
     }
 
     @Override
-    public List<ModelProvider> list() {
-        return new ArrayList<>(providers);
+    public List<ModelProvider> list(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return new ArrayList<>(providers);
+        }
+        return providers.stream()
+                .filter(provider -> tenantId.equals(provider.tenantId()))
+                .toList();
     }
 
     @Override

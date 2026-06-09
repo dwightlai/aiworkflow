@@ -32,8 +32,13 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     }
 
     @Override
-    public List<KnowledgeBase> listKnowledgeBases() {
-        return new ArrayList<>(knowledgeBases);
+    public List<KnowledgeBase> listKnowledgeBases(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return new ArrayList<>(knowledgeBases);
+        }
+        return knowledgeBases.stream()
+                .filter(knowledgeBase -> tenantId.equals(knowledgeBase.tenantId()))
+                .toList();
     }
 
     @Override

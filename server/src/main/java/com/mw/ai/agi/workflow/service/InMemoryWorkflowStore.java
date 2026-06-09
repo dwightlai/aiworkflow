@@ -26,9 +26,10 @@ public class InMemoryWorkflowStore implements WorkflowStore {
     }
 
     @Override
-    public List<Workflow> listWorkflows() {
+    public List<Workflow> listWorkflows(String tenantId) {
         return workflows.values().stream()
                 .filter(workflow -> workflow.status() != WorkflowStatus.DELETED)
+                .filter(workflow -> tenantId == null || tenantId.isBlank() || tenantId.equals(workflow.tenantId()))
                 .sorted(Comparator.comparing(Workflow::createdAt))
                 .toList();
     }

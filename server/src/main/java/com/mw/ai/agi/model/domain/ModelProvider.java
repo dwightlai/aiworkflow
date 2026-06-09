@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 
 public record ModelProvider(
         String id,
+        String tenantId,
         String name,
         String modelType,
         String modelUsage,

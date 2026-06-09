@@ -9,13 +9,14 @@ import java.time.Instant;
 public class AiBotEntity {
     @TableId
     private String id;
+    private String tenantId;
     private String name;
     private String description;
     private String ownerUnitId;
     private String avatar;
     private String workflowId;
     private String modelProviderId;
-    private String knowledgeBaseId;
+    private String knowledgeBaseIds;
     private String systemPrompt;
     private String openingMessage;
     private String status;
@@ -30,6 +31,14 @@ public class AiBotEntity {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getName() {
@@ -80,12 +89,12 @@ public class AiBotEntity {
         this.modelProviderId = modelProviderId;
     }
 
-    public String getKnowledgeBaseId() {
-        return knowledgeBaseId;
+    public String getKnowledgeBaseIds() {
+        return knowledgeBaseIds;
     }
 
-    public void setKnowledgeBaseId(String knowledgeBaseId) {
-        this.knowledgeBaseId = knowledgeBaseId;
+    public void setKnowledgeBaseIds(String knowledgeBaseIds) {
+        this.knowledgeBaseIds = knowledgeBaseIds;
     }
 
     public String getSystemPrompt() {

@@ -9,6 +9,8 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
 import { IdentityOrganizationPage } from './pages/system/IdentityOrganizationPage';
+import { TenantsPage } from './pages/system/TenantsPage';
+import { TenantWorkspacePage } from './pages/system/TenantWorkspacePage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
 import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
@@ -95,6 +97,26 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     };
   }
 
+  const tenantWorkspaceMatch = pathname.match(/^\/system\/tenants\/([^/]+)(?:\/(.*))?$/);
+  if (tenantWorkspaceMatch) {
+    const tenantId = tenantWorkspaceMatch[1] ?? '';
+    const tab = tenantWorkspaceMatch[2];
+    const defaultTab = tab === 'users' ? 'users' : tab === 'roles' ? 'roles' : tab === 'apps' ? 'apps' : 'organizations';
+    return {
+      title: '租户工作台',
+      breadcrumb: ['首页', '系统管理', '租户管理', '租户工作台'],
+      element: <TenantWorkspacePage tenantId={tenantId} defaultTab={defaultTab} />
+    };
+  }
+
+  if (pathname === '/system/tenants') {
+    return {
+      title: '租户管理',
+      breadcrumb: ['首页', '系统管理', '租户管理'],
+      element: <TenantsPage />
+    };
+  }
+
   if (pathname === '/system/users') {
     return {
       title: '组织用户',
@@ -177,6 +199,7 @@ const routeTitleByPath: Record<string, string> = {
   '/tools': '工具插件',
   '/models': '模型配置',
   '/model-market': '模型市场',
+  '/system/tenants': '租户管理',
   '/system/users': '组织用户',
   '/system/roles': '组织用户',
   '/system/menus': '菜单管理',

@@ -16,6 +16,7 @@ import { Alert, Button, Card, Drawer, Form, Input, InputNumber, Modal, Select, S
 import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
 import { useEffect, useState } from 'react';
+import { resolveIdentityTenantId } from '../../api/auth';
 import {
   createIntegrationApp,
   createIntegrationAppScope,
@@ -54,6 +55,7 @@ import {
 
 interface IdentityOrganizationPageProps {
   defaultTab?: string;
+  tenantId?: string;
 }
 
 type DrawerMode = 'create' | 'edit';
@@ -72,8 +74,11 @@ const appInitialValues: SaveIntegrationAppRequest = {
   authType: 'API_KEY'
 };
 
-export function IdentityOrganizationPage({ defaultTab = 'organizations' }: IdentityOrganizationPageProps) {
+export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantId }: IdentityOrganizationPageProps) {
   const queryClient = useQueryClient();
+  const effectiveTenantId = resolveIdentityTenantId(tenantId);
+  const scopeKey = effectiveTenantId;
+  const workspaceMode = Boolean(tenantId);
   const [activeTab, setActiveTab] = useState(normalizeTab(defaultTab));
   const [orgForm] = Form.useForm<SaveOrganizationRequest & UpdateOrganizationRequest>();
   const [userForm] = Form.useForm<UserFormValues>();
@@ -94,10 +99,10 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations' }: Ident
   const [batchSortOpen, setBatchSortOpen] = useState(false);
   const [batchSortItems, setBatchSortItems] = useState<BatchSortItem[]>([]);
 
-  const organizationsQuery = useQuery({ queryKey: ['identity', 'organizations'], queryFn: listOrganizations });
-  const rolesQuery = useQuery({ queryKey: ['identity', 'roles'], queryFn: listRoles });
-  const usersQuery = useQuery({ queryKey: ['identity', 'users'], queryFn: listUsers });
-  const appsQuery = useQuery({ queryKey: ['identity', 'integration-apps'], queryFn: listIntegrationApps });
+  const organizationsQuery = useQuery({ queryKey: ['identity', scopeKey, 'organizations'], queryFn: () => listOrganizations(effectiveTenantId) });
+  const rolesQuery = useQuery({ queryKey: ['identity', scopeKey, 'roles'], queryFn: () => listRoles(effectiveTenantId) });
+  const usersQuery = useQuery({ queryKey: ['identity', scopeKey, 'users'], queryFn: () => listUsers(effectiveTenantId) });
+  const appsQuery = useQuery({ queryKey: ['identity', scopeKey, 'integration-apps'], queryFn: () => listIntegrationApps(effectiveTenantId) });
 
   const organizations = organizationsQuery.data?.items ?? [];
   const roles = rolesQuery.data?.items ?? [];
@@ -121,22 +126,22 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations' }: Ident
     mutationFn: (values: SaveOrganizationRequest & UpdateOrganizationRequest) => {
       const payload = normalizeOrganization(values);
       return orgDrawer?.mode === 'edit' && orgDrawer.record
-        ? updateOrganization(orgDrawer.record.id, payload)
-        : createOrganization(payload as SaveOrganizationRequest);
+        ? updateOrganization(orgDrawer.record.id, payload, effectiveTenantId)
+        : createOrganization(payload as SaveOrganizationRequest, effectiveTenantId);
     },
     onSuccess: async () => {
       message.success(orgDrawer?.mode === 'edit' ? '组织已更新' : '组织已创建');
       setOrgDrawer(null);
       orgForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'organizations'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'organizations'] });
     }
   });
 
   const deleteOrgMutation = useMutation({
-    mutationFn: deleteOrganization,
+    mutationFn: (organizationId: string) => deleteOrganization(organizationId, effectiveTenantId),
     onSuccess: async () => {
       message.success('组织已删除');
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'organizations'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'organizations'] });
     }
   });
 
@@ -144,32 +149,32 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations' }: Ident
     mutationFn: (values: UserFormValues) => {
       const payload = normalizeUser(values);
       return userDrawer?.mode === 'edit' && userDrawer.record
-        ? updateUser(userDrawer.record.id, payload as UpdateUserRequest)
-        : createUser(payload as SaveUserRequest);
+        ? updateUser(userDrawer.record.id, payload as UpdateUserRequest, effectiveTenantId)
+        : createUser(payload as SaveUserRequest, effectiveTenantId);
     },
     onSuccess: async () => {
       message.success(userDrawer?.mode === 'edit' ? '用户已更新' : '用户已创建');
       setUserDrawer(null);
       userForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'users'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'users'] });
     }
   });
 
   const deleteUserMutation = useMutation({
-    mutationFn: deleteUser,
+    mutationFn: (userId: string) => deleteUser(userId, effectiveTenantId),
     onSuccess: async () => {
       message.success('用户已删除');
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'users'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'users'] });
     }
   });
 
   const sortUsersMutation = useMutation({
     mutationFn: ({ organizationId, items }: { organizationId: string; items: UserSortOrderUpdate[] }) =>
-      updateUserSortOrders(organizationId, items),
+      updateUserSortOrders(organizationId, items, effectiveTenantId),
     onSuccess: async () => {
       message.success('用户排序已更新');
       setBatchSortOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'users'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'users'] });
     }
   });
 
@@ -177,69 +182,69 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations' }: Ident
     mutationFn: (values: SaveRoleRequest & UpdateRoleRequest) => {
       const payload = normalizeRole(values);
       return roleDrawer?.mode === 'edit' && roleDrawer.record
-        ? updateRole(roleDrawer.record.id, payload)
-        : createRole(payload as SaveRoleRequest);
+        ? updateRole(roleDrawer.record.id, payload, effectiveTenantId)
+        : createRole(payload as SaveRoleRequest, effectiveTenantId);
     },
     onSuccess: async () => {
       message.success(roleDrawer?.mode === 'edit' ? '角色已更新' : '角色已创建');
       setRoleDrawer(null);
       roleForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'roles'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'roles'] });
     }
   });
 
   const deleteRoleMutation = useMutation({
-    mutationFn: deleteRole,
+    mutationFn: (roleId: string) => deleteRole(roleId, effectiveTenantId),
     onSuccess: async () => {
       message.success('角色已删除');
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'roles'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'roles'] });
     }
   });
 
   const updateUserStatusMutation = useMutation({
-    mutationFn: ({ userId, status }: { userId: string; status: string }) => updateUserStatus(userId, status),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['identity', 'users'] })
+    mutationFn: ({ userId, status }: { userId: string; status: string }) => updateUserStatus(userId, status, effectiveTenantId),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'users'] })
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: ({ userId, password }: { userId: string; password: string }) => resetUserPassword(userId, password),
+    mutationFn: ({ userId, password }: { userId: string; password: string }) => resetUserPassword(userId, password, effectiveTenantId),
     onSuccess: async () => {
       setPasswordUser(null);
       passwordForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'users'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'users'] });
     }
   });
 
   const createAppMutation = useMutation({
-    mutationFn: createIntegrationApp,
+    mutationFn: (request: SaveIntegrationAppRequest) => createIntegrationApp(request, effectiveTenantId),
     onSuccess: async () => {
       setAppDrawerOpen(false);
       appForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'integration-apps'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'integration-apps'] });
     }
   });
 
   const updateAppStatusMutation = useMutation({
-    mutationFn: ({ appId, status }: { appId: string; status: string }) => updateIntegrationAppStatus(appId, status),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['identity', 'integration-apps'] })
+    mutationFn: ({ appId, status }: { appId: string; status: string }) => updateIntegrationAppStatus(appId, status, effectiveTenantId),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'integration-apps'] })
   });
 
   const deleteAppMutation = useMutation({
-    mutationFn: deleteIntegrationApp,
+    mutationFn: (appId: string) => deleteIntegrationApp(appId, effectiveTenantId),
     onSuccess: async () => {
       message.success('第三方应用已删除');
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'integration-apps'] });
+      await queryClient.invalidateQueries({ queryKey: ['identity', scopeKey, 'integration-apps'] });
     }
   });
 
   const createSecretMutation = useMutation({
-    mutationFn: createIntegrationAppSecret,
+    mutationFn: (appId: string) => createIntegrationAppSecret(appId, effectiveTenantId),
     onSuccess: (secret) => setGeneratedKey(secret.apiKey)
   });
 
   const createScopeMutation = useMutation({
     mutationFn: ({ appId, values }: { appId: string; values: { scopeType: string; scopeId: string; permission: string } }) =>
-      createIntegrationAppScope(appId, values),
+      createIntegrationAppScope(appId, values, effectiveTenantId),
     onSuccess: () => {
       setScopeApp(null);
       scopeForm.resetFields();
@@ -294,8 +299,8 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations' }: Ident
     <section style={pageStyle}>
       <div style={headerStyle}>
         <Space direction="vertical" size={4}>
-          <Typography.Title level={3} style={{ margin: 0 }}>组织用户</Typography.Title>
-          <Typography.Text type="secondary">统一维护组织树、用户、角色和第三方接入应用，作为知识库和智能体授权的身份基础。</Typography.Text>
+          <Typography.Title level={3} style={{ margin: 0 }}>{workspaceMode ? '租户组织用户' : '组织用户'}</Typography.Title>
+          <Typography.Text type="secondary">{workspaceMode ? '管理当前租户下的组织、用户、角色和第三方应用。' : '管理本租户下的组织、用户、角色和第三方应用。'}</Typography.Text>
         </Space>
         <Button icon={<ReloadOutlined />} onClick={invalidateIdentity}>刷新</Button>
       </div>

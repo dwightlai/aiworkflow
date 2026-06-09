@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.engine;
 
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.knowledge.domain.KnowledgeBase;
 import com.mw.ai.agi.knowledge.service.KnowledgeBaseService;
 import com.mw.ai.agi.model.service.ModelProviderService;
@@ -12,6 +13,8 @@ import com.mw.ai.agi.workflow.service.DagValidator;
 import com.mw.ai.agi.workflow.service.InMemoryWorkflowStore;
 import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
 import com.mw.ai.agi.workflow.service.WorkflowNotFoundException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -37,6 +40,16 @@ class WorkflowExecutionServiceTest {
                     new ConditionNodeExecutor()
             ))
     );
+
+    @BeforeEach
+    void setTenant() {
+        TenantContext.set("tenant-1");
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
 
     @Test
     void runsPublishedWorkflowFromStartToEnd() {
@@ -365,6 +378,7 @@ class WorkflowExecutionServiceTest {
                         )),
                         node("llm", WorkflowNodeType.LLM, Map.of(
                                 "providerId", providerId,
+                                "outputKey", "output",
                                 "inputParams", List.of(Map.of("name", "question", "value", "question", "type", "String")),
                                 "systemPrompt", "你是客服助手",
                                 "userPrompt", "问题：{{question}}\n知识：{{documents}}",

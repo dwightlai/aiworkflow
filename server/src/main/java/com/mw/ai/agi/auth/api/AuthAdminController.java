@@ -37,6 +37,24 @@ public class AuthAdminController {
         return ApiResponse.success(new PageResponse<>(tenants, tenants.size()));
     }
 
+    @PostMapping("/tenants")
+    public ApiResponse<TenantEntity> createTenant(@Valid @RequestBody SaveTenantRequest request) {
+        return ApiResponse.success(authAdminService.createTenant(request.code(), request.name()));
+    }
+
+    @PutMapping("/tenants/{tenantId}")
+    public ApiResponse<TenantEntity> updateTenant(
+            @PathVariable String tenantId,
+            @Valid @RequestBody UpdateTenantRequest request
+    ) {
+        return ApiResponse.success(authAdminService.updateTenant(tenantId, request.name(), request.status()));
+    }
+
+    @DeleteMapping("/tenants/{tenantId}")
+    public ApiResponse<TenantEntity> deleteTenant(@PathVariable String tenantId) {
+        return ApiResponse.success(authAdminService.deleteTenant(tenantId));
+    }
+
     @GetMapping("/organizations")
     public ApiResponse<PageResponse<OrganizationEntity>> listOrganizations() {
         List<OrganizationEntity> organizations = authAdminService.listOrganizations();
@@ -231,6 +249,12 @@ public class AuthAdminController {
                 request.scopeId(),
                 request.permission()
         ));
+    }
+
+    public record SaveTenantRequest(@NotBlank String code, @NotBlank String name) {
+    }
+
+    public record UpdateTenantRequest(@NotBlank String name, String status) {
     }
 
     public record SaveOrganizationRequest(

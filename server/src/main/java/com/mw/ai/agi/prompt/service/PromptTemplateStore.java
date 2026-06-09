@@ -10,7 +10,7 @@ public interface PromptTemplateStore {
 
     Optional<PromptTemplate> findById(String id);
 
-    List<PromptTemplate> list();
+    List<PromptTemplate> list(String tenantId);
 
     void delete(String id);
 }

@@ -13,7 +13,7 @@ public interface KnowledgeStore {
 
     Optional<KnowledgeBase> findKnowledgeBaseById(String id);
 
-    List<KnowledgeBase> listKnowledgeBases();
+    List<KnowledgeBase> listKnowledgeBases(String tenantId);
 
     void deleteKnowledgeBase(String id);
 

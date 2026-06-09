@@ -1,11 +1,14 @@
 package com.mw.ai.agi.workflow.engine;
 
+import com.mw.ai.agi.auth.service.TenantBusinessGuard;
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.workflow.domain.WorkflowDefinition;
 import com.mw.ai.agi.workflow.domain.WorkflowEdge;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -30,15 +33,27 @@ public class WorkflowExecutionService {
     private final WorkflowApplicationService workflowService;
     private final WorkflowExecutionStore executionStore;
     private final WorkflowNodeExecutorRegistry executorRegistry;
+    private final TenantBusinessGuard tenantGuard;
 
     public WorkflowExecutionService(
             WorkflowApplicationService workflowService,
             WorkflowExecutionStore executionStore,
             WorkflowNodeExecutorRegistry executorRegistry
     ) {
+        this(workflowService, executionStore, executorRegistry, null);
+    }
+
+    @Autowired
+    public WorkflowExecutionService(
+            WorkflowApplicationService workflowService,
+            WorkflowExecutionStore executionStore,
+            WorkflowNodeExecutorRegistry executorRegistry,
+            TenantBusinessGuard tenantGuard
+    ) {
         this.workflowService = workflowService;
         this.executionStore = executionStore;
         this.executorRegistry = executorRegistry;
+        this.tenantGuard = tenantGuard;
     }
 
     public WorkflowExecutionResult runWorkflow(WorkflowExecutionRequest request) {
@@ -113,11 +128,13 @@ public class WorkflowExecutionService {
     public WorkflowExecutionResult getWorkflowExecution(String executionId) {
         WorkflowExecution execution = executionStore.findWorkflowExecutionById(executionId)
                 .orElseThrow(() -> new WorkflowRunNotFoundException(executionId));
+        workflowService.getWorkflow(execution.workflowId());
         return new WorkflowExecutionResult(execution, executionStore.listNodeExecutions(executionId));
     }
 
     public List<WorkflowExecutionResult> listWorkflowExecutions() {
-        return executionStore.listWorkflowExecutions().stream()
+        String tenantId = tenantGuard == null ? TenantContext.requireTenantId() : tenantGuard.currentTenantId();
+        return executionStore.listWorkflowExecutions(tenantId).stream()
                 .map(execution -> new WorkflowExecutionResult(
                         execution,
                         executionStore.listNodeExecutions(execution.id())

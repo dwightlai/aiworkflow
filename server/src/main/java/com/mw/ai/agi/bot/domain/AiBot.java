@@ -1,16 +1,18 @@
 package com.mw.ai.agi.bot.domain;
 
 import java.time.Instant;
+import java.util.List;
 
 public record AiBot(
         String id,
+        String tenantId,
         String name,
         String description,
         String ownerUnitId,
         String avatar,
         String workflowId,
         String modelProviderId,
-        String knowledgeBaseId,
+        List<String> knowledgeBaseIds,
         String systemPrompt,
         String openingMessage,
         BotStatus status,

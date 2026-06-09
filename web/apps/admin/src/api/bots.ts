@@ -22,7 +22,7 @@ export interface Bot {
   avatar: string;
   workflowId: string | null;
   modelProviderId: string | null;
-  knowledgeBaseId: string | null;
+  knowledgeBaseIds: string[];
   systemPrompt: string;
   openingMessage: string;
   status: BotStatus;
@@ -59,7 +59,7 @@ export interface SaveBotRequest {
   avatar: string;
   workflowId: string | null;
   modelProviderId: string | null;
-  knowledgeBaseId: string | null;
+  knowledgeBaseIds: string[];
   systemPrompt: string;
   openingMessage: string;
   status: BotStatus;

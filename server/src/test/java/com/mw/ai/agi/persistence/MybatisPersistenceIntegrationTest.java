@@ -68,6 +68,7 @@ class MybatisPersistenceIntegrationTest {
 
         modelProviderStore.save(new ModelProvider(
                 "mp_1",
+                "tenant_default",
                 "DeepSeek Chat",
                 "DeepSeek",
                 "chat",
@@ -81,7 +82,7 @@ class MybatisPersistenceIntegrationTest {
                 now,
                 now
         ));
-        promptTemplateStore.save(new PromptTemplate("pt_1", "客服问候", "你好，{{name}}", "greeting", now, now));
+        promptTemplateStore.save(new PromptTemplate("pt_1", "tenant_default", "客服问候", "你好，{{name}}", "greeting", now, now));
 
         assertThat(modelProviderStore.findById("mp_1")).isPresent();
         assertThat(promptTemplateStore.findById("pt_1")).isPresent();
@@ -108,6 +109,7 @@ class MybatisPersistenceIntegrationTest {
         ));
         knowledgeStore.saveKnowledgeBase(new KnowledgeBase(
                 "kb_1",
+                "tenant_default",
                 "客服手册",
                 "FAQ",
                 null,
@@ -148,7 +150,7 @@ class MybatisPersistenceIntegrationTest {
 
         workflowStore.saveWorkflow(new Workflow(
                 "wf_1",
-                "tenant-default",
+                "tenant_default",
                 "测试工作流",
                 "Smoke",
                 WorkflowStatus.DRAFT,
@@ -169,7 +171,7 @@ class MybatisPersistenceIntegrationTest {
         ));
         workflowStore.saveWorkflow(new Workflow(
                 "wf_1",
-                "tenant-default",
+                "tenant_default",
                 "测试工作流",
                 "Smoke",
                 WorkflowStatus.DRAFT,

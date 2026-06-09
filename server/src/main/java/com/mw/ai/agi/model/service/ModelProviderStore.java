@@ -10,7 +10,7 @@ public interface ModelProviderStore {
 
     Optional<ModelProvider> findById(String id);
 
-    List<ModelProvider> list();
+    List<ModelProvider> list(String tenantId);
 
     void delete(String id);
 }

@@ -16,7 +16,7 @@ const botsApiMock = vi.hoisted(() => ({
         avatar: 'robot',
         workflowId: 'wf_1',
         modelProviderId: 'model_chat',
-        knowledgeBaseId: 'kb_1',
+        knowledgeBaseIds: ['kb_1'],
         systemPrompt: '回答要准确',
         openingMessage: '你好，我是客服助手',
         status: 'ENABLED',

@@ -8,7 +8,7 @@ public interface WorkflowExecutionStore {
 
     Optional<WorkflowExecution> findWorkflowExecutionById(String executionId);
 
-    List<WorkflowExecution> listWorkflowExecutions();
+    List<WorkflowExecution> listWorkflowExecutions(String tenantId);
 
     NodeExecution saveNodeExecution(NodeExecution nodeExecution);
 

@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.service;
 
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.workflow.domain.Workflow;
 import com.mw.ai.agi.workflow.domain.WorkflowDefinition;
 import com.mw.ai.agi.workflow.domain.WorkflowEdge;
@@ -8,6 +9,8 @@ import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
 import com.mw.ai.agi.workflow.domain.WorkflowStatus;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 import com.mw.ai.agi.workflow.domain.WorkflowVersionStatus;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -21,6 +24,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class WorkflowApplicationServiceTest {
     private final WorkflowStore store = new InMemoryWorkflowStore();
     private final WorkflowApplicationService service = new WorkflowApplicationService(store, new DagValidator());
+
+    @BeforeEach
+    void setTenant() {
+        TenantContext.set("tenant-1");
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
 
     @Test
     void createsWorkflowWithDraftVersion() {

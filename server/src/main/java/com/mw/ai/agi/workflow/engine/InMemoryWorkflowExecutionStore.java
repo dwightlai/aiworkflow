@@ -8,13 +8,17 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import com.mw.ai.agi.auth.service.TenantContext;
+
 public class InMemoryWorkflowExecutionStore implements WorkflowExecutionStore {
     private final ConcurrentMap<String, WorkflowExecution> workflowExecutions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, List<NodeExecution>> nodeExecutionsByWorkflowExecutionId = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, String> executionTenants = new ConcurrentHashMap<>();
 
     @Override
     public WorkflowExecution saveWorkflowExecution(WorkflowExecution execution) {
         workflowExecutions.put(execution.id(), execution);
+        executionTenants.putIfAbsent(execution.id(), TenantContext.requireTenantId());
         return execution;
     }
 
@@ -24,8 +28,9 @@ public class InMemoryWorkflowExecutionStore implements WorkflowExecutionStore {
     }
 
     @Override
-    public List<WorkflowExecution> listWorkflowExecutions() {
+    public List<WorkflowExecution> listWorkflowExecutions(String tenantId) {
         return workflowExecutions.values().stream()
+                .filter(execution -> tenantId == null || tenantId.isBlank() || tenantId.equals(executionTenants.get(execution.id())))
                 .sorted(Comparator.comparing(WorkflowExecution::startedAt).reversed())
                 .toList();
     }

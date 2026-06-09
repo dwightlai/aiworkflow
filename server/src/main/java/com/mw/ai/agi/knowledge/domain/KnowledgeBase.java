@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record KnowledgeBase(
         String id,
+        String tenantId,
         String name,
         String description,
         String ownerUnitId,

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { AuthUser } from '../api/auth';
 import { useState } from 'react';
 import { PageHeader } from './PageHeader';
-import { menuGroups } from './menu';
+import { menuGroups, getVisibleMenuGroups } from './menu';
 
 export interface AdminShellProps {
   title: string;
@@ -24,6 +24,7 @@ export function AdminShell({
   onNavigate
 }: AdminShellProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const visibleMenuGroups = getVisibleMenuGroups(currentUser);
 
   return (
     <div
@@ -55,7 +56,7 @@ export function AdminShell({
           <span style={{ color: '#1062ff' }}>AI</span>{collapsed ? '' : 'Flow'}
         </div>
 
-        {menuGroups.map((group) => (
+        {visibleMenuGroups.map((group) => (
           <div key={group.title}>
             {!collapsed ? (
               <div style={{ color: '#b7bfcc', fontSize: 13, margin: '18px 10px 10px' }}>

@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
-    private static final String DEFAULT_TENANT_ID = "tenant-default";
+import com.mw.ai.agi.auth.service.TenantContext;
 
+public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
     private final WorkflowExecutionMapper executionMapper;
     private final WorkflowNodeExecutionMapper nodeExecutionMapper;
     private final JsonSupport jsonSupport;
@@ -47,9 +47,13 @@ public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
     }
 
     @Override
-    public List<WorkflowExecution> listWorkflowExecutions() {
-        return executionMapper.selectList(new LambdaQueryWrapper<WorkflowExecutionEntity>()
-                        .orderByDesc(WorkflowExecutionEntity::getStartedAt))
+    public List<WorkflowExecution> listWorkflowExecutions(String tenantId) {
+        LambdaQueryWrapper<WorkflowExecutionEntity> wrapper = new LambdaQueryWrapper<WorkflowExecutionEntity>()
+                .orderByDesc(WorkflowExecutionEntity::getStartedAt);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(WorkflowExecutionEntity::getTenantId, tenantId);
+        }
+        return executionMapper.selectList(wrapper)
                 .stream()
                 .map(this::toDomain)
                 .toList();
@@ -76,7 +80,7 @@ public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
         entity.setId(execution.id());
         entity.setWorkflowId(execution.workflowId());
         entity.setWorkflowVersionId(execution.workflowVersionId());
-        entity.setTenantId(DEFAULT_TENANT_ID);
+        entity.setTenantId(TenantContext.requireTenantId());
         entity.setStatus(execution.status().name());
         entity.setInputJson(jsonSupport.write(execution.input()));
         entity.setContextJson(jsonSupport.write(Map.of()));

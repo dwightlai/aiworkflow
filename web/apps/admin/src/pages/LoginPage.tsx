@@ -6,10 +6,10 @@ import { login, type AuthSession } from '../api/auth';
 export function LoginPage({ onLogin }: { onLogin: (session: AuthSession) => void }) {
   const [loading, setLoading] = useState(false);
 
-  async function handleFinish(values: { username: string; password: string }) {
+  async function handleFinish(values: { username: string; password: string; tenantCode?: string }) {
     setLoading(true);
     try {
-      const session = await login(values.username, values.password);
+      const session = await login(values.username, values.password, values.tenantCode);
       onLogin(session);
       message.success('登录成功');
     } catch (error) {
@@ -35,7 +35,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: AuthSession) => void
           登录 AIFlow 管理端
         </Typography.Title>
         <Typography.Paragraph type="secondary">
-          初始管理员：admin / admin123
+          默认租户：admin / admin123（租户编码留空）
         </Typography.Paragraph>
         <Alert
           showIcon
@@ -44,6 +44,9 @@ export function LoginPage({ onLogin }: { onLogin: (session: AuthSession) => void
           style={{ marginBottom: 20 }}
         />
         <Form layout="vertical" onFinish={handleFinish}>
+          <Form.Item name="tenantCode" label="租户编码">
+            <Input placeholder="留空则登录默认租户" autoComplete="organization" />
+          </Form.Item>
           <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
             <Input prefix={<UserOutlined />} autoComplete="username" />
           </Form.Item>

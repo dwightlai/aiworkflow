@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.api;
 
+import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.workflow.domain.Workflow;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
@@ -20,7 +21,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/workflows")
 public class WorkflowController {
-    private static final String DEFAULT_TENANT_ID = "tenant-default";
     private static final String DEFAULT_USER_ID = "system";
 
     private final WorkflowApplicationService workflowService;
@@ -40,7 +40,7 @@ public class WorkflowController {
     @PostMapping
     public ApiResponse<WorkflowResponse> create(@Valid @RequestBody CreateWorkflowRequest request) {
         Workflow workflow = workflowService.createWorkflow(
-                DEFAULT_TENANT_ID,
+                TenantContext.requireTenantId(),
                 request.name(),
                 request.description(),
                 DEFAULT_USER_ID,

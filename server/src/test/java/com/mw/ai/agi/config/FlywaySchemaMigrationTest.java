@@ -70,7 +70,8 @@ class FlywaySchemaMigrationTest {
                 "agi_integration_app_secret",
                 "agi_integration_app_scope",
                 "agi_login_session",
-                "agi_auth_audit_log"
+                "agi_auth_audit_log",
+                "agi_asset_grant"
         );
         assertThat(tableNames).allMatch(tableName -> tableName.startsWith("agi_"));
 

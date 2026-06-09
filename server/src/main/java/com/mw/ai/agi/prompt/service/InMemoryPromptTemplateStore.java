@@ -25,8 +25,13 @@ public class InMemoryPromptTemplateStore implements PromptTemplateStore {
     }
 
     @Override
-    public List<PromptTemplate> list() {
-        return new ArrayList<>(templates);
+    public List<PromptTemplate> list(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return new ArrayList<>(templates);
+        }
+        return templates.stream()
+                .filter(template -> tenantId.equals(template.tenantId()))
+                .toList();
     }
 
     @Override

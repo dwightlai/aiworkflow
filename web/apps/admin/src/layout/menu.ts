@@ -1,3 +1,6 @@
+import type { AuthUser } from '../api/auth';
+import { isPlatformOperator } from '../api/auth';
+
 export interface AppMenuItem {
   key: string;
   label: string;
@@ -17,7 +20,6 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'bots', label: '智能体 Bots', path: '/bots' },
       { key: 'workflows', label: '工作流', path: '/workflows' },
       { key: 'workflow-runs', label: '运行监控', path: '/workflow-runs' },
-      { key: 'prompts', label: 'Prompt', path: '/prompts' },
       { key: 'knowledge', label: '知识库', path: '/knowledge' },
       { key: 'models', label: '模型配置', path: '/models' }
     ]
@@ -25,6 +27,7 @@ export const menuGroups: AppMenuGroup[] = [
   {
     title: '系统管理',
     items: [
+      { key: 'tenants', label: '租户管理', path: '/system/tenants' },
       { key: 'identity', label: '组织用户', path: '/system/identity' },
       { key: 'menus', label: '菜单管理', path: '/system/menus' },
       { key: 'dictionary', label: '数据字典', path: '/system/dictionary' },
@@ -32,3 +35,11 @@ export const menuGroups: AppMenuGroup[] = [
     ]
   }
 ];
+
+export function getVisibleMenuGroups(user?: AuthUser | null): AppMenuGroup[] {
+  const platformOperator = isPlatformOperator(user);
+  return menuGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => platformOperator || item.key !== 'tenants')
+  }));
+}

@@ -12,19 +12,34 @@ import com.mw.ai.agi.bot.persistence.BotMessageMapper;
 import com.mw.ai.agi.bot.persistence.BotSessionEntity;
 import com.mw.ai.agi.bot.persistence.BotSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.mw.ai.agi.persistence.JsonSupport;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class MybatisBotStore implements BotStore {
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
+    };
+
     private final AiBotMapper botMapper;
     private final BotSessionMapper sessionMapper;
     private final BotMessageMapper messageMapper;
+    private final JsonSupport jsonSupport;
 
-    public MybatisBotStore(AiBotMapper botMapper, BotSessionMapper sessionMapper, BotMessageMapper messageMapper) {
+    public MybatisBotStore(
+            AiBotMapper botMapper,
+            BotSessionMapper sessionMapper,
+            BotMessageMapper messageMapper,
+            JsonSupport jsonSupport
+    ) {
         this.botMapper = botMapper;
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
+        this.jsonSupport = jsonSupport;
     }
 
     @Override
@@ -39,9 +54,13 @@ public class MybatisBotStore implements BotStore {
     }
 
     @Override
-    public List<AiBot> list() {
-        return botMapper.selectList(new LambdaQueryWrapper<AiBotEntity>()
-                        .orderByAsc(AiBotEntity::getCreatedAt))
+    public List<AiBot> list(String tenantId) {
+        LambdaQueryWrapper<AiBotEntity> wrapper = new LambdaQueryWrapper<AiBotEntity>()
+                .orderByAsc(AiBotEntity::getCreatedAt);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(AiBotEntity::getTenantId, tenantId);
+        }
+        return botMapper.selectList(wrapper)
                 .stream()
                 .map(this::toDomain)
                 .toList();
@@ -108,13 +127,14 @@ public class MybatisBotStore implements BotStore {
     private AiBotEntity toEntity(AiBot bot) {
         AiBotEntity entity = new AiBotEntity();
         entity.setId(bot.id());
+        entity.setTenantId(bot.tenantId());
         entity.setName(bot.name());
         entity.setDescription(bot.description());
         entity.setOwnerUnitId(bot.ownerUnitId());
         entity.setAvatar(bot.avatar());
         entity.setWorkflowId(bot.workflowId());
         entity.setModelProviderId(bot.modelProviderId());
-        entity.setKnowledgeBaseId(bot.knowledgeBaseId());
+        entity.setKnowledgeBaseIds(writeKnowledgeBaseIds(bot.knowledgeBaseIds()));
         entity.setSystemPrompt(bot.systemPrompt());
         entity.setOpeningMessage(bot.openingMessage());
         entity.setStatus(bot.status().name());
@@ -128,13 +148,14 @@ public class MybatisBotStore implements BotStore {
     private AiBot toDomain(AiBotEntity entity) {
         return new AiBot(
                 entity.getId(),
+                entity.getTenantId(),
                 entity.getName(),
                 entity.getDescription(),
                 entity.getOwnerUnitId(),
                 entity.getAvatar(),
                 entity.getWorkflowId(),
                 entity.getModelProviderId(),
-                entity.getKnowledgeBaseId(),
+                readKnowledgeBaseIds(entity.getKnowledgeBaseIds()),
                 entity.getSystemPrompt(),
                 entity.getOpeningMessage(),
                 BotStatus.valueOf(entity.getStatus()),
@@ -143,6 +164,31 @@ public class MybatisBotStore implements BotStore {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    private String writeKnowledgeBaseIds(List<String> knowledgeBaseIds) {
+        List<String> normalized = normalizeKnowledgeBaseIds(knowledgeBaseIds);
+        return normalized.isEmpty() ? null : jsonSupport.write(normalized);
+    }
+
+    private List<String> readKnowledgeBaseIds(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return normalizeKnowledgeBaseIds(jsonSupport.read(value, STRING_LIST_TYPE));
+    }
+
+    private List<String> normalizeKnowledgeBaseIds(List<String> knowledgeBaseIds) {
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
+            return List.of();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String knowledgeBaseId : knowledgeBaseIds) {
+            if (knowledgeBaseId != null && !knowledgeBaseId.isBlank()) {
+                normalized.add(knowledgeBaseId.trim());
+            }
+        }
+        return new ArrayList<>(normalized);
     }
 
     private BotSessionEntity toEntity(BotSession session) {
