@@ -61,7 +61,7 @@ describe('bots api', () => {
       avatar: 'robot',
       workflowId: 'wf_1',
       modelProviderId: null,
-      knowledgeBaseId: null,
+      knowledgeBaseIds: [],
       systemPrompt: '',
       openingMessage: 'Hi',
       status: 'ENABLED'
@@ -72,7 +72,7 @@ describe('bots api', () => {
       avatar: 'robot',
       workflowId: 'wf_1',
       modelProviderId: null,
-      knowledgeBaseId: null,
+      knowledgeBaseIds: [],
       systemPrompt: '',
       openingMessage: 'Hi',
       status: 'DISABLED'
