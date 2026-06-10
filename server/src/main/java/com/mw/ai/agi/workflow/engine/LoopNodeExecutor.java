@@ -2,7 +2,7 @@ package com.mw.ai.agi.workflow.engine;
 
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -14,10 +14,17 @@ import java.util.Map;
 public class LoopNodeExecutor implements WorkflowNodeExecutor {
     private final ContentTemplateNodeExecutor contentTemplateNodeExecutor;
     private final HttpToolNodeExecutor httpToolNodeExecutor;
+    private final LlmNodeExecutor llmNodeExecutor;
 
-    public LoopNodeExecutor(ObjectMapper objectMapper) {
-        this.contentTemplateNodeExecutor = new ContentTemplateNodeExecutor(objectMapper);
-        this.httpToolNodeExecutor = new HttpToolNodeExecutor(objectMapper);
+    @Autowired
+    public LoopNodeExecutor(
+            ContentTemplateNodeExecutor contentTemplateNodeExecutor,
+            HttpToolNodeExecutor httpToolNodeExecutor,
+            LlmNodeExecutor llmNodeExecutor
+    ) {
+        this.contentTemplateNodeExecutor = contentTemplateNodeExecutor;
+        this.httpToolNodeExecutor = httpToolNodeExecutor;
+        this.llmNodeExecutor = llmNodeExecutor;
     }
 
     @Override
@@ -63,6 +70,12 @@ public class LoopNodeExecutor implements WorkflowNodeExecutor {
         if (type.equals("HTTP") || type.equals("HTTP_TOOL")) {
             String outputKey = stringValue(step.get("outputKey"), "httpResult");
             return Map.of(outputKey, httpToolNodeExecutor.executeInline(step, context));
+        }
+        if (type.equals("LLM")) {
+            if (llmNodeExecutor == null) {
+                throw new IllegalStateException("LLM loop step requires LlmNodeExecutor");
+            }
+            return llmNodeExecutor.executeInline(step, context);
         }
         return contentTemplateNodeExecutor.executeInline(step, context);
     }

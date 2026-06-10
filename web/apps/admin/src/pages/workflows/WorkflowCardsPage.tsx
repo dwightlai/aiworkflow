@@ -26,11 +26,6 @@ const statusOptions = [
   { label: '已发布', value: 'PUBLISHED' },
   { label: '已归档', value: 'ARCHIVED' }
 ];
-const templates = [
-  { name: '客服问答助手', scene: '知识库 + LLM', detail: '适合售前咨询、工单预处理' },
-  { name: '合同条款抽取', scene: 'Prompt + 结构化输出', detail: '适合法务、采购和风控审核' },
-  { name: '线索评分流程', scene: '条件分支 + 工具调用', detail: '适合 CRM 自动化流转' }
-];
 
 export function WorkflowCardsPage() {
   const [keyword, setKeyword] = useState('');
@@ -111,7 +106,7 @@ export function WorkflowCardsPage() {
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>AI 功能 / 工作流</Typography.Text>
           <Typography.Title level={3} style={{ margin: '4px 0 6px' }}>工作流运营台</Typography.Title>
           <Typography.Paragraph style={heroCopyStyle}>
-            管理 AI 工作流资产，从模板创建、编辑编排、发布运行到执行观察都在这里完成。
+            管理 AI 工作流资产，从编辑编排、发布运行到执行观察都在这里完成。
           </Typography.Paragraph>
         </div>
         <Space>
@@ -129,9 +124,8 @@ export function WorkflowCardsPage() {
         <SummaryCard title="最近运行" value={latestUpdatedAt ? formatDate(latestUpdatedAt) : '-'} detail="以更新时间近似展示" icon={<ClockCircleOutlined />} />
       </section>
 
-      <section style={mainGridStyle}>
-        <div style={{ minWidth: 0 }}>
-          <section style={filterBarStyle}>
+      <section>
+        <section style={filterBarStyle}>
             <Space size={10} wrap>
               <Typography.Text strong>搜索：</Typography.Text>
               <Input
@@ -191,26 +185,9 @@ export function WorkflowCardsPage() {
             )) : null}
           </div>
 
-          {!workflowQuery.isLoading && workflows.length === 0 ? (
-            <Empty description="暂无工作流，先创建一个可运行的 AI 流程" />
-          ) : null}
-        </div>
-
-        <aside style={templatePanelStyle}>
-          <Typography.Title level={5} style={{ marginTop: 0 }}>模板中心</Typography.Title>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
-            常见智能工作流模板，后续可接入模板市场和一键创建。
-          </Typography.Paragraph>
-          <div style={templateListStyle}>
-            {templates.map((template) => (
-              <button key={template.name} type="button" style={templateCardStyle}>
-                <span style={templateNameStyle}>{template.name}</span>
-                <Tag color="blue" style={{ width: 'fit-content' }}>{template.scene}</Tag>
-                <span style={templateDetailStyle}>{template.detail}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
+        {!workflowQuery.isLoading && workflows.length === 0 ? (
+          <Empty description="暂无工作流，先创建一个可运行的 AI 流程" />
+        ) : null}
       </section>
 
       <Drawer
@@ -493,12 +470,6 @@ const summaryIconStyle: React.CSSProperties = {
   width: 36
 };
 
-const mainGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: 'minmax(0, 1fr) 310px'
-};
-
 const filterBarStyle: React.CSSProperties = {
   background: '#fff',
   border: '1px solid #edf0f5',
@@ -579,41 +550,6 @@ const cardActionsStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(5, 1fr)',
   minHeight: 42
-};
-
-const templatePanelStyle: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #edf0f5',
-  borderRadius: 8,
-  height: 'fit-content',
-  padding: 16
-};
-
-const templateListStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 10
-};
-
-const templateCardStyle: React.CSSProperties = {
-  background: '#fbfdff',
-  border: '1px solid #e5ebf4',
-  borderRadius: 8,
-  cursor: 'pointer',
-  display: 'grid',
-  gap: 8,
-  padding: 12,
-  textAlign: 'left'
-};
-
-const templateNameStyle: React.CSSProperties = {
-  color: '#0f172a',
-  fontWeight: 700
-};
-
-const templateDetailStyle: React.CSSProperties = {
-  color: '#667085',
-  fontSize: 12,
-  lineHeight: '18px'
 };
 
 const settingFieldStyle: React.CSSProperties = {

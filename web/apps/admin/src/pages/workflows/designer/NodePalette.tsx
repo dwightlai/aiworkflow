@@ -67,7 +67,7 @@ const nodeTemplates: NodeTemplate[] = [
   {
     type: 'CONTENT_TEMPLATE',
     name: '内容模板',
-    description: '使用模板生成文本或 JSON 内容',
+    description: '工作流步骤内变量渲染，不等于编研模板',
     icon: <CommentOutlined />,
     config: {
       template: '请结合以下知识片段回答用户问题。\n\n知识片段：{{documents}}\n\n用户问题：{{question}}',

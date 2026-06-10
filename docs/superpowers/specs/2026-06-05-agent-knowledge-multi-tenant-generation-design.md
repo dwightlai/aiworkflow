@@ -904,6 +904,53 @@ manual_revision_summary
 
 第一阶段可以暂缓复杂人工流转、临时向量库、多模型协作和复杂版本管理，但必须保留引用来源、生成任务记录、资料快照和人工编辑入口。
 
+### 9.18 MVP 实现映射（2026-06-08）
+
+当前仓库已按 9.17 最小可行版本落地，映射关系如下。
+
+#### 9.18.1 数据表
+
+| 设计概念 | 实现表 | 说明 |
+|---|---|---|
+| 生成模板 | `agi_generation_template` | `template_schema` 存章节/变量；`workflow_id` 绑定编研工作流；`workflow_snapshot` 为保存时自动同步的版本快照 |
+| 生成任务 | `agi_generation_job` | `outline_json`、`section_outputs_json` 存大纲与分节输出 |
+| 生成成果 | `agi_generation_output` | `content_markdown`、`citations`、`source_snapshot` |
+
+种子模板 ID：`template_research_001`，绑定 MVP 工作流快照 `workflow_research_mvp`。
+
+#### 9.18.2 后端 API
+
+| 能力 | 路径 | 说明 |
+|---|---|---|
+| 编研模板 CRUD | `/api/generation-templates` | 管理端维护章节结构与工作流快照 |
+| 主题库列表（模拟） | `/api/research/theme-libraries` | 模拟数字档案馆主题库 |
+| 创建编研任务 | `POST /api/research/jobs` | 入参含 `templateId`、`themeLibraryId`、`knowledgeBaseIds`、`variables` |
+| 查询任务/成果 | `/api/research/jobs/{id}`、`/api/research/jobs/{id}/output` | 返回解析后的大纲、分节正文与 Markdown 成果 |
+
+MVP 阶段 `ResearchGenerationService` 同步执行 8 步流水线（读模板 → mock 主题库 → mock 知识检索 → 生成大纲/分章 → 落库），尚未接入 `agi_workflow` 执行引擎与 `WAITING_HUMAN` 人工节点。
+
+#### 9.18.3 前端页面
+
+| 页面 | 路由 | 职责 |
+|---|---|---|
+| 编研模板 | `/research/templates` | 模板列表、章节结构、工作流 Steps 预览 |
+| 智能编研 | `/research/compile` | 五步向导 + 右侧工作流编排快照 + 成果展示 |
+
+#### 9.18.4 与现有模块关系
+
+- **`agi_workflow`**：编研工作流在工作流模块设计；编研模板通过 `workflow_id` 绑定，保存模板时自动同步 `workflow_snapshot` 供任务审计。
+- **`CONTENT_TEMPLATE` 节点**：单次变量渲染，与 `agi_generation_template` 多章节编研模板不同。
+- **`agi_prompt_template`**：Prompt 字符串模板，非编研成果结构模板。
+- **数字档案馆集成**：`MockArchiveCorpusService` 模拟主题库/档案条目；生产环境替换为 Feign 调用档案馆 Open API。
+
+#### 9.18.5 后续迭代
+
+1. 接入真实 LLM 分章生成与引用校验节点。
+2. 大纲确认、定稿人工节点（`WAITING_HUMAN`）。
+3. `agi_asset_grant` 增加 `GENERATION_TEMPLATE` 资产类型。
+4. 开放 API 支持 `templateId` + `externalCorpus` 传参。
+5. 编研任务与 `agi_workflow_run` / `agi_workflow_node_run` 全链路追踪。
+
 
 ## 10. 生成运行流程
 

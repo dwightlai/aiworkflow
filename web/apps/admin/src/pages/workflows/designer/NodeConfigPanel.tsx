@@ -47,7 +47,15 @@ interface LoopStep {
   responseBodyType?: string;
   headers?: KeyValueRow[];
   params?: KeyValueRow[];
+  providerId?: string;
+  model?: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
 }
+
+const DEFAULT_SHARED_LLM_PROVIDER_ID = 'model_research_chat';
 
 interface VariableOption {
   value: string;
@@ -82,7 +90,13 @@ export function NodeConfigPanel({
   if (node.type === 'LLM') {
     return (
       <Panel node={node} title="大模型" description="使用大模型处理问题" icon={<RobotOutlined />} onChange={onChange}>
-        <LlmConfigV2 node={node} setConfig={setConfig} modelProviders={modelProviders} variableOptions={variableOptions} />
+        <LlmConfigV2
+          node={node}
+          setConfig={setConfig}
+          modelProviders={modelProviders}
+          variableOptions={variableOptions}
+          onProviderChange={(providerId, model) => syncSharedLlmProvider(nodes, onChange, providerId, model)}
+        />
       </Panel>
     );
   }
@@ -122,7 +136,7 @@ export function NodeConfigPanel({
   if (node.type === 'LOOP') {
     return (
       <Panel node={node} title="循环" description="遍历数组并执行循环体步骤" icon={<RedoOutlined />} onChange={onChange}>
-        <LoopConfig node={node} setConfig={setConfig} />
+        <LoopConfig node={node} setConfig={setConfig} modelProviders={modelProviders} nodes={nodes} onChange={onChange} />
       </Panel>
     );
   }
@@ -217,7 +231,7 @@ function LlmConfig({ node, setConfig, modelProviders }: { node: WorkflowNode; se
             aria-label="选择模型"
             placeholder="请选择模型"
             value={stringValue(config.providerId, undefined)}
-            options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name}-${provider.model}` }))}
+            options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name} / ${provider.model}` }))}
             onChange={(providerId) => {
               const provider = enabledModels.find((item) => item.id === providerId);
               setConfig({ providerId, model: provider?.model ?? '' });
@@ -292,10 +306,21 @@ function KnowledgeConfig({ node, setConfig, knowledgeBases }: { node: WorkflowNo
   );
 }
 
-function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void; modelProviders: ModelProvider[]; variableOptions: VariableOptionGroup[] }) {
+function LlmConfigV2({
+  node,
+  setConfig,
+  modelProviders,
+  variableOptions,
+  onProviderChange
+}: {
+  node: WorkflowNode;
+  setConfig: (patch: Record<string, unknown>) => void;
+  modelProviders: ModelProvider[];
+  variableOptions: VariableOptionGroup[];
+  onProviderChange?: (providerId: string, model: string) => void;
+}) {
   const config = node.config ?? {};
   const inputParams = readParams(config.inputParams);
-  const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
   return (
     <>
       <ParamSectionV2
@@ -310,14 +335,12 @@ function LlmConfigV2({ node, setConfig, modelProviders, variableOptions }: { nod
       <SectionTitle title="模型配置" />
       <Form layout="vertical" size="small">
         <Form.Item label="模型">
-          <Select
-            aria-label="选择模型"
-            placeholder="请选择模型"
-            value={stringValue(config.providerId, undefined)}
-            options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name}-${provider.model}` }))}
-            onChange={(providerId) => {
-              const provider = enabledModels.find((item) => item.id === providerId);
-              setConfig({ providerId, model: provider?.model ?? '' });
+          <ModelProviderSelect
+            providerId={stringValue(config.providerId, undefined)}
+            modelProviders={modelProviders}
+            onSelect={(providerId, model) => {
+              setConfig({ providerId, model });
+              onProviderChange?.(providerId, model);
             }}
           />
         </Form.Item>
@@ -543,7 +566,7 @@ function QuestionClassifierConfig({ node, setConfig, variableOptions, modelProvi
                 aria-label="选择分类模型"
                 placeholder="请选择模型"
                 value={stringValue(config.providerId, undefined)}
-                options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name}-${provider.model}` }))}
+                options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name} / ${provider.model}` }))}
                 onChange={(providerId) => {
                   const provider = enabledModels.find((item) => item.id === providerId);
                   setConfig({ providerId, model: provider?.model ?? '' });
@@ -728,44 +751,98 @@ function HttpConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch
   );
 }
 
-function LoopConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
+function LoopConfig({
+  node,
+  setConfig,
+  modelProviders,
+  nodes,
+  onChange
+}: {
+  node: WorkflowNode;
+  setConfig: (patch: Record<string, unknown>) => void;
+  modelProviders: ModelProvider[];
+  nodes: WorkflowNode[];
+  onChange: NodeConfigPanelProps['onChange'];
+}) {
   const config = node.config ?? {};
   const steps = readLoopSteps(config.loopSteps);
   const outputParams = readParams(config.outputParams, [{ name: String(config.outputKey ?? 'loopResults'), type: 'Array' }]);
+  const loopStepTypeOptions = [
+    { value: 'LLM', label: '大模型' },
+    { value: 'CONTENT_TEMPLATE', label: '内容模板' },
+    { value: 'HTTP_TOOL', label: 'HTTP 请求' }
+  ];
+
+  function updateSteps(nextSteps: LoopStep[]) {
+    setConfig({ loopSteps: nextSteps });
+  }
+
+  function handleStepTypeChange(index: number, type: string) {
+    const nextStep = type === 'LLM'
+      ? { ...defaultLlmLoopStep(modelProviders), name: steps[index]?.name || '大模型分章写作' }
+      : type === 'HTTP_TOOL'
+        ? { type: 'HTTP_TOOL', name: steps[index]?.name || 'HTTP 请求', method: 'GET', url: '', bodyTemplate: '', outputKey: 'httpResult' }
+        : { ...defaultLoopStep(), name: steps[index]?.name || '模板处理' };
+    updateSteps(updateLoopStep(steps, index, nextStep));
+  }
+
+  function handleLoopLlmProviderChange(index: number, providerId: string, model: string) {
+    updateSteps(updateLoopStep(steps, index, { providerId, model }));
+    syncSharedLlmProvider(nodes, onChange, providerId, model);
+  }
+
   return (
     <>
       <SectionTitle title="循环设置" />
       <Form layout="vertical" size="small">
         <Form.Item label="循环变量">
-          <Input placeholder="items" value={String(config.loopVar ?? 'items')} onChange={(event) => setConfig({ loopVar: event.target.value })} />
+          <Input placeholder="templateHttp.body.data.sections" value={String(config.loopVar ?? 'items')} onChange={(event) => setConfig({ loopVar: event.target.value })} />
         </Form.Item>
         <Form.Item label="循环项变量">
-          <Input placeholder="loopItem" value={String(config.itemVar ?? 'loopItem')} onChange={(event) => setConfig({ itemVar: event.target.value })} />
+          <Input placeholder="section" value={String(config.itemVar ?? 'loopItem')} onChange={(event) => setConfig({ itemVar: event.target.value })} />
         </Form.Item>
         <Form.Item label="索引变量">
-          <Input placeholder="index" value={String(config.indexVar ?? 'index')} onChange={(event) => setConfig({ indexVar: event.target.value })} />
+          <Input placeholder="sectionIndex" value={String(config.indexVar ?? 'index')} onChange={(event) => setConfig({ indexVar: event.target.value })} />
         </Form.Item>
         <Form.Item label="最大循环次数">
           <InputNumber min={1} max={1000} style={{ width: '100%' }} value={numberValue(config.maxIterations, 100)} onChange={(maxIterations) => setConfig({ maxIterations: maxIterations ?? 100 })} />
         </Form.Item>
       </Form>
       <section style={sectionStyle}>
-        <SectionTitle title="循环体步骤" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setConfig({ loopSteps: [...steps, defaultLoopStep()] })} />} />
+        <SectionTitle title="循环体步骤" action={<Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateSteps([...steps, defaultLlmLoopStep(modelProviders)])} />} />
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           {steps.map((step, index) => (
             <div key={`${step.name}-${index}`} style={stepCardStyle}>
-              <Input placeholder="步骤名称" value={step.name} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { name: event.target.value }) })} />
-              <Select value={step.type} options={[{ value: 'CONTENT_TEMPLATE', label: '内容模板' }, { value: 'HTTP_TOOL', label: 'HTTP 请求' }]} onChange={(type) => setConfig({ loopSteps: updateLoopStep(steps, index, { type }) })} />
-              {step.type === 'HTTP_TOOL' ? (
+              <Input placeholder="步骤名称" value={step.name} onChange={(event) => updateSteps(updateLoopStep(steps, index, { name: event.target.value }))} />
+              <Select value={step.type} options={loopStepTypeOptions} onChange={(type) => handleStepTypeChange(index, type)} />
+              {step.type === 'LLM' ? (
                 <>
-                  <Select value={step.method ?? 'POST'} options={methodOptions} onChange={(method) => setConfig({ loopSteps: updateLoopStep(steps, index, { method }) })} />
-                  <Input placeholder="请求地址" value={step.url} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { url: event.target.value }) })} />
-                  <Input.TextArea placeholder='{"item":"{{loopItem}}"}' autoSize={{ minRows: 4, maxRows: 8 }} value={step.bodyTemplate} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { bodyTemplate: event.target.value }) })} />
+                  <Form layout="vertical" size="small">
+                    <Form.Item label="模型（与「大模型生成大纲」节点共用）">
+                      <ModelProviderSelect
+                        providerId={step.providerId}
+                        modelProviders={modelProviders}
+                        onSelect={(providerId, model) => handleLoopLlmProviderChange(index, providerId, model)}
+                      />
+                    </Form.Item>
+                    <Form.Item label="系统提示词">
+                      <Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} value={step.systemPrompt ?? ''} onChange={(event) => updateSteps(updateLoopStep(steps, index, { systemPrompt: event.target.value }))} />
+                    </Form.Item>
+                    <Form.Item label="用户提示词">
+                      <Input.TextArea autoSize={{ minRows: 6, maxRows: 14 }} value={step.userPrompt ?? ''} onChange={(event) => updateSteps(updateLoopStep(steps, index, { userPrompt: event.target.value }))} />
+                    </Form.Item>
+                  </Form>
+                </>
+              ) : step.type === 'HTTP_TOOL' ? (
+                <>
+                  <Select value={step.method ?? 'POST'} options={methodOptions} onChange={(method) => updateSteps(updateLoopStep(steps, index, { method }))} />
+                  <Input placeholder="请求地址" value={step.url} onChange={(event) => updateSteps(updateLoopStep(steps, index, { url: event.target.value }))} />
+                  <Input.TextArea placeholder='{"item":"{{loopItem}}"}' autoSize={{ minRows: 4, maxRows: 8 }} value={step.bodyTemplate} onChange={(event) => updateSteps(updateLoopStep(steps, index, { bodyTemplate: event.target.value }))} />
                 </>
               ) : (
-                <Input.TextArea placeholder="第 {{index}} 项：{{loopItem}}" autoSize={{ minRows: 4, maxRows: 8 }} value={step.template} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { template: event.target.value }) })} />
+                <Input.TextArea placeholder="第 {{index}} 项：{{loopItem}}" autoSize={{ minRows: 4, maxRows: 8 }} value={step.template} onChange={(event) => updateSteps(updateLoopStep(steps, index, { template: event.target.value }))} />
               )}
-              <Input placeholder="输出变量" value={step.outputKey} onChange={(event) => setConfig({ loopSteps: updateLoopStep(steps, index, { outputKey: event.target.value }) })} />
+              <Input placeholder="输出变量" value={step.outputKey} onChange={(event) => updateSteps(updateLoopStep(steps, index, { outputKey: event.target.value }))} />
             </div>
           ))}
         </Space>
@@ -1037,8 +1114,92 @@ function readLoopSteps(value: unknown): LoopStep[] {
       url: String(item.url ?? ''),
       bodyType: String(item.bodyType ?? 'JSON'),
       bodyTemplate: String(item.bodyTemplate ?? ''),
-      responseBodyType: String(item.responseBodyType ?? 'TEXT')
+      responseBodyType: String(item.responseBodyType ?? 'TEXT'),
+      providerId: String(item.providerId ?? ''),
+      model: String(item.model ?? ''),
+      systemPrompt: String(item.systemPrompt ?? item.systemMessage ?? ''),
+      userPrompt: String(item.userPrompt ?? item.userMessage ?? ''),
+      temperature: numberValue(item.temperature, 0.3),
+      maxTokens: numberValue(item.maxTokens, 3000)
     }));
+}
+
+function syncSharedLlmProvider(
+  nodes: WorkflowNode[],
+  onChange: NodeConfigPanelProps['onChange'],
+  providerId: string,
+  model: string
+) {
+  for (const workflowNode of nodes) {
+    if (workflowNode.type === 'LLM') {
+      onChange(workflowNode.id, {
+        config: { ...(workflowNode.config ?? {}), providerId, model }
+      });
+    }
+    if (workflowNode.type === 'LOOP') {
+      const steps = readLoopSteps(workflowNode.config?.loopSteps);
+      if (!steps.some((step) => step.type === 'LLM')) {
+        continue;
+      }
+      const nextSteps = steps.map((step) => step.type === 'LLM' ? { ...step, providerId, model } : step);
+      onChange(workflowNode.id, {
+        config: { ...(workflowNode.config ?? {}), loopSteps: nextSteps }
+      });
+    }
+  }
+}
+
+function ModelProviderSelect({
+  providerId,
+  modelProviders,
+  onSelect
+}: {
+  providerId?: string;
+  modelProviders: ModelProvider[];
+  onSelect: (providerId: string, model: string) => void;
+}) {
+  const enabledModels = modelProviders.filter((provider) => provider.enabled && provider.modelUsage !== 'EMBEDDING');
+  return (
+    <Select
+      aria-label="选择模型"
+      placeholder="请选择模型"
+      value={providerId || undefined}
+      options={enabledModels.map((provider) => ({ value: provider.id, label: `${provider.name} / ${provider.model}` }))}
+      onChange={(nextProviderId) => {
+        const provider = enabledModels.find((item) => item.id === nextProviderId);
+        onSelect(nextProviderId, provider?.model ?? '');
+      }}
+    />
+  );
+}
+
+function defaultLlmLoopStep(modelProviders: ModelProvider[]): LoopStep {
+  const provider = modelProviders.find((item) => item.id === DEFAULT_SHARED_LLM_PROVIDER_ID)
+    ?? modelProviders.find((item) => item.enabled && item.modelUsage !== 'EMBEDDING');
+  return {
+    type: 'LLM',
+    name: '大模型分章写作',
+    providerId: provider?.id ?? DEFAULT_SHARED_LLM_PROVIDER_ID,
+    model: provider?.model ?? '',
+    systemPrompt: '你是档案编研写作助手。根据章节要求、档案馆资料和知识库内容撰写正文，语言规范、逻辑清楚，有引用处标注来源，不得编造事实。',
+    userPrompt: `编研主题：{{topic}}
+章节标题：{{section.title}}
+编写要求：{{section.instruction}}
+
+档案馆资料：
+{{corpusHttp.body.data.summary}}
+
+知识库内容：
+{{knowledge.content}}
+
+编研大纲参考：
+{{outlineText}}
+
+请撰写本章节的 Markdown 正文（以 ## 标题 开头，不少于200字）。`,
+    outputKey: 'sectionMarkdown',
+    temperature: 0.3,
+    maxTokens: 3000
+  };
 }
 
 function updateLoopStep(steps: LoopStep[], index: number, patch: Partial<LoopStep>) {

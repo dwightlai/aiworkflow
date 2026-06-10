@@ -42,6 +42,9 @@ public class OpenAiCompatibleChatModelClient implements ChatModelClient {
     @Override
     public String generate(String providerId, String model, String prompt, Map<String, Object> options) {
         ModelProvider provider = modelProviderService.get(providerId);
+        if (ModelProviderStubSupport.isStubPlaceholder(provider)) {
+            return new StubChatModelClient().generate(providerId, model, prompt, options);
+        }
         validateProvider(provider);
         String actualModel = firstNonBlank(provider.model(), model);
         if (actualModel == null) {

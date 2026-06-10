@@ -2,6 +2,7 @@ package com.mw.ai.agi.workflow.engine;
 
 import com.mw.ai.agi.model.domain.ModelProvider;
 import com.mw.ai.agi.model.service.ChatModelClient;
+import com.mw.ai.agi.model.service.ModelProviderStubSupport;
 import com.mw.ai.agi.model.service.ModelProviderService;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
@@ -26,14 +27,17 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
         return WorkflowNodeType.LLM;
     }
 
+    Map<String, Object> executeInline(Map<String, Object> step, Map<String, Object> context) {
+        WorkflowNode node = new WorkflowNode("loop-llm", WorkflowNodeType.LLM, "loop llm", step);
+        return execute(node, new NodeExecutionContext(context, context)).output();
+    }
+
     @Override
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
-        String providerId = requiredStringConfig(node, "providerId");
-        ModelProvider provider = modelProviderService.get(providerId);
-        if (!provider.enabled()) {
-            throw new IllegalArgumentException("Model provider is disabled: " + providerId);
-        }
-        String model = optionalStringConfig(node, "model", provider.model());
+        String configuredProviderId = requiredStringConfig(node, "providerId");
+        ModelProvider provider = resolveExecutableProvider(configuredProviderId);
+        String providerId = provider.id();
+        String model = resolveModel(node, provider);
         String promptKey = optionalStringConfig(node, "promptKey", "question");
         String outputKey = optionalStringConfig(node, "outputKey", "content");
 
@@ -115,5 +119,29 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
             return stringValue;
         }
         return defaultValue;
+    }
+
+    private ModelProvider resolveExecutableProvider(String configuredProviderId) {
+        ModelProvider configured = modelProviderService.get(configuredProviderId);
+        if (!configured.enabled()) {
+            throw new IllegalArgumentException("Model provider is disabled: " + configuredProviderId);
+        }
+        if (!ModelProviderStubSupport.isStubPlaceholder(configured)) {
+            return configured;
+        }
+        return modelProviderService.list().stream()
+                .filter(ModelProvider::enabled)
+                .filter(ModelProviderStubSupport::isChatUsage)
+                .filter(provider -> !ModelProviderStubSupport.isStubPlaceholder(provider))
+                .findFirst()
+                .orElse(configured);
+    }
+
+    private String resolveModel(WorkflowNode node, ModelProvider provider) {
+        String configuredModel = optionalStringConfig(node, "model", "");
+        if (configuredModel.isBlank() || "research-stub".equalsIgnoreCase(configuredModel)) {
+            return provider.model();
+        }
+        return configuredModel;
     }
 }

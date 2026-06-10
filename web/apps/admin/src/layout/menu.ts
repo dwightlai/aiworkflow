@@ -21,7 +21,9 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'workflows', label: '工作流', path: '/workflows' },
       { key: 'workflow-runs', label: '运行监控', path: '/workflow-runs' },
       { key: 'knowledge', label: '知识库', path: '/knowledge' },
-      { key: 'models', label: '模型配置', path: '/models' }
+      { key: 'models', label: '模型配置', path: '/models' },
+      { key: 'generation-templates', label: '编研模板', path: '/research/templates' },
+      { key: 'research', label: '智能编研', path: '/research/compile' }
     ]
   },
   {

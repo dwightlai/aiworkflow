@@ -274,7 +274,11 @@ class BuiltinNodeExecutorTest {
 
     @Test
     void loopNodeRunsTemplateStepsForEachItem() {
-        LoopNodeExecutor executor = new LoopNodeExecutor(new ObjectMapper());
+        LoopNodeExecutor executor = new LoopNodeExecutor(
+                new ContentTemplateNodeExecutor(new ObjectMapper()),
+                new HttpToolNodeExecutor(new ObjectMapper()),
+                null
+        );
         NodeExecutionContext context = new NodeExecutionContext(
                 Map.of("items", List.of("北京", "上海")),
                 Map.of("items", List.of("北京", "上海"))

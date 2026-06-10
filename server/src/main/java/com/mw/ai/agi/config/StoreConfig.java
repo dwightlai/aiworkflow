@@ -22,6 +22,18 @@ import com.mw.ai.agi.model.service.InMemoryModelProviderStore;
 import com.mw.ai.agi.model.service.ModelProviderStore;
 import com.mw.ai.agi.model.service.MybatisModelProviderStore;
 import com.mw.ai.agi.persistence.JsonSupport;
+import com.mw.ai.agi.generation.persistence.GenerationJobMapper;
+import com.mw.ai.agi.generation.persistence.GenerationOutputMapper;
+import com.mw.ai.agi.generation.persistence.GenerationTemplateMapper;
+import com.mw.ai.agi.generation.service.GenerationJobStore;
+import com.mw.ai.agi.generation.service.GenerationOutputStore;
+import com.mw.ai.agi.generation.service.GenerationTemplateStore;
+import com.mw.ai.agi.generation.service.InMemoryGenerationJobStore;
+import com.mw.ai.agi.generation.service.InMemoryGenerationOutputStore;
+import com.mw.ai.agi.generation.service.InMemoryGenerationTemplateStore;
+import com.mw.ai.agi.generation.service.MybatisGenerationJobStore;
+import com.mw.ai.agi.generation.service.MybatisGenerationOutputStore;
+import com.mw.ai.agi.generation.service.MybatisGenerationTemplateStore;
 import com.mw.ai.agi.prompt.persistence.PromptTemplateMapper;
 import com.mw.ai.agi.prompt.service.InMemoryPromptTemplateStore;
 import com.mw.ai.agi.prompt.service.MybatisPromptTemplateStore;
@@ -108,6 +120,24 @@ public class StoreConfig {
     public PromptTemplateStore promptTemplateStore(ObjectProvider<PromptTemplateMapper> mapperProvider) {
         PromptTemplateMapper mapper = mapperProvider.getIfAvailable();
         return mapper == null ? new InMemoryPromptTemplateStore() : new MybatisPromptTemplateStore(mapper);
+    }
+
+    @Bean
+    public GenerationTemplateStore generationTemplateStore(ObjectProvider<GenerationTemplateMapper> mapperProvider) {
+        GenerationTemplateMapper mapper = mapperProvider.getIfAvailable();
+        return mapper == null ? new InMemoryGenerationTemplateStore() : new MybatisGenerationTemplateStore(mapper);
+    }
+
+    @Bean
+    public GenerationJobStore generationJobStore(ObjectProvider<GenerationJobMapper> mapperProvider) {
+        GenerationJobMapper mapper = mapperProvider.getIfAvailable();
+        return mapper == null ? new InMemoryGenerationJobStore() : new MybatisGenerationJobStore(mapper);
+    }
+
+    @Bean
+    public GenerationOutputStore generationOutputStore(ObjectProvider<GenerationOutputMapper> mapperProvider) {
+        GenerationOutputMapper mapper = mapperProvider.getIfAvailable();
+        return mapper == null ? new InMemoryGenerationOutputStore() : new MybatisGenerationOutputStore(mapper);
     }
 
     @Bean

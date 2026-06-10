@@ -8,6 +8,8 @@ import { KnowledgeDocumentsPage } from './pages/knowledge/KnowledgeDocumentsPage
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ModelProvidersPage } from './pages/models/ModelProvidersPage';
 import { PromptTemplatesPage } from './pages/prompts/PromptTemplatesPage';
+import { GenerationTemplatesPage } from './pages/research/GenerationTemplatesPage';
+import { ResearchCompilationPage } from './pages/research/ResearchCompilationPage';
 import { IdentityOrganizationPage } from './pages/system/IdentityOrganizationPage';
 import { AssetGrantsPage } from './pages/system/AssetGrantsPage';
 import { OpenApiDocsPage } from './pages/system/OpenApiDocsPage';
@@ -97,6 +99,22 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: '知识库',
       breadcrumb: ['首页', 'AI 功能', '知识库'],
       element: <KnowledgeBasesPage />
+    };
+  }
+
+  if (pathname === '/research/templates') {
+    return {
+      title: '编研模板',
+      breadcrumb: ['首页', 'AI 功能', '编研模板'],
+      element: <GenerationTemplatesPage />
+    };
+  }
+
+  if (pathname === '/research/compile') {
+    return {
+      title: '智能编研',
+      breadcrumb: ['首页', 'AI 功能', '智能编研'],
+      element: <ResearchCompilationPage />
     };
   }
 
@@ -215,6 +233,8 @@ const routeTitleByPath: Record<string, string> = {
   '/bots': '智能体 Bots',
   '/prompts': 'Prompt',
   '/knowledge': '知识库',
+  '/research/templates': '编研模板',
+  '/research/compile': '智能编研',
   '/tools': '工具插件',
   '/models': '模型配置',
   '/model-market': '模型市场',

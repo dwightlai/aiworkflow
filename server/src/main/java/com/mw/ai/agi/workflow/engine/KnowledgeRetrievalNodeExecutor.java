@@ -26,7 +26,7 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
 
     @Override
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
-        List<String> knowledgeBaseIds = knowledgeBaseIds(node);
+        List<String> knowledgeBaseIds = knowledgeBaseIds(node, context.context());
         String queryKey = optionalStringConfig(node, "queryKey", "question");
         String outputKey = optionalStringConfig(node, "outputKey", "documents");
         int topK = intConfig(node, "fetchCount", intConfig(node, "topK", 3));
@@ -36,7 +36,7 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
         String queryTemplate = optionalStringConfig(node, "queryText", optionalStringConfig(node, "keywordTemplate", ""));
         Object query = queryTemplate.isBlank() ? nodeContext.get(queryKey) : TemplateRenderer.render(queryTemplate, nodeContext);
         String queryText = query == null ? "" : String.valueOf(query);
-        if (queryText.isBlank()) {
+        if (queryText.isBlank() || knowledgeBaseIds.isEmpty()) {
             return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, List.of()));
         }
         List<KnowledgeSearchResult> results = knowledgeBaseIds.stream()
@@ -69,15 +69,27 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
         }
     }
 
-    private List<String> knowledgeBaseIds(WorkflowNode node) {
-        Object value = node.config().get("knowledgeBaseIds");
-        List<String> ids = value instanceof List<?> values
-                ? values.stream().map(String::valueOf).filter(item -> !item.isBlank()).toList()
-                : List.of();
+    private List<String> knowledgeBaseIds(WorkflowNode node, Map<String, Object> context) {
+        List<String> ids = readIdList(node.config().get("knowledgeBaseIds"));
         if (!ids.isEmpty()) {
             return ids;
         }
-        return List.of(requiredStringConfig(node, "knowledgeBaseId"));
+        Object configuredId = node.config().get("knowledgeBaseId");
+        if (configuredId instanceof String configured && !configured.isBlank()) {
+            return List.of(configured);
+        }
+        List<String> fromContext = readIdList(context.get("knowledgeBaseIds"));
+        if (!fromContext.isEmpty()) {
+            return fromContext;
+        }
+        return List.of();
+    }
+
+    private List<String> readIdList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        return values.stream().map(String::valueOf).filter(item -> !item.isBlank()).toList();
     }
 
     private Map<String, Object> resolveInputParams(WorkflowNode node, Map<String, Object> context) {

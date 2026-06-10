@@ -71,14 +71,12 @@ describe('WorkflowCardsPage', () => {
     expect(screen.getByRole('button', { name: /编辑/ })).toBeInTheDocument();
   });
 
-  it('renders a workflow operations console with summary and templates', async () => {
+  it('renders a workflow operations console with summary metrics', async () => {
     renderPage();
 
     expect(await screen.findByText('工作流运营台')).toBeInTheDocument();
     expect(screen.getByText('总工作流')).toBeInTheDocument();
     expect(screen.getAllByText('已发布').length).toBeGreaterThan(0);
-    expect(screen.getByText('模板中心')).toBeInTheDocument();
-    expect(screen.getByText('客服问答助手')).toBeInTheDocument();
   });
 
   it('archives a workflow from the card actions', async () => {
