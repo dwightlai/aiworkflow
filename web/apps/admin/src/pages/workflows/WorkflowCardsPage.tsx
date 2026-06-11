@@ -101,7 +101,7 @@ export function WorkflowCardsPage() {
         const matchedStatus = statusFilter === 'ALL' || workflow.status === statusFilter;
         return matchedKeyword && matchedStatus;
       })
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+      .sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? ''));
   }, [keyword, statusFilter, workflows]);
   const publishedCount = workflows.filter((workflow) => workflow.status === 'PUBLISHED').length;
   const draftCount = workflows.filter((workflow) => workflow.status === 'DRAFT').length;

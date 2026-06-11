@@ -1,0 +1,25 @@
+server:
+  port: ${SERVER_PORT:18080}
+
+spring:
+  config:
+    activate:
+      on-profile: standalone
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+    service-registry:
+      auto-registration:
+        enabled: false
+  datasource:
+    url: ${POSTGRES_JDBC_URL:jdbc:postgresql://localhost:5432/aiworkflow_demo}
+    username: ${POSTGRES_USERNAME:aiworkflow}
+    password: ${POSTGRES_PASSWORD:aiworkflow}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/postgresql
+
+agi:
+  auth:
+    admin-password: ${AGI_ADMIN_PASSWORD:admin123}
