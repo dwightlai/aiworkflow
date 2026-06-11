@@ -96,6 +96,7 @@ class ResearchGenerationServiceTest {
                 template.status(),
                 template.version(),
                 template.createdBy(),
+                template.updatedBy(),
                 template.createdAt(),
                 Instant.now()
         ));

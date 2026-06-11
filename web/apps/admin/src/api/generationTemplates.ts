@@ -70,6 +70,21 @@ export interface SaveGenerationTemplateRequest {
   status: string;
 }
 
+export interface GenerationTemplateRuntimeView {
+  id: string;
+  name: string;
+  outputType: string;
+  sections: GenerationTemplateSection[];
+  sectionCount: number;
+  outlineSections: string;
+  variables: GenerationTemplateVariable[];
+}
+
+export interface ParsedTemplateSchemaText {
+  schema: GenerationTemplateSchema | null;
+  error: string | null;
+}
+
 export async function listGenerationTemplates(): Promise<PageResponse<GenerationTemplate>> {
   return requestJson<PageResponse<GenerationTemplate>>('/api/generation-templates');
 }
@@ -95,6 +110,47 @@ export async function deleteGenerationTemplate(id: string): Promise<void> {
   await requestJson<void>(`/api/generation-templates/${id}`, {
     method: 'DELETE'
   });
+}
+
+export async function getGenerationTemplateRuntime(id: string): Promise<GenerationTemplateRuntimeView> {
+  return requestJson<GenerationTemplateRuntimeView>(`/api/generation-templates/${id}/runtime`);
+}
+
+export function parseTemplateSchemaText(value: string): ParsedTemplateSchemaText {
+  if (!value.trim()) {
+    return { schema: null, error: '模板结构不能为空' };
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return { schema: null, error: '模板结构必须是 JSON 对象' };
+    }
+    return { schema: parsed as GenerationTemplateSchema, error: null };
+  } catch {
+    return { schema: null, error: 'JSON 格式无效，请检查语法' };
+  }
+}
+
+export function buildTemplateSkeleton(
+  schema: GenerationTemplateSchema,
+  title?: string | null
+): string {
+  const docTitle = title?.trim() || schema.title?.trim() || '{成果标题}';
+  const lines = [`# ${docTitle}`, ''];
+  for (const section of schema.sections ?? []) {
+    lines.push(`## ${section.title || section.key}`);
+    lines.push(`（${section.instruction || '按模板说明生成'}）`);
+    lines.push('');
+  }
+  return lines.join('\n').trim();
+}
+
+export function runtimeViewToSchema(runtime: GenerationTemplateRuntimeView): GenerationTemplateSchema {
+  return {
+    title: runtime.name,
+    variables: runtime.variables ?? [],
+    sections: runtime.sections ?? []
+  };
 }
 
 export function parseTemplateSchema(value: GenerationTemplateSchema | string | null | undefined): GenerationTemplateSchema {

@@ -24,6 +24,8 @@ public class KnowledgeBaseEntity {
     private String status;
     private Integer documentCount;
     private Integer chunkCount;
+    private String createdBy;
+    private String updatedBy;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -59,6 +61,10 @@ public class KnowledgeBaseEntity {
     public void setDocumentCount(Integer documentCount) { this.documentCount = documentCount; }
     public Integer getChunkCount() { return chunkCount; }
     public void setChunkCount(Integer chunkCount) { this.chunkCount = chunkCount; }
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

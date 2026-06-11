@@ -1,0 +1,10 @@
+ALTER TABLE agi_knowledge_base ADD created_by VARCHAR(64);
+ALTER TABLE agi_knowledge_base ADD updated_by VARCHAR(64);
+ALTER TABLE agi_ai_bot ADD created_by VARCHAR(64);
+ALTER TABLE agi_ai_bot ADD updated_by VARCHAR(64);
+ALTER TABLE agi_model_provider ADD created_by VARCHAR(64);
+ALTER TABLE agi_model_provider ADD updated_by VARCHAR(64);
+ALTER TABLE agi_prompt_template ADD created_by VARCHAR(64);
+ALTER TABLE agi_prompt_template ADD updated_by VARCHAR(64);
+ALTER TABLE agi_integration_app ADD created_by VARCHAR(64);
+ALTER TABLE agi_integration_app ADD updated_by VARCHAR(64);

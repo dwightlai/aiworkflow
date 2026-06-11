@@ -126,6 +126,12 @@ export async function archiveWorkflow(workflowId: string): Promise<Workflow> {
   });
 }
 
+export async function restoreWorkflow(workflowId: string): Promise<Workflow> {
+  return requestJson<Workflow>(`/api/workflows/${workflowId}/restore`, {
+    method: 'POST'
+  });
+}
+
 export async function deleteWorkflow(workflowId: string): Promise<void> {
   await requestJson<void>(`/api/workflows/${workflowId}`, {
     method: 'DELETE'

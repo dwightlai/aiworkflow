@@ -19,6 +19,8 @@ public record KnowledgeBase(
         String status,
         int documentCount,
         int chunkCount,
+        String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

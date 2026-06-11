@@ -3,6 +3,7 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
   FileTextOutlined,
   LinkOutlined,
   PlusOutlined
@@ -18,7 +19,6 @@ import {
   Select,
   Space,
   Statistic,
-  Steps,
   Table,
   Tag,
   Typography,
@@ -30,16 +30,19 @@ import { useMemo, useState } from 'react';
 import {
   createGenerationTemplate,
   deleteGenerationTemplate,
+  getGenerationTemplateRuntime,
   listGenerationTemplates,
   parseTemplateSchema,
+  parseTemplateSchemaText,
   parseWorkflowSnapshot,
+  runtimeViewToSchema,
   updateGenerationTemplate,
   type GenerationTemplate,
   type GenerationTemplateSchema,
-  type SaveGenerationTemplateRequest,
-  type WorkflowSnapshotNode
+  type SaveGenerationTemplateRequest
 } from '../../api/generationTemplates';
 import { getWorkflow, listWorkflows } from '../../api/workflows';
+import { GenerationTemplatePreviewPanel } from './GenerationTemplatePreviewPanel';
 import { resolveWorkflowDisplay } from './workflowDisplay';
 
 const defaultTemplateSchema: GenerationTemplateSchema = {
@@ -98,10 +101,15 @@ export function GenerationTemplatesPage() {
   const [form] = Form.useForm<GenerationTemplateFormValues>();
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<GenerationTemplate | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<GenerationTemplate | null>(null);
   const templateSchemaText = Form.useWatch('templateSchemaText', form) ?? '';
+  const outputType = Form.useWatch('outputType', form) ?? 'MARKDOWN';
+  const templateName = Form.useWatch('templateName', form) ?? '';
   const workflowId = Form.useWatch('workflowId', form) ?? null;
-  const parsedSchema = useMemo(() => parseJsonField<GenerationTemplateSchema>(templateSchemaText, defaultTemplateSchema), [templateSchemaText]);
+  const parsedSchemaResult = useMemo(() => parseTemplateSchemaText(templateSchemaText), [templateSchemaText]);
+  const parsedSchema = parsedSchemaResult.schema ?? defaultTemplateSchema;
 
   const templatesQuery = useQuery({
     queryKey: ['generation-templates'],
@@ -115,6 +123,16 @@ export function GenerationTemplatesPage() {
     queryKey: ['workflow', workflowId],
     queryFn: () => getWorkflow(workflowId!),
     enabled: Boolean(workflowId)
+  });
+  const previewRuntimeQuery = useQuery({
+    queryKey: ['generation-template-runtime', previewTemplate?.id],
+    queryFn: () => getGenerationTemplateRuntime(previewTemplate!.id),
+    enabled: Boolean(previewTemplate?.id && previewOpen)
+  });
+  const previewWorkflowQuery = useQuery({
+    queryKey: ['workflow', previewTemplate?.workflowId],
+    queryFn: () => getWorkflow(previewTemplate!.workflowId!),
+    enabled: Boolean(previewTemplate?.workflowId && previewOpen)
   });
 
   const templates = templatesQuery.data?.items ?? [];
@@ -133,6 +151,25 @@ export function GenerationTemplatesPage() {
     ),
     [workflowId, selectedWorkflowQuery.data]
   );
+  const previewWorkflow = useMemo(
+    () => resolveWorkflowDisplay(
+      previewTemplate?.workflowId,
+      previewWorkflowQuery.data?.name ?? null,
+      previewWorkflowQuery.data?.latestVersion?.definition ?? null,
+      previewTemplate?.workflowSnapshot,
+      parseWorkflowSnapshot
+    ),
+    [previewTemplate, previewWorkflowQuery.data]
+  );
+  const previewSchema = useMemo(() => {
+    if (previewRuntimeQuery.data) {
+      return runtimeViewToSchema(previewRuntimeQuery.data);
+    }
+    if (previewTemplate) {
+      return parseTemplateSchema(previewTemplate.templateSchema);
+    }
+    return { sections: [], variables: [] };
+  }, [previewRuntimeQuery.data, previewTemplate]);
   const sectionCount = templates.reduce(
     (count, template) => count + (parseTemplateSchema(template.templateSchema).sections?.length ?? 0),
     0
@@ -188,6 +225,11 @@ export function GenerationTemplatesPage() {
     setDrawerOpen(true);
   }
 
+  function openPreviewDrawer(template: GenerationTemplate) {
+    setPreviewTemplate(template);
+    setPreviewOpen(true);
+  }
+
   const columns: ColumnsType<GenerationTemplate> = [
     {
       title: '模板名称',
@@ -230,9 +272,10 @@ export function GenerationTemplatesPage() {
     },
     {
       title: '操作',
-      width: 168,
+      width: 220,
       render: (_, template) => (
         <Space>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => openPreviewDrawer(template)}>预览</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEditDrawer(template)}>编辑</Button>
           <Button
             danger
@@ -292,9 +335,41 @@ export function GenerationTemplatesPage() {
       </Card>
 
       <Drawer
+        title={previewTemplate ? `模板预览 · ${resolveTemplateName(previewTemplate)}` : '模板预览'}
+        open={previewOpen}
+        width={760}
+        destroyOnClose
+        onClose={() => {
+          setPreviewOpen(false);
+          setPreviewTemplate(null);
+        }}
+      >
+        {previewRuntimeQuery.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="运行时预览加载失败"
+            description={String((previewRuntimeQuery.error as Error)?.message)}
+            style={{ marginBottom: 12 }}
+          />
+        ) : null}
+        {previewRuntimeQuery.isLoading ? (
+          <Typography.Text type="secondary">加载运行时预览...</Typography.Text>
+        ) : null}
+        <GenerationTemplatePreviewPanel
+          schema={previewSchema}
+          outputType={previewRuntimeQuery.data?.outputType ?? previewTemplate?.outputType}
+          templateName={previewRuntimeQuery.data?.name ?? (previewTemplate ? resolveTemplateName(previewTemplate) : undefined)}
+          workflowNodes={previewWorkflow.nodes ?? []}
+          workflowLoading={previewWorkflowQuery.isLoading}
+          workflowName={previewWorkflow.name ?? previewWorkflowQuery.data?.name ?? null}
+        />
+      </Drawer>
+
+      <Drawer
         title={editingTemplate ? '编辑编研模板' : '新增编研模板'}
         open={drawerOpen}
-        width={720}
+        width={760}
         destroyOnClose
         onClose={() => {
           setDrawerOpen(false);
@@ -305,7 +380,13 @@ export function GenerationTemplatesPage() {
         footer={(
           <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" icon={<CheckCircleOutlined />} loading={saveMutation.isPending} onClick={() => form.submit()}>
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              loading={saveMutation.isPending}
+              disabled={Boolean(parsedSchemaResult.error)}
+              onClick={() => form.submit()}
+            >
               {editingTemplate ? '修改' : '保存'}
             </Button>
           </Space>
@@ -373,34 +454,17 @@ export function GenerationTemplatesPage() {
           <Form.Item name="templateSchemaText" label="模板结构 JSON" rules={[{ required: true, message: '请输入模板结构' }]}>
             <Input.TextArea autoSize={{ minRows: 8, maxRows: 14 }} />
           </Form.Item>
-          <Card size="small" title="章节结构预览" style={{ marginBottom: 12 }}>
-            <Table
-              size="small"
-              rowKey="key"
-              pagination={false}
-              dataSource={parsedSchema.sections ?? []}
-              columns={[
-                { title: '章节键', dataIndex: 'key', width: 120 },
-                { title: '标题', dataIndex: 'title' },
-                { title: '生成说明', dataIndex: 'instruction', ellipsis: true }
-              ]}
-            />
-          </Card>
-          <Card size="small" title="工作流编排预览" loading={selectedWorkflowQuery.isLoading}>
-            {(parsedWorkflow.nodes ?? []).length > 0 ? (
-              <Steps
-                size="small"
-                direction="vertical"
-                current={(parsedWorkflow.nodes ?? []).length}
-                items={(parsedWorkflow.nodes ?? []).map((node: WorkflowSnapshotNode) => ({
-                  title: node.name,
-                  description: node.type ? `${node.type}${node.order ? ` · 步骤 ${node.order}` : ''}` : undefined
-                }))}
-              />
-            ) : (
-              <Typography.Text type="secondary">选择工作流后显示节点编排。</Typography.Text>
-            )}
-          </Card>
+          {parsedSchemaResult.error ? (
+            <Alert type="error" showIcon message="模板 JSON 无效" description={parsedSchemaResult.error} style={{ marginBottom: 12 }} />
+          ) : null}
+          <GenerationTemplatePreviewPanel
+            schema={parsedSchema}
+            outputType={outputType}
+            templateName={templateName}
+            workflowNodes={parsedWorkflow.nodes ?? []}
+            workflowLoading={selectedWorkflowQuery.isLoading}
+            workflowName={parsedWorkflow.name ?? selectedWorkflowQuery.data?.name ?? null}
+          />
         </Form>
       </Drawer>
     </section>
@@ -408,7 +472,11 @@ export function GenerationTemplatesPage() {
 }
 
 function normalizeValues(values: GenerationTemplateFormValues): SaveGenerationTemplateRequest {
-  const schema = parseJsonField<GenerationTemplateSchema>(values.templateSchemaText, defaultTemplateSchema);
+  const parsed = parseTemplateSchemaText(values.templateSchemaText);
+  if (!parsed.schema) {
+    throw new Error(parsed.error ?? '模板结构无效');
+  }
+  const schema = parsed.schema;
   const templateName = values.templateName?.trim() || schema.title?.trim() || '';
   return {
     name: templateName,
@@ -420,17 +488,6 @@ function normalizeValues(values: GenerationTemplateFormValues): SaveGenerationTe
     status: values.status,
     templateSchema: values.templateSchemaText
   };
-}
-
-function parseJsonField<T>(value: string, fallback: T): T {
-  if (!value.trim()) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 const pageStyle: React.CSSProperties = {

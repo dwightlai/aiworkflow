@@ -1,5 +1,6 @@
 package com.mw.ai.agi.bot.service;
 
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.bot.domain.AiBot;
 import com.mw.ai.agi.bot.domain.BotChatResult;
 import com.mw.ai.agi.bot.domain.BotMessage;
@@ -94,6 +95,7 @@ public class BotService {
         List<String> effectiveKnowledgeBaseIds = AssetReferenceSupport.requireAssetIds(knowledgeBaseIds);
         ensureRunnable(workflowId, modelProviderId, effectiveKnowledgeBaseIds);
         Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
         BotStatus effectiveStatus = status == null ? BotStatus.ENABLED : status;
         AiBot saved = store.save(new AiBot(
                 "bot_" + UUID.randomUUID(),
@@ -110,6 +112,8 @@ public class BotService {
                 effectiveStatus,
                 0,
                 effectiveStatus == BotStatus.ENABLED ? now : null,
+                operator,
+                operator,
                 now,
                 now
         ));
@@ -135,6 +139,7 @@ public class BotService {
         ensureRunnable(workflowId, modelProviderId, effectiveKnowledgeBaseIds);
         BotStatus effectiveStatus = status == null ? current.status() : status;
         Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
         AiBot saved = store.save(new AiBot(
                 current.id(),
                 current.tenantId(),
@@ -150,6 +155,8 @@ public class BotService {
                 effectiveStatus,
                 current.conversationCount(),
                 effectiveStatus == BotStatus.ENABLED && current.publishedAt() == null ? now : current.publishedAt(),
+                current.createdBy(),
+                operator,
                 current.createdAt(),
                 now
         ));
@@ -185,6 +192,8 @@ public class BotService {
                 bot.status(),
                 bot.conversationCount() + 1,
                 bot.publishedAt(),
+                bot.createdBy(),
+                bot.updatedBy(),
                 bot.createdAt(),
                 Instant.now()
         ));
@@ -264,6 +273,8 @@ public class BotService {
                 bot.status(),
                 bot.conversationCount() + 1,
                 bot.publishedAt(),
+                bot.createdBy(),
+                bot.updatedBy(),
                 bot.createdAt(),
                 Instant.now()
         ));

@@ -66,6 +66,8 @@ public class MybatisModelProviderStore implements ModelProviderStore {
         entity.setModel(provider.model());
         entity.setApiKeyRef(provider.apiKeyRef());
         entity.setEnabled(provider.enabled());
+        entity.setCreatedBy(provider.createdBy());
+        entity.setUpdatedBy(provider.updatedBy());
         entity.setCreatedAt(provider.createdAt());
         entity.setUpdatedAt(provider.updatedAt());
         return entity;
@@ -86,6 +88,8 @@ public class MybatisModelProviderStore implements ModelProviderStore {
                 entity.getModel(),
                 entity.getApiKeyRef(),
                 Boolean.TRUE.equals(entity.getEnabled()),
+                entity.getCreatedBy(),
+                entity.getUpdatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

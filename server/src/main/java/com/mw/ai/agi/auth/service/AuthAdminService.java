@@ -3,6 +3,7 @@ package com.mw.ai.agi.auth.service;
 import com.mw.ai.agi.common.asset.AssetReferenceSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.persistence.IntegrationAppEntity;
 import com.mw.ai.agi.auth.persistence.IntegrationAppMapper;
 import com.mw.ai.agi.auth.persistence.IntegrationAppScopeEntity;
@@ -650,6 +651,7 @@ public class AuthAdminService {
         ensureTenantAccess(tenantId);
         findTenantOrThrow(tenantId);
         Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
         IntegrationAppEntity entity = new IntegrationAppEntity();
         entity.setId(integrationAppId(tenantId, code));
         entity.setTenantId(tenantId);
@@ -658,6 +660,8 @@ public class AuthAdminService {
         entity.setAppType(appType == null || appType.isBlank() ? "OTHER" : appType);
         entity.setAuthType(authType == null || authType.isBlank() ? "API_KEY" : authType);
         entity.setStatus("ACTIVE");
+        entity.setCreatedBy(operator);
+        entity.setUpdatedBy(operator);
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         integrationAppMapper.insert(entity);
@@ -797,6 +801,7 @@ public class AuthAdminService {
         integrationAppMapper.update(null, new LambdaUpdateWrapper<IntegrationAppEntity>()
                 .eq(IntegrationAppEntity::getId, app.getId())
                 .set(IntegrationAppEntity::getStatus, normalizedStatus)
+                .set(IntegrationAppEntity::getUpdatedBy, OperatorContext.currentUserId())
                 .set(IntegrationAppEntity::getUpdatedAt, Instant.now()));
         return integrationAppMapper.selectById(appId);
     }
@@ -811,6 +816,7 @@ public class AuthAdminService {
         integrationAppMapper.update(null, new LambdaUpdateWrapper<IntegrationAppEntity>()
                 .eq(IntegrationAppEntity::getId, app.getId())
                 .set(IntegrationAppEntity::getStatus, "DELETED")
+                .set(IntegrationAppEntity::getUpdatedBy, OperatorContext.currentUserId())
                 .set(IntegrationAppEntity::getUpdatedAt, Instant.now()));
         return integrationAppMapper.selectById(appId);
     }

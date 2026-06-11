@@ -18,6 +18,8 @@ public record AiBot(
         BotStatus status,
         int conversationCount,
         Instant publishedAt,
+        String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

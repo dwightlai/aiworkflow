@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.service;
 
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.workflow.domain.Workflow;
@@ -39,6 +40,7 @@ public class WorkflowApplicationService {
             WorkflowDefinition definition
     ) {
         Instant now = Instant.now();
+        String operator = createdBy == null || createdBy.isBlank() ? OperatorContext.currentUserId() : createdBy;
         Workflow workflow = new Workflow(
                 UUID.randomUUID().toString(),
                 tenantId,
@@ -47,7 +49,8 @@ public class WorkflowApplicationService {
                 description,
                 WorkflowStatus.DRAFT,
                 null,
-                createdBy,
+                operator,
+                operator,
                 now,
                 now
         );
@@ -111,6 +114,7 @@ public class WorkflowApplicationService {
         Instant updatedAt = publishedAt.isAfter(workflow.updatedAt())
                 ? publishedAt
                 : workflow.updatedAt().plusNanos(1);
+        String operator = OperatorContext.currentUserId();
         store.saveWorkflow(new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
@@ -120,6 +124,7 @@ public class WorkflowApplicationService {
                 WorkflowStatus.PUBLISHED,
                 publishedVersion.id(),
                 workflow.createdBy(),
+                operator,
                 workflow.createdAt(),
                 updatedAt
         ));
@@ -132,6 +137,7 @@ public class WorkflowApplicationService {
 
     public synchronized Workflow updateWorkflowMetadata(String workflowId, String name, String description) {
         Workflow workflow = getWorkflow(workflowId);
+        String operator = OperatorContext.currentUserId();
         Workflow updated = new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
@@ -141,6 +147,7 @@ public class WorkflowApplicationService {
                 workflow.status(),
                 workflow.currentVersionId(),
                 workflow.createdBy(),
+                operator,
                 workflow.createdAt(),
                 Instant.now()
         );
@@ -149,6 +156,10 @@ public class WorkflowApplicationService {
 
     public synchronized Workflow archiveWorkflow(String workflowId) {
         Workflow workflow = getWorkflow(workflowId);
+        if (workflow.status() == WorkflowStatus.ARCHIVED) {
+            return workflow;
+        }
+        String operator = OperatorContext.currentUserId();
         Workflow archived = new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
@@ -158,10 +169,36 @@ public class WorkflowApplicationService {
                 WorkflowStatus.ARCHIVED,
                 workflow.currentVersionId(),
                 workflow.createdBy(),
+                operator,
                 workflow.createdAt(),
                 Instant.now()
         );
         return store.saveWorkflow(archived);
+    }
+
+    public synchronized Workflow restoreWorkflow(String workflowId) {
+        Workflow workflow = getWorkflow(workflowId);
+        if (workflow.status() != WorkflowStatus.ARCHIVED) {
+            throw new IllegalStateException("Only archived workflows can be restored.");
+        }
+        WorkflowStatus restoredStatus = workflow.currentVersionId() == null || workflow.currentVersionId().isBlank()
+                ? WorkflowStatus.DRAFT
+                : WorkflowStatus.PUBLISHED;
+        String operator = OperatorContext.currentUserId();
+        Workflow restored = new Workflow(
+                workflow.id(),
+                workflow.tenantId(),
+                workflow.ownerUnitId(),
+                workflow.name(),
+                workflow.description(),
+                restoredStatus,
+                workflow.currentVersionId(),
+                workflow.createdBy(),
+                operator,
+                workflow.createdAt(),
+                Instant.now()
+        );
+        return store.saveWorkflow(restored);
     }
 
     public synchronized void deleteWorkflow(String workflowId) {
@@ -170,6 +207,7 @@ public class WorkflowApplicationService {
         if (workflow.status() == WorkflowStatus.DELETED) {
             return;
         }
+        String operator = OperatorContext.currentUserId();
         store.saveWorkflow(new Workflow(
                 workflow.id(),
                 workflow.tenantId(),
@@ -179,6 +217,7 @@ public class WorkflowApplicationService {
                 WorkflowStatus.DELETED,
                 workflow.currentVersionId(),
                 workflow.createdBy(),
+                operator,
                 workflow.createdAt(),
                 Instant.now()
         ));

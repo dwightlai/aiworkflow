@@ -174,6 +174,7 @@ public class ResearchWorkflowSeedService implements ApplicationRunner {
                     WorkflowStatus.PUBLISHED,
                     ResearchWorkflowDefinitionBuilder.WORKFLOW_VERSION_ID,
                     "user_admin",
+                    "user_admin",
                     now,
                     now
             );

@@ -252,6 +252,24 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void restoresArchivedPublishedWorkflow() {
+        Workflow workflow = service.createWorkflow(
+                "tenant-1",
+                "Support triage",
+                null,
+                "user-1",
+                validDefinition()
+        );
+        WorkflowVersion publishedVersion = service.publishDraftVersion(workflow.id(), "publisher-1");
+        service.archiveWorkflow(workflow.id());
+
+        Workflow restored = service.restoreWorkflow(workflow.id());
+
+        assertThat(restored.status()).isEqualTo(WorkflowStatus.PUBLISHED);
+        assertThat(restored.currentVersionId()).isEqualTo(publishedVersion.id());
+    }
+
+    @Test
     void throwsWhenWorkflowDoesNotExist() {
         assertThatThrownBy(() -> service.getWorkflow("missing-workflow"))
                 .isInstanceOf(WorkflowNotFoundException.class)

@@ -17,6 +17,7 @@ public record GenerationTemplate(
         String status,
         int version,
         String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

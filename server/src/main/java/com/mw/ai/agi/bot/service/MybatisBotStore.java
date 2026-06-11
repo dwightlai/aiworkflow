@@ -141,6 +141,8 @@ public class MybatisBotStore implements BotStore {
         entity.setStatus(bot.status().name());
         entity.setConversationCount(bot.conversationCount());
         entity.setPublishedAt(bot.publishedAt());
+        entity.setCreatedBy(bot.createdBy());
+        entity.setUpdatedBy(bot.updatedBy());
         entity.setCreatedAt(bot.createdAt());
         entity.setUpdatedAt(bot.updatedAt());
         return entity;
@@ -162,6 +164,8 @@ public class MybatisBotStore implements BotStore {
                 BotStatus.valueOf(entity.getStatus()),
                 entity.getConversationCount(),
                 entity.getPublishedAt(),
+                entity.getCreatedBy(),
+                entity.getUpdatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

@@ -16,6 +16,7 @@ public class WorkflowEntity {
     private String status;
     private String currentVersionId;
     private String createdBy;
+    private String updatedBy;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -81,6 +82,14 @@ public class WorkflowEntity {
 
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
     public Instant getCreatedAt() {

@@ -1,5 +1,6 @@
 package com.mw.ai.agi.knowledge.service;
 
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.knowledge.domain.KnowledgeBase;
 import com.mw.ai.agi.knowledge.domain.KnowledgeChunk;
 import com.mw.ai.agi.knowledge.domain.KnowledgeChunkPreview;
@@ -129,6 +130,7 @@ public class KnowledgeBaseService {
             int topK
     ) {
         Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
         KnowledgeBase knowledgeBase = new KnowledgeBase(
                 "kb_" + UUID.randomUUID(),
                 currentTenantId(),
@@ -146,6 +148,8 @@ public class KnowledgeBaseService {
                 "READY",
                 0,
                 0,
+                operator,
+                operator,
                 now,
                 now
         );
@@ -220,6 +224,7 @@ public class KnowledgeBaseService {
             int topK
     ) {
         KnowledgeBase current = getKnowledgeBase(id);
+        String operator = OperatorContext.currentUserId();
         KnowledgeBase updated = new KnowledgeBase(
                 current.id(),
                 current.tenantId(),
@@ -237,6 +242,8 @@ public class KnowledgeBaseService {
                 current.status(),
                 current.documentCount(),
                 current.chunkCount(),
+                current.createdBy(),
+                operator,
                 current.createdAt(),
                 Instant.now()
         );
@@ -726,6 +733,8 @@ public class KnowledgeBaseService {
                 current.status(),
                 documentCount,
                 chunkCount,
+                current.createdBy(),
+                current.updatedBy(),
                 current.createdAt(),
                 Instant.now()
         ));

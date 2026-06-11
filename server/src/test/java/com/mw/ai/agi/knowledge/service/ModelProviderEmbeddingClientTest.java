@@ -55,6 +55,8 @@ class ModelProviderEmbeddingClientTest {
                 "test-embedding",
                 null,
                 true,
+                null,
+                null,
                 Instant.now(),
                 Instant.now()
         ));
@@ -110,6 +112,8 @@ class ModelProviderEmbeddingClientTest {
                 "test-embedding",
                 null,
                 true,
+                null,
+                null,
                 Instant.now(),
                 Instant.now()
         ));

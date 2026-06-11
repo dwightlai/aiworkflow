@@ -15,6 +15,7 @@ public record WorkflowResponse(
         WorkflowStatus status,
         String currentVersionId,
         String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt,
         WorkflowVersionResponse latestVersion
@@ -29,6 +30,7 @@ public record WorkflowResponse(
                 workflow.status(),
                 workflow.currentVersionId(),
                 workflow.createdBy(),
+                workflow.updatedBy(),
                 workflow.createdAt(),
                 workflow.updatedAt(),
                 latestVersion == null ? null : WorkflowVersionResponse.from(latestVersion)

@@ -22,6 +22,8 @@ public class AiBotEntity {
     private String status;
     private Integer conversationCount;
     private Instant publishedAt;
+    private String createdBy;
+    private String updatedBy;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -135,6 +137,22 @@ public class AiBotEntity {
 
     public void setPublishedAt(Instant publishedAt) {
         this.publishedAt = publishedAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
     public Instant getCreatedAt() {

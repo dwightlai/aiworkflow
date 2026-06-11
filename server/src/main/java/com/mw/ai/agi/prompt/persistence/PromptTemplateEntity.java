@@ -13,6 +13,8 @@ public class PromptTemplateEntity {
     private String name;
     private String template;
     private String description;
+    private String createdBy;
+    private String updatedBy;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -26,6 +28,10 @@ public class PromptTemplateEntity {
     public void setTemplate(String template) { this.template = template; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

@@ -6,6 +6,7 @@ import {
   getWorkflowRun,
   listWorkflows,
   publishWorkflow,
+  restoreWorkflow,
   runWorkflow,
   updateWorkflowMetadata
 } from './workflows';
@@ -90,6 +91,20 @@ describe('workflow admin api', () => {
 
     expect(archived.status).toBe('ARCHIVED');
     expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1/archive', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('restores archived workflows back to published', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: { id: 'workflow-1', name: 'Greeting', status: 'PUBLISHED' },
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const restored = await restoreWorkflow('workflow-1');
+
+    expect(restored.status).toBe('PUBLISHED');
+    expect(fetchMock).toHaveBeenCalledWith('/api/workflows/workflow-1/restore', expect.objectContaining({ method: 'POST' }));
   });
 
   it('deletes workflows logically', async () => {

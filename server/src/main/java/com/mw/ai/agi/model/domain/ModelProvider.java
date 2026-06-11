@@ -17,6 +17,8 @@ public record ModelProvider(
         String model,
         String apiKeyRef,
         boolean enabled,
+        String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

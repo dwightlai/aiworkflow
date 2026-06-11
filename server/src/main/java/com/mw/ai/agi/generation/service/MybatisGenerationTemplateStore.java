@@ -62,6 +62,7 @@ public class MybatisGenerationTemplateStore implements GenerationTemplateStore {
         entity.setStatus(template.status());
         entity.setVersion(template.version());
         entity.setCreatedBy(template.createdBy());
+        entity.setUpdatedBy(template.updatedBy());
         entity.setCreatedAt(template.createdAt());
         entity.setUpdatedAt(template.updatedAt());
         return entity;
@@ -83,6 +84,7 @@ public class MybatisGenerationTemplateStore implements GenerationTemplateStore {
                 entity.getStatus(),
                 entity.getVersion() == null ? 1 : entity.getVersion(),
                 entity.getCreatedBy(),
+                entity.getUpdatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

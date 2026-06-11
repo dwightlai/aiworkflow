@@ -213,6 +213,8 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setStatus(knowledgeBase.status());
         entity.setDocumentCount(knowledgeBase.documentCount());
         entity.setChunkCount(knowledgeBase.chunkCount());
+        entity.setCreatedBy(knowledgeBase.createdBy());
+        entity.setUpdatedBy(knowledgeBase.updatedBy());
         entity.setCreatedAt(knowledgeBase.createdAt());
         entity.setUpdatedAt(knowledgeBase.updatedAt());
         return entity;
@@ -236,6 +238,8 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 entity.getStatus(),
                 entity.getDocumentCount(),
                 entity.getChunkCount(),
+                entity.getCreatedBy(),
+                entity.getUpdatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

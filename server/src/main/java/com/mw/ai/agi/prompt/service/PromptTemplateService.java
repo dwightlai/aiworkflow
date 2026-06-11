@@ -1,5 +1,6 @@
 package com.mw.ai.agi.prompt.service;
 
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.prompt.domain.PromptTemplate;
@@ -27,12 +28,15 @@ public class PromptTemplateService {
 
     public PromptTemplate create(String name, String template, String description) {
         Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
         PromptTemplate promptTemplate = new PromptTemplate(
                 "prompt_" + UUID.randomUUID(),
                 currentTenantId(),
                 name,
                 template,
                 description,
+                operator,
+                operator,
                 now,
                 now
         );
@@ -41,12 +45,15 @@ public class PromptTemplateService {
 
     public PromptTemplate update(String id, String name, String template, String description) {
         PromptTemplate current = get(id);
+        String operator = OperatorContext.currentUserId();
         return store.save(new PromptTemplate(
                 current.id(),
                 current.tenantId(),
                 name,
                 template,
                 description,
+                current.createdBy(),
+                operator,
                 current.createdAt(),
                 Instant.now()
         ));

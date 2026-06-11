@@ -8,6 +8,8 @@ public record PromptTemplate(
         String name,
         String template,
         String description,
+        String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

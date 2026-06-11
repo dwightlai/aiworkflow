@@ -1,5 +1,6 @@
 import type { AuthUser } from '../api/auth';
 import { isPlatformOperator } from '../api/auth';
+import type { MenuGroup } from '../api/system';
 
 export interface AppMenuItem {
   key: string;
@@ -10,6 +11,17 @@ export interface AppMenuItem {
 export interface AppMenuGroup {
   title: string;
   items: AppMenuItem[];
+}
+
+export function mapNavigationToMenuGroups(groups: MenuGroup[]): AppMenuGroup[] {
+  return groups.map((group) => ({
+    title: group.title,
+    items: group.items.map((item) => ({
+      key: item.menuKey,
+      label: item.title,
+      path: item.path
+    }))
+  }));
 }
 
 export const menuGroups: AppMenuGroup[] = [

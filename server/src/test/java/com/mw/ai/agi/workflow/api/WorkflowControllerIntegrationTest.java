@@ -135,6 +135,24 @@ class WorkflowControllerIntegrationTest {
     }
 
     @Test
+    void restoresArchivedPublishedWorkflow() throws Exception {
+        String workflowId = createWorkflow();
+        mockMvc.perform(post("/api/workflows/{workflowId}/publish", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        mockMvc.perform(post("/api/workflows/{workflowId}/archive", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ARCHIVED"));
+
+        mockMvc.perform(post("/api/workflows/{workflowId}/restore", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data.currentVersionId").isNotEmpty());
+    }
+
+    @Test
     void archivesWorkflowWithoutDeletingVersions() throws Exception {
         String workflowId = createWorkflow();
 

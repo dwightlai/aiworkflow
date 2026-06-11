@@ -5,10 +5,9 @@ import {
   EditOutlined,
   FileSearchOutlined,
   FolderOutlined,
-  MoreOutlined,
   PlayCircleOutlined,
   PlusOutlined,
-  ReloadOutlined,
+  RollbackOutlined,
   SearchOutlined,
   SettingOutlined,
   ThunderboltOutlined
@@ -17,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Drawer, Empty, Input, Popconfirm, Segmented, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { archiveWorkflow, deleteWorkflow, getWorkflow, listWorkflows, runWorkflow, updateWorkflowMetadata, buildWorkflowRunInput, type Workflow } from '../../api/workflows';
+import { archiveWorkflow, deleteWorkflow, getWorkflow, listWorkflows, restoreWorkflow, runWorkflow, updateWorkflowMetadata, buildWorkflowRunInput, type Workflow } from '../../api/workflows';
 
 const demoDescription = '配置节点、Prompt、模型和工具调用，编排可运行的 AI 自动化流程。';
 const statusOptions = [
@@ -45,6 +44,13 @@ export function WorkflowCardsPage() {
     mutationFn: (workflow: Workflow) => archiveWorkflow(workflow.id),
     onSuccess: async () => {
       message.success('工作流已归档');
+      await queryClient.invalidateQueries({ queryKey: ['workflows'] });
+    }
+  });
+  const restoreMutation = useMutation({
+    mutationFn: (workflow: Workflow) => restoreWorkflow(workflow.id),
+    onSuccess: async (workflow) => {
+      message.success(workflow.status === 'PUBLISHED' ? '工作流已恢复为已发布' : '工作流已恢复为草稿');
       await queryClient.invalidateQueries({ queryKey: ['workflows'] });
     }
   });
@@ -137,12 +143,6 @@ export function WorkflowCardsPage() {
                 onChange={(event) => setKeyword(event.target.value)}
               />
               <Segmented options={statusOptions} value={statusFilter} onChange={(value) => setStatusFilter(String(value))} />
-              <Button type="primary" icon={<SearchOutlined />}>
-                搜索
-              </Button>
-              <Button icon={<ReloadOutlined />} onClick={() => { setKeyword(''); setStatusFilter('ALL'); }}>
-                重置
-              </Button>
             </Space>
           </section>
 
@@ -176,8 +176,10 @@ export function WorkflowCardsPage() {
                 key={workflow.id}
                 workflow={workflow}
                 archivePending={archiveMutation.isPending}
+                restorePending={restoreMutation.isPending}
                 deletePending={deleteMutation.isPending}
                 onArchive={() => archiveMutation.mutate(workflow)}
+                onRestore={() => restoreMutation.mutate(workflow)}
                 onDelete={() => deleteMutation.mutate(workflow)}
                 onSettings={() => openSettingsDrawer(workflow)}
                 onRun={() => openRunDrawer(workflow)}
@@ -316,16 +318,20 @@ function SummaryCard({ title, value, detail, icon }: { title: string; value: str
 function WorkflowCard({
   workflow,
   archivePending,
+  restorePending,
   deletePending,
   onArchive,
+  onRestore,
   onDelete,
   onSettings,
   onRun
 }: {
   workflow: Workflow;
   archivePending: boolean;
+  restorePending: boolean;
   deletePending: boolean;
   onArchive: () => void;
+  onRestore: () => void;
   onDelete: () => void;
   onSettings: () => void;
   onRun: () => void;
@@ -362,7 +368,7 @@ function WorkflowCard({
         <ActionButton icon={<PlayCircleOutlined />} label="运行" onClick={onRun} />
         <ActionButton icon={<EditOutlined />} label="编辑" onClick={() => navigateTo(`/workflows/${workflow.id}/designer`)} />
         {workflow.status === 'ARCHIVED' ? (
-          <ActionButton icon={<MoreOutlined />} label="更多" />
+          <ActionButton icon={<RollbackOutlined />} label="恢复发布" loading={restorePending} onClick={onRestore} />
         ) : (
           <ActionButton icon={<FolderOutlined />} label="归档工作流" loading={archivePending} onClick={onArchive} />
         )}

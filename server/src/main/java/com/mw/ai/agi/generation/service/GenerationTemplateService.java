@@ -1,6 +1,7 @@
 package com.mw.ai.agi.generation.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.generation.domain.GenerationTemplate;
@@ -54,6 +55,7 @@ public class GenerationTemplateService {
             String createdBy
     ) {
         Instant now = Instant.now();
+        String operator = createdBy == null || createdBy.isBlank() ? OperatorContext.currentUserId() : createdBy;
         GenerationTemplate template = new GenerationTemplate(
                 "gen_tpl_" + UUID.randomUUID(),
                 currentTenantId(),
@@ -68,7 +70,8 @@ public class GenerationTemplateService {
                 resolveWorkflowSnapshot(workflowId, workflowSnapshot),
                 status == null || status.isBlank() ? "DRAFT" : status,
                 version <= 0 ? 1 : version,
-                createdBy,
+                operator,
+                operator,
                 now,
                 now
         );
@@ -90,6 +93,7 @@ public class GenerationTemplateService {
             int version
     ) {
         GenerationTemplate current = get(id);
+        String operator = OperatorContext.currentUserId();
         return store.save(new GenerationTemplate(
                 current.id(),
                 current.tenantId(),
@@ -105,6 +109,7 @@ public class GenerationTemplateService {
                 status,
                 version <= 0 ? current.version() : version,
                 current.createdBy(),
+                operator,
                 current.createdAt(),
                 Instant.now()
         ));

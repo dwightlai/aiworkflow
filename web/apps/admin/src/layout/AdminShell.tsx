@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AuthUser } from '../api/auth';
+import { listMenuNavigation } from '../api/system';
 import { useState } from 'react';
 import { PageHeader } from './PageHeader';
-import { menuGroups, getVisibleMenuGroups } from './menu';
+import { getVisibleMenuGroups, mapNavigationToMenuGroups, type AppMenuGroup } from './menu';
 
 export interface AdminShellProps {
   title: string;
@@ -24,7 +26,14 @@ export function AdminShell({
   onNavigate
 }: AdminShellProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const visibleMenuGroups = getVisibleMenuGroups(currentUser);
+  const navigationQuery = useQuery({
+    queryKey: ['system', 'menu-navigation'],
+    queryFn: listMenuNavigation,
+    staleTime: 60_000
+  });
+  const visibleMenuGroups: AppMenuGroup[] = navigationQuery.data?.length
+    ? mapNavigationToMenuGroups(navigationQuery.data)
+    : getVisibleMenuGroups(currentUser);
 
   return (
     <div

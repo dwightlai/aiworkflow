@@ -92,6 +92,7 @@ public class MybatisWorkflowStore implements WorkflowStore {
         entity.setStatus(workflow.status().name());
         entity.setCurrentVersionId(workflow.currentVersionId());
         entity.setCreatedBy(workflow.createdBy());
+        entity.setUpdatedBy(workflow.updatedBy());
         entity.setCreatedAt(workflow.createdAt());
         entity.setUpdatedAt(workflow.updatedAt());
         return entity;
@@ -107,6 +108,7 @@ public class MybatisWorkflowStore implements WorkflowStore {
                 WorkflowStatus.valueOf(entity.getStatus()),
                 entity.getCurrentVersionId(),
                 entity.getCreatedBy(),
+                entity.getUpdatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

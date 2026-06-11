@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 public class TenantAdminGuard {
     private final String defaultTenantId;
@@ -44,5 +46,26 @@ public class TenantAdminGuard {
             return;
         }
         throw new AuthException("TENANT_ACCESS_DENIED", HttpStatus.FORBIDDEN, "Tenant access denied.");
+    }
+
+    public void assertSystemConfigurator() {
+        assertAnyRole("platform_admin", "unit_admin");
+    }
+
+    public void assertAuditViewer() {
+        assertAnyRole("platform_admin", "unit_admin", "auditor");
+    }
+
+    private void assertAnyRole(String... roleCodes) {
+        if (AuthRequestContext.current().isEmpty()) {
+            return;
+        }
+        List<String> allowed = List.of(roleCodes);
+        boolean matched = AuthRequestContext.current()
+                .map(holder -> holder.roleIds().stream().anyMatch(allowed::contains))
+                .orElse(false);
+        if (!matched) {
+            throw new AuthException("SYSTEM_ACCESS_DENIED", HttpStatus.FORBIDDEN, "System access denied.");
+        }
     }
 }

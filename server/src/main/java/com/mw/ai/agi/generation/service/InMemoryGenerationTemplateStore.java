@@ -85,6 +85,7 @@ public class InMemoryGenerationTemplateStore implements GenerationTemplateStore 
                 "ENABLED",
                 1,
                 "user_admin",
+                "user_admin",
                 now,
                 now
         ));

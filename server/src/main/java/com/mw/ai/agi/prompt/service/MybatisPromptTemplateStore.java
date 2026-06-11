@@ -53,6 +53,8 @@ public class MybatisPromptTemplateStore implements PromptTemplateStore {
         entity.setName(template.name());
         entity.setTemplate(template.template());
         entity.setDescription(template.description());
+        entity.setCreatedBy(template.createdBy());
+        entity.setUpdatedBy(template.updatedBy());
         entity.setCreatedAt(template.createdAt());
         entity.setUpdatedAt(template.updatedAt());
         return entity;
@@ -65,6 +67,8 @@ public class MybatisPromptTemplateStore implements PromptTemplateStore {
                 entity.getName(),
                 entity.getTemplate(),
                 entity.getDescription(),
+                entity.getCreatedBy(),
+                entity.getUpdatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

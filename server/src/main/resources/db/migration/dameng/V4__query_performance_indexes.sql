@@ -1,0 +1,11 @@
+CREATE INDEX idx_agi_auth_audit_tenant_event_time ON agi_auth_audit_log(tenant_id, event_type, occurred_at);
+CREATE INDEX idx_agi_auth_audit_tenant_user_time ON agi_auth_audit_log(tenant_id, user_id, occurred_at);
+CREATE INDEX idx_agi_auth_audit_tenant_result_time ON agi_auth_audit_log(tenant_id, result, occurred_at);
+CREATE INDEX idx_agi_app_secret_tenant_app ON agi_integration_app_secret(tenant_id, app_id, created_at);
+CREATE INDEX idx_agi_integration_app_tenant ON agi_integration_app(tenant_id, status, code);
+CREATE INDEX idx_agi_user_tenant_status ON agi_user(tenant_id, status);
+CREATE INDEX idx_agi_organization_tenant ON agi_organization(tenant_id, status, sort_order);
+CREATE INDEX idx_agi_user_organization_org ON agi_user_organization(organization_id);
+CREATE INDEX idx_agi_workflow_execution_tenant_time ON agi_workflow_execution(tenant_id, started_at);
+CREATE INDEX idx_agi_knowledge_base_tenant_status ON agi_knowledge_base(tenant_id, status, updated_at);
+CREATE INDEX idx_agi_ai_bot_tenant_status ON agi_ai_bot(tenant_id, status, updated_at);

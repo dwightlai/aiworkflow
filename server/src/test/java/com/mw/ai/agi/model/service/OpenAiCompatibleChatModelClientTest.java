@@ -66,6 +66,8 @@ class OpenAiCompatibleChatModelClientTest {
                 "deepseek-chat",
                 "secret-key",
                 true,
+                null,
+                null,
                 Instant.now(),
                 Instant.now()
         ));

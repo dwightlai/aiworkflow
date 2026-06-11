@@ -11,6 +11,7 @@ public record Workflow(
         WorkflowStatus status,
         String currentVersionId,
         String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

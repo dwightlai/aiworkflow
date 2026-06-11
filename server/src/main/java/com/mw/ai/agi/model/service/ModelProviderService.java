@@ -1,5 +1,6 @@
 package com.mw.ai.agi.model.service;
 
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.model.domain.ModelProvider;
@@ -43,6 +44,7 @@ public class ModelProviderService {
             boolean enabled
     ) {
         Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
         ModelProvider provider = new ModelProvider(
                 "model_provider_" + UUID.randomUUID(),
                 currentTenantId(),
@@ -57,6 +59,8 @@ public class ModelProviderService {
                 model,
                 apiKeyRef,
                 enabled,
+                operator,
+                operator,
                 now,
                 now
         );
@@ -77,6 +81,7 @@ public class ModelProviderService {
             boolean enabled
     ) {
         ModelProvider current = get(id);
+        String operator = OperatorContext.currentUserId();
         return store.save(new ModelProvider(
                 current.id(),
                 current.tenantId(),
@@ -91,6 +96,8 @@ public class ModelProviderService {
                 model,
                 apiKeyRef,
                 enabled,
+                current.createdBy(),
+                operator,
                 current.createdAt(),
                 Instant.now()
         ));

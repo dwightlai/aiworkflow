@@ -1,5 +1,6 @@
 package com.mw.ai.agi.workflow.api;
 
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.workflow.domain.Workflow;
@@ -21,8 +22,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/workflows")
 public class WorkflowController {
-    private static final String DEFAULT_USER_ID = "system";
-
     private final WorkflowApplicationService workflowService;
 
     public WorkflowController(WorkflowApplicationService workflowService) {
@@ -43,7 +42,7 @@ public class WorkflowController {
                 TenantContext.requireTenantId(),
                 request.name(),
                 request.description(),
-                DEFAULT_USER_ID,
+                OperatorContext.currentUserId(),
                 request.definition()
         );
         return ApiResponse.success(toResponse(workflow));
@@ -78,7 +77,7 @@ public class WorkflowController {
 
     @PostMapping("/{workflowId}/publish")
     public ApiResponse<WorkflowResponse> publish(@PathVariable String workflowId) {
-        WorkflowVersion publishedVersion = workflowService.publishDraftVersion(workflowId, DEFAULT_USER_ID);
+        WorkflowVersion publishedVersion = workflowService.publishDraftVersion(workflowId, OperatorContext.currentUserId());
         Workflow workflow = workflowService.getWorkflow(workflowId);
         return ApiResponse.success(WorkflowResponse.from(workflow, publishedVersion));
     }
@@ -86,6 +85,12 @@ public class WorkflowController {
     @PostMapping("/{workflowId}/archive")
     public ApiResponse<WorkflowResponse> archive(@PathVariable String workflowId) {
         Workflow workflow = workflowService.archiveWorkflow(workflowId);
+        return ApiResponse.success(toResponse(workflow));
+    }
+
+    @PostMapping("/{workflowId}/restore")
+    public ApiResponse<WorkflowResponse> restore(@PathVariable String workflowId) {
+        Workflow workflow = workflowService.restoreWorkflow(workflowId);
         return ApiResponse.success(toResponse(workflow));
     }
 

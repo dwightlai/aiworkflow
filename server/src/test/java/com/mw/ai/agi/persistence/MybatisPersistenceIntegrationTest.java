@@ -80,10 +80,12 @@ class MybatisPersistenceIntegrationTest {
                 "deepseek-chat",
                 "secret-ref",
                 true,
+                "user_1",
+                "user_1",
                 now,
                 now
         ));
-        promptTemplateStore.save(new PromptTemplate("pt_1", "tenant_default", "客服问候", "你好，{{name}}", "greeting", now, now));
+        promptTemplateStore.save(new PromptTemplate("pt_1", "tenant_default", "客服问候", "你好，{{name}}", "greeting", "user_1", "user_1", now, now));
 
         assertThat(modelProviderStore.findById("mp_1")).isPresent();
         assertThat(promptTemplateStore.findById("pt_1")).isPresent();
@@ -125,6 +127,8 @@ class MybatisPersistenceIntegrationTest {
                 "READY",
                 1,
                 1,
+                "user_1",
+                "user_1",
                 now,
                 now
         ));
@@ -158,6 +162,7 @@ class MybatisPersistenceIntegrationTest {
                 WorkflowStatus.DRAFT,
                 null,
                 "tester",
+                "tester",
                 now,
                 now
         ));
@@ -179,6 +184,7 @@ class MybatisPersistenceIntegrationTest {
                 "Smoke",
                 WorkflowStatus.DRAFT,
                 "wv_1",
+                "tester",
                 "tester",
                 now,
                 now

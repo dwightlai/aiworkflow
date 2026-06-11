@@ -12,6 +12,9 @@ import { GenerationTemplatesPage } from './pages/research/GenerationTemplatesPag
 import { ResearchCompilationPage } from './pages/research/ResearchCompilationPage';
 import { IdentityOrganizationPage } from './pages/system/IdentityOrganizationPage';
 import { AssetGrantsPage } from './pages/system/AssetGrantsPage';
+import { DictionaryPage } from './pages/system/DictionaryPage';
+import { LogsPage } from './pages/system/LogsPage';
+import { MenusPage } from './pages/system/MenusPage';
 import { OpenApiDocsPage } from './pages/system/OpenApiDocsPage';
 import { IntegrationAppsPage } from './pages/system/IntegrationAppsPage';
 import { TenantsPage } from './pages/system/TenantsPage';
@@ -194,6 +197,30 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     };
   }
 
+  if (pathname === '/system/menus') {
+    return {
+      title: '菜单管理',
+      breadcrumb: ['首页', '系统管理', '菜单管理'],
+      element: <MenusPage />
+    };
+  }
+
+  if (pathname === '/system/dictionary') {
+    return {
+      title: '数据字典',
+      breadcrumb: ['首页', '系统管理', '数据字典'],
+      element: <DictionaryPage />
+    };
+  }
+
+  if (pathname === '/system/logs') {
+    return {
+      title: '日志管理',
+      breadcrumb: ['首页', '系统管理', '日志管理'],
+      element: <LogsPage />
+    };
+  }
+
   if (pathname.startsWith('/knowledge/') && pathname.endsWith('/documents/new')) {
     const knowledgeBaseId = pathname.split('/')[2] ?? '';
     return {
@@ -244,6 +271,7 @@ const routeTitleByPath: Record<string, string> = {
   '/system/asset-grants': '资产授权',
   '/system/integration-apps': '第三方应用',
   '/system/open-api-docs': '开放 API 文档',
+  '/system/menus': '菜单管理',
   '/system/departments': '组织用户',
   '/system/dictionary': '数据字典',
   '/system/jobs': '定时任务',
