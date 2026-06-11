@@ -12,7 +12,7 @@ describe('AdminShell', () => {
     });
     render(
       <QueryClientProvider client={queryClient}>
-        <AdminShell title="工作台" breadcrumb={['首页', 'AI 功能', '工作台']}>
+        <AdminShell breadcrumb={['首页', 'AI 功能', '工作台']}>
           <div>dashboard content</div>
         </AdminShell>
       </QueryClientProvider>

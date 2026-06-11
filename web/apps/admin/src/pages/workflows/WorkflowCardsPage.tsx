@@ -93,13 +93,15 @@ export function WorkflowCardsPage() {
   const workflows = workflowQuery.data?.items ?? [];
   const visibleWorkflows = useMemo(() => {
     const trimmed = keyword.trim().toLowerCase();
-    return workflows.filter((workflow) => {
-      const matchedKeyword = !trimmed ||
-        workflow.name.toLowerCase().includes(trimmed) ||
-        (workflow.description ?? '').toLowerCase().includes(trimmed);
-      const matchedStatus = statusFilter === 'ALL' || workflow.status === statusFilter;
-      return matchedKeyword && matchedStatus;
-    });
+    return workflows
+      .filter((workflow) => {
+        const matchedKeyword = !trimmed ||
+          workflow.name.toLowerCase().includes(trimmed) ||
+          (workflow.description ?? '').toLowerCase().includes(trimmed);
+        const matchedStatus = statusFilter === 'ALL' || workflow.status === statusFilter;
+        return matchedKeyword && matchedStatus;
+      })
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }, [keyword, statusFilter, workflows]);
   const publishedCount = workflows.filter((workflow) => workflow.status === 'PUBLISHED').length;
   const draftCount = workflows.filter((workflow) => workflow.status === 'DRAFT').length;

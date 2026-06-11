@@ -30,7 +30,7 @@ public class InMemoryWorkflowStore implements WorkflowStore {
         return workflows.values().stream()
                 .filter(workflow -> workflow.status() != WorkflowStatus.DELETED)
                 .filter(workflow -> tenantId == null || tenantId.isBlank() || tenantId.equals(workflow.tenantId()))
-                .sorted(Comparator.comparing(Workflow::createdAt))
+                .sorted(Comparator.comparing(Workflow::updatedAt).reversed())
                 .toList();
     }
 

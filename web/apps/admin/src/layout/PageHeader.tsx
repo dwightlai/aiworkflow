@@ -2,14 +2,13 @@ import { Button, Space, Typography } from 'antd';
 import type { AuthUser } from '../api/auth';
 
 export interface PageHeaderProps {
-  title: string;
   breadcrumb: string[];
   currentUser?: AuthUser;
   onLogout?: () => void | Promise<void>;
   onToggleSidebar?: () => void;
 }
 
-export function PageHeader({ title, breadcrumb, currentUser, onLogout, onToggleSidebar }: PageHeaderProps) {
+export function PageHeader({ breadcrumb, currentUser, onLogout, onToggleSidebar }: PageHeaderProps) {
   return (
     <div
       style={{
@@ -27,10 +26,7 @@ export function PageHeader({ title, breadcrumb, currentUser, onLogout, onToggleS
         <Button size="small" onClick={onToggleSidebar} aria-label="折叠菜单">
           ☰
         </Button>
-        <Typography.Text style={{ color: '#1f2937', fontSize: 20, fontWeight: 700 }}>
-          {title}
-        </Typography.Text>
-        <Typography.Text style={{ color: '#8d96a6' }}>
+        <Typography.Text style={{ color: '#5f6b7c', fontSize: 14 }}>
           {breadcrumb.join(' / ')}
         </Typography.Text>
       </Space>

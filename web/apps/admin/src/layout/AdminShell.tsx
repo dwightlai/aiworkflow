@@ -7,7 +7,6 @@ import { PageHeader } from './PageHeader';
 import { getVisibleMenuGroups, mapNavigationToMenuGroups, type AppMenuGroup } from './menu';
 
 export interface AdminShellProps {
-  title: string;
   breadcrumb: string[];
   currentPath?: string;
   currentUser?: AuthUser;
@@ -17,7 +16,6 @@ export interface AdminShellProps {
 }
 
 export function AdminShell({
-  title,
   breadcrumb,
   currentPath = '/',
   currentUser,
@@ -108,7 +106,6 @@ export function AdminShell({
 
       <main style={{ minWidth: 0 }}>
         <PageHeader
-          title={title}
           breadcrumb={breadcrumb}
           currentUser={currentUser}
           onLogout={onLogout}

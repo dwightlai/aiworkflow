@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Drawer, Form, Radio, Select, Space, Typography, message } from 'antd';
-import { useEffect } from 'react';
+import { Button, Drawer, Form, Radio, Space, TreeSelect, Typography, message } from 'antd';
+import { useEffect, useMemo } from 'react';
 import { listAssetGrants, saveAssetGrants, type AssetGrant, type AssetType } from '../api/assetGrants';
 import { listOrganizations } from '../api/identity';
 import { resolveIdentityTenantId } from '../api/auth';
+import { buildDepartmentPickerTree, buildOrganizationTreeByType, filterDepartmentIds, toTreeSelectData } from '../utils/organizationTree';
 
 export interface AssetGrantDrawerProps {
   open: boolean;
@@ -75,8 +76,14 @@ export function AssetGrantDrawer({
     enabled: open && Boolean(assetId)
   });
   const organizations = organizationsQuery.data?.items ?? [];
-  const unitOptions = organizations.filter((item) => item.orgType === 'UNIT').map((item) => ({ value: item.id, label: item.name }));
-  const departmentOptions = organizations.filter((item) => item.orgType === 'DEPARTMENT').map((item) => ({ value: item.id, label: item.name }));
+  const unitTreeData = useMemo(
+    () => toTreeSelectData(buildOrganizationTreeByType(organizations, 'UNIT')),
+    [organizations]
+  );
+  const departmentTreeData = useMemo(
+    () => buildDepartmentPickerTree(organizations),
+    [organizations]
+  );
 
   const saveMutation = useMutation({
     mutationFn: (values: GrantFormValues) => {
@@ -140,25 +147,51 @@ export function AssetGrantDrawer({
     >
       <Form form={form} layout="vertical" initialValues={{ unitIds: [], unitScope: 'SELF', departmentIds: [], departmentScope: 'SELF' }} onFinish={(values) => saveMutation.mutate(values)}>
         <Form.Item label="授权单位">
-          <Space align="start" wrap style={{ width: '100%' }}>
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
             <Form.Item name="unitIds" noStyle>
-              <Select mode="multiple" allowClear placeholder="不选表示全部单位" style={{ minWidth: 320 }} loading={organizationsQuery.isLoading} options={unitOptions} />
+              <TreeSelect
+                treeCheckable
+                multiple
+                allowClear
+                showCheckedStrategy={TreeSelect.SHOW_ALL}
+                treeDefaultExpandAll
+                placeholder="不选表示全部单位"
+                style={{ width: '100%' }}
+                loading={organizationsQuery.isLoading}
+                treeData={unitTreeData}
+                maxTagCount="responsive"
+              />
             </Form.Item>
-            <Form.Item name="unitScope" noStyle rules={[{ required: true }]}>
-              <Radio.Group optionType="button" options={[{ value: 'SELF', label: '仅本单位' }, { value: 'SUBTREE', label: '本级及下属' }]} />
-            </Form.Item>
-            <Typography.Text type="secondary">不选=全部单位</Typography.Text>
+            <Space wrap>
+              <Form.Item name="unitScope" noStyle rules={[{ required: true }]}>
+                <Radio.Group optionType="button" options={[{ value: 'SELF', label: '仅本单位' }, { value: 'SUBTREE', label: '本级及下属' }]} />
+              </Form.Item>
+              <Typography.Text type="secondary">不选=全部单位</Typography.Text>
+            </Space>
           </Space>
         </Form.Item>
         <Form.Item label="授权部门">
-          <Space align="start" wrap style={{ width: '100%' }}>
-            <Form.Item name="departmentIds" noStyle>
-              <Select mode="multiple" allowClear placeholder="不选表示全部部门" style={{ minWidth: 320 }} loading={organizationsQuery.isLoading} options={departmentOptions} />
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Form.Item name="departmentIds" noStyle getValueFromEvent={(values: string[]) => filterDepartmentIds(values ?? [], organizations)}>
+              <TreeSelect
+                treeCheckable
+                multiple
+                allowClear
+                showCheckedStrategy={TreeSelect.SHOW_CHILD}
+                treeDefaultExpandAll
+                placeholder="不选表示全部部门"
+                style={{ width: '100%' }}
+                loading={organizationsQuery.isLoading}
+                treeData={departmentTreeData}
+                maxTagCount="responsive"
+              />
             </Form.Item>
-            <Form.Item name="departmentScope" noStyle rules={[{ required: true }]}>
-              <Radio.Group optionType="button" options={[{ value: 'SELF', label: '仅本部门' }, { value: 'SUBTREE', label: '本级及下属' }]} />
-            </Form.Item>
-            <Typography.Text type="secondary">不选=全部部门</Typography.Text>
+            <Space wrap>
+              <Form.Item name="departmentScope" noStyle rules={[{ required: true }]}>
+                <Radio.Group optionType="button" options={[{ value: 'SELF', label: '仅本部门' }, { value: 'SUBTREE', label: '本级及下属' }]} />
+              </Form.Item>
+              <Typography.Text type="secondary">不选=全部部门</Typography.Text>
+            </Space>
           </Space>
         </Form.Item>
       </Form>

@@ -42,7 +42,6 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         {session ? (
           <AdminShell
-            title={route.title}
             breadcrumb={route.breadcrumb}
             currentPath={pathname}
             currentUser={session.user}
