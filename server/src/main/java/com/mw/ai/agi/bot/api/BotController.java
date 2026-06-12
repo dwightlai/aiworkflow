@@ -2,6 +2,7 @@ package com.mw.ai.agi.bot.api;
 
 import com.mw.ai.agi.bot.domain.AiBot;
 import com.mw.ai.agi.bot.domain.BotChatResult;
+import com.mw.ai.agi.bot.domain.BotCapability;
 import com.mw.ai.agi.bot.domain.BotMessage;
 import com.mw.ai.agi.bot.domain.BotRunResult;
 import com.mw.ai.agi.bot.domain.BotSession;
@@ -54,6 +55,8 @@ public class BotController {
                 body.knowledgeBaseIds(),
                 body.systemPrompt(),
                 body.openingMessage(),
+                body.capabilityHint(),
+                body.suggestedQuestions(),
                 body.status()
         ));
     }
@@ -71,6 +74,8 @@ public class BotController {
                 body.knowledgeBaseIds(),
                 body.systemPrompt(),
                 body.openingMessage(),
+                body.capabilityHint(),
+                body.suggestedQuestions(),
                 body.status()
         ));
     }
@@ -129,6 +134,49 @@ public class BotController {
         ));
     }
 
+    @GetMapping("/{id}/capabilities")
+    public ApiResponse<PageResponse<BotCapability>> capabilities(@PathVariable String id) {
+        List<BotCapability> items = botService.listCapabilities(id);
+        return ApiResponse.success(new PageResponse<>(items, items.size()));
+    }
+
+    @PostMapping("/{id}/capabilities")
+    public ApiResponse<BotCapability> createCapability(@PathVariable String id, @RequestBody SaveBotCapabilityRequest body) {
+        return ApiResponse.success(botService.createCapability(
+                id,
+                body.capabilityType() == null ? "WORKFLOW" : body.capabilityType(),
+                body.capabilityId(),
+                body.capabilityCode(),
+                body.routingKeywords(),
+                Boolean.TRUE.equals(body.primaryCapability()),
+                body.enabled() == null || body.enabled()
+        ));
+    }
+
+    @PutMapping("/{id}/capabilities/{capabilityId}")
+    public ApiResponse<BotCapability> updateCapability(
+            @PathVariable String id,
+            @PathVariable String capabilityId,
+            @RequestBody SaveBotCapabilityRequest body
+    ) {
+        return ApiResponse.success(botService.updateCapability(
+                id,
+                capabilityId,
+                body.capabilityType(),
+                body.capabilityId(),
+                body.capabilityCode(),
+                body.routingKeywords(),
+                body.primaryCapability(),
+                body.enabled()
+        ));
+    }
+
+    @DeleteMapping("/{id}/capabilities/{capabilityId}")
+    public ApiResponse<Void> deleteCapability(@PathVariable String id, @PathVariable String capabilityId) {
+        botService.deleteCapability(id, capabilityId);
+        return ApiResponse.success(null);
+    }
+
     private Map<String, Object> safeInput(Map<String, Object> input) {
         return input == null ? Map.of() : input;
     }
@@ -143,6 +191,8 @@ public class BotController {
             List<String> knowledgeBaseIds,
             String systemPrompt,
             String openingMessage,
+            String capabilityHint,
+            List<String> suggestedQuestions,
             BotStatus status
     ) {
     }
@@ -165,6 +215,16 @@ public class BotController {
     }
 
     public record PageResponse<T>(List<T> items, long total) {
+    }
+
+    public record SaveBotCapabilityRequest(
+            String capabilityType,
+            String capabilityId,
+            String capabilityCode,
+            String routingKeywords,
+            Boolean primaryCapability,
+            Boolean enabled
+    ) {
     }
 }
 

@@ -99,7 +99,7 @@ function navigateTo(path: string) {
 }
 
 const moduleProfiles: Record<string, { description: string; phase: string; progress: number; capabilities: string[] }> = {
-  '智能体 Bots': {
+  '智能体': {
     description: '把已发布工作流包装成可对话、可配置、可投放的智能体应用。',
     phase: '后续阶段',
     progress: 35,

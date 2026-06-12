@@ -92,6 +92,7 @@ public class MybatisBotStore implements BotStore {
     public List<BotSession> listSessions(String botId) {
         return sessionMapper.selectList(new LambdaQueryWrapper<BotSessionEntity>()
                         .eq(BotSessionEntity::getBotId, botId)
+                        .orderByDesc(BotSessionEntity::getPinned)
                         .orderByDesc(BotSessionEntity::getUpdatedAt))
                 .stream()
                 .map(this::toDomain)
@@ -106,6 +107,16 @@ public class MybatisBotStore implements BotStore {
                 .stream()
                 .findFirst()
                 .map(this::toDomain);
+    }
+
+    @Override
+    public void deleteSession(String botId, String sessionId) {
+        messageMapper.delete(new LambdaQueryWrapper<BotMessageEntity>()
+                .eq(BotMessageEntity::getBotId, botId)
+                .eq(BotMessageEntity::getSessionId, sessionId));
+        sessionMapper.delete(new LambdaQueryWrapper<BotSessionEntity>()
+                .eq(BotSessionEntity::getBotId, botId)
+                .eq(BotSessionEntity::getId, sessionId));
     }
 
     @Override
@@ -138,6 +149,8 @@ public class MybatisBotStore implements BotStore {
         entity.setKnowledgeBaseIds(writeKnowledgeBaseIds(bot.knowledgeBaseIds()));
         entity.setSystemPrompt(bot.systemPrompt());
         entity.setOpeningMessage(bot.openingMessage());
+        entity.setCapabilityHint(bot.capabilityHint());
+        entity.setSuggestedQuestions(writeSuggestedQuestions(bot.suggestedQuestions()));
         entity.setStatus(bot.status().name());
         entity.setConversationCount(bot.conversationCount());
         entity.setPublishedAt(bot.publishedAt());
@@ -161,6 +174,8 @@ public class MybatisBotStore implements BotStore {
                 readKnowledgeBaseIds(entity.getKnowledgeBaseIds()),
                 entity.getSystemPrompt(),
                 entity.getOpeningMessage(),
+                entity.getCapabilityHint(),
+                readSuggestedQuestions(entity.getSuggestedQuestions()),
                 BotStatus.valueOf(entity.getStatus()),
                 entity.getConversationCount(),
                 entity.getPublishedAt(),
@@ -169,6 +184,20 @@ public class MybatisBotStore implements BotStore {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    private List<String> readSuggestedQuestions(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return jsonSupport.read(value, STRING_LIST_TYPE);
+    }
+
+    private String writeSuggestedQuestions(List<String> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return null;
+        }
+        return jsonSupport.write(questions);
     }
 
     private String writeKnowledgeBaseIds(List<String> knowledgeBaseIds) {
@@ -193,6 +222,8 @@ public class MybatisBotStore implements BotStore {
         entity.setBotId(session.botId());
         entity.setTitle(session.title());
         entity.setMessageCount(session.messageCount());
+        entity.setPinned(session.pinned());
+        entity.setUserId(session.userId());
         entity.setCreatedAt(session.createdAt());
         entity.setUpdatedAt(session.updatedAt());
         return entity;
@@ -205,7 +236,9 @@ public class MybatisBotStore implements BotStore {
                 entity.getTitle(),
                 entity.getMessageCount(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                Boolean.TRUE.equals(entity.getPinned()),
+                entity.getUserId()
         );
     }
 
@@ -216,6 +249,8 @@ public class MybatisBotStore implements BotStore {
         entity.setBotId(message.botId());
         entity.setRole(message.role().name());
         entity.setContent(message.content());
+        entity.setMetadata(message.metadata().isEmpty() ? null : jsonSupport.write(message.metadata()));
+        entity.setMessageType(message.messageType());
         entity.setCreatedAt(message.createdAt());
         return entity;
     }
@@ -227,7 +262,16 @@ public class MybatisBotStore implements BotStore {
                 entity.getBotId(),
                 BotMessageRole.valueOf(entity.getRole()),
                 entity.getContent(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                readMetadata(entity.getMetadata()),
+                entity.getMessageType()
         );
+    }
+
+    private java.util.Map<String, Object> readMetadata(String value) {
+        if (value == null || value.isBlank()) {
+            return java.util.Map.of();
+        }
+        return jsonSupport.readMap(value);
     }
 }

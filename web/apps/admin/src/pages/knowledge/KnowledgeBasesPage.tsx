@@ -563,6 +563,10 @@ export function KnowledgeBasesPage() {
     value: store.id,
     label: `${store.name} · ${store.storeType}`
   }));
+  const vectorStoreNameMap = useMemo(
+    () => new Map(vectorStores.map((store) => [store.id, store.name])),
+    [vectorStores]
+  );
   const embeddingModelOptions = modelProviders
     .filter((provider) => provider.enabled && provider.modelUsage === 'EMBEDDING')
     .map((provider) => ({
@@ -585,7 +589,12 @@ export function KnowledgeBasesPage() {
     {
       title: '向量库配置',
       width: 180,
-      render: (_, base) => <Tag color={base.vectorStoreConfigId ? 'geekblue' : 'default'}>{base.vectorStoreConfigId || '默认内存'}</Tag>
+      render: (_, base) => {
+        const label = base.vectorStoreConfigId
+          ? vectorStoreNameMap.get(base.vectorStoreConfigId) ?? '未知配置'
+          : '默认内存';
+        return <Tag color={base.vectorStoreConfigId ? 'geekblue' : 'default'}>{label}</Tag>;
+      }
     },
     {
       title: '向量维度',

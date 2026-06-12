@@ -47,10 +47,26 @@ public class LlmNodeExecutor implements WorkflowNodeExecutor {
         Object promptValue = userPrompt.isBlank() ? TemplateRenderer.resolvePath(nodeContext, promptKey) : TemplateRenderer.render(userPrompt, nodeContext);
         String prompt = promptValue == null ? "" : String.valueOf(promptValue);
         String systemMessage = optionalStringConfig(node, "systemMessage", optionalStringConfig(node, "systemPrompt", ""));
+        if (systemMessage.isBlank()) {
+            Object botSystemPrompt = nodeContext.get("systemPrompt");
+            if (botSystemPrompt != null && !String.valueOf(botSystemPrompt).isBlank()) {
+                systemMessage = String.valueOf(botSystemPrompt);
+            }
+        }
         if (!systemMessage.isBlank()) {
             prompt = TemplateRenderer.render(systemMessage, nodeContext) + "\n\n" + prompt;
         }
-        String response = chatModelClient.generate(providerId, model, prompt, modelOptions(node));
+        final String finalPrompt = prompt;
+        Map<String, Object> options = modelOptions(node);
+        String response = WorkflowStreamContext.current()
+                .map(sink -> chatModelClient.generateStream(
+                        providerId,
+                        model,
+                        finalPrompt,
+                        options,
+                        sink::emitLlmDelta
+                ))
+                .orElseGet(() -> chatModelClient.generate(providerId, model, finalPrompt, options));
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("content", response);
         output.put("reasoning_content", "");

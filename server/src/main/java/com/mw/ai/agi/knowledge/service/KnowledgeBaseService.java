@@ -31,6 +31,7 @@ import java.util.UUID;
 @Service
 public class KnowledgeBaseService {
     private static final int DEFAULT_VECTOR_DIMENSION = 1536;
+    private static final int DEFAULT_MIN_RELEVANCE_SCORE = 350;
     private static final int EMBEDDING_BACKFILL_BATCH_SIZE = 16;
     private static final String DEFAULT_SPLITTER_TYPE = "SIMPLE_TEXT";
     private static final int DEFAULT_CHUNK_SIZE = 500;
@@ -562,15 +563,15 @@ public class KnowledgeBaseService {
                     .filter(result -> result.score() > 0)
                     .toList();
             if (!"HYBRID".equalsIgnoreCase(knowledgeBase.retrievalMode())) {
-                return vectorResults.stream().limit(limit).toList();
+                return applyRelevanceThreshold(vectorResults.stream().limit(limit).toList());
             }
-            return mergeSearchResults(vectorResults, localKeywordResults(knowledgeBaseId, terms), limit);
+            return applyRelevanceThreshold(mergeSearchResults(vectorResults, localKeywordResults(knowledgeBaseId, terms), limit));
         }
         Map<String, KnowledgeChunkVector> vectorsByChunkId = vectorsByChunkId(knowledgeBaseId);
         List<Double> queryEmbedding = shouldUseVector(knowledgeBase)
                 ? embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), query)
                 : List.of();
-        return store.listChunks(knowledgeBaseId).stream()
+        List<KnowledgeSearchResult> results = store.listChunks(knowledgeBaseId).stream()
                 .filter(KnowledgeChunk::enabled)
                 .map(chunk -> new KnowledgeSearchResult(
                         chunk.id(),
@@ -582,6 +583,7 @@ public class KnowledgeBaseService {
                 .sorted(Comparator.comparingInt(KnowledgeSearchResult::score).reversed())
                 .limit(limit)
                 .toList();
+        return applyRelevanceThreshold(results);
     }
 
     public List<KnowledgeSearchResult> searchMany(List<String> knowledgeBaseIds, String query, int topK) {
@@ -610,10 +612,10 @@ public class KnowledgeBaseService {
                         ));
             }
         }
-        return merged.values().stream()
+        return applyRelevanceThreshold(merged.values().stream()
                 .sorted(Comparator.comparingInt(KnowledgeSearchResult::score).reversed())
                 .limit(limit)
-                .toList();
+                .toList());
     }
 
     public List<KnowledgeSearchResult> searchDocument(String knowledgeBaseId, String documentId, String query, int topK) {
@@ -634,7 +636,7 @@ public class KnowledgeBaseService {
         List<Double> queryEmbedding = shouldUseVector(knowledgeBase)
                 ? embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), query)
                 : List.of();
-        return store.listChunks(knowledgeBaseId, documentId).stream()
+        List<KnowledgeSearchResult> results = store.listChunks(knowledgeBaseId, documentId).stream()
                 .filter(KnowledgeChunk::enabled)
                 .map(chunk -> new KnowledgeSearchResult(
                         chunk.id(),
@@ -646,6 +648,7 @@ public class KnowledgeBaseService {
                 .sorted(Comparator.comparingInt(KnowledgeSearchResult::score).reversed())
                 .limit(limit)
                 .toList();
+        return applyRelevanceThreshold(results);
     }
 
     private List<KnowledgeSearchResult> localKeywordResults(String knowledgeBaseId, Set<String> terms) {
@@ -1042,27 +1045,77 @@ public class KnowledgeBaseService {
     private Set<String> tokenize(String query) {
         String normalized = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();
         Set<String> terms = new LinkedHashSet<>();
+        if (normalized.isBlank()) {
+            return terms;
+        }
         for (String term : normalized.split("[\\s,\\uFF0C\\u3002\\uFF1B;:\\uFF1A]+")) {
             if (!term.isBlank()) {
                 terms.add(term);
+                appendCjkTerms(term, terms);
             }
         }
-        normalized.codePoints()
-                .filter(Character::isLetterOrDigit)
-                .mapToObj(Character::toString)
-                .forEach(terms::add);
         return terms;
+    }
+
+    private void appendCjkTerms(String text, Set<String> terms) {
+        StringBuilder run = new StringBuilder();
+        for (int index = 0; index < text.length(); index++) {
+            char ch = text.charAt(index);
+            if (isCjk(ch)) {
+                run.append(ch);
+                continue;
+            }
+            flushCjkRun(run, terms);
+            run.setLength(0);
+        }
+        flushCjkRun(run, terms);
+    }
+
+    private void flushCjkRun(StringBuilder run, Set<String> terms) {
+        if (run.length() < 2) {
+            return;
+        }
+        String segment = run.toString();
+        terms.add(segment);
+        for (int index = 0; index < segment.length() - 1; index++) {
+            terms.add(segment.substring(index, index + 2));
+        }
+    }
+
+    private boolean isCjk(char ch) {
+        Character.UnicodeBlock block = Character.UnicodeBlock.of(ch);
+        return block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
+                || block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
+                || block == Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS;
     }
 
     private int score(String content, Set<String> terms) {
         String normalized = content.toLowerCase(Locale.ROOT);
         int score = 0;
+        boolean matchedSignificantTerm = false;
         for (String term : terms) {
-            if (!term.isBlank() && normalized.contains(term)) {
-                score += term.length() > 1 ? 2 : 1;
+            if (term.isBlank() || !normalized.contains(term)) {
+                continue;
+            }
+            if (term.length() >= 2) {
+                matchedSignificantTerm = true;
+                score += term.length() * 10;
             }
         }
-        return score;
+        return matchedSignificantTerm ? score : 0;
+    }
+
+    private List<KnowledgeSearchResult> applyRelevanceThreshold(List<KnowledgeSearchResult> results) {
+        if (results.isEmpty()) {
+            return results;
+        }
+        int maxScore = results.stream().mapToInt(KnowledgeSearchResult::score).max().orElse(0);
+        if (maxScore < DEFAULT_MIN_RELEVANCE_SCORE) {
+            return List.of();
+        }
+        return results.stream()
+                .filter(result -> result.score() >= DEFAULT_MIN_RELEVANCE_SCORE)
+                .toList();
     }
 
     private String defaultString(String value, String fallback) {

@@ -23,6 +23,8 @@ import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
 import { WorkflowDesignerPage } from './pages/workflows/WorkflowDesignerPage';
 import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
 import { WorkflowRunsPage } from './pages/workflows/WorkflowRunsPage';
+import { ConnectorsPage } from './pages/connectors/ConnectorsPage';
+import { AgentAuditPage } from './pages/agent/AgentAuditPage';
 
 export interface ResolvedRoute {
   title: string;
@@ -49,9 +51,25 @@ export function resolveRoute(pathname: string): ResolvedRoute {
 
   if (pathname === '/bots') {
     return {
-      title: '智能体 Bots',
-      breadcrumb: ['首页', 'AI 功能', '智能体 Bots'],
+      title: '智能体',
+      breadcrumb: ['首页', 'AI 功能', '智能体'],
       element: <BotsPage />
+    };
+  }
+
+  if (pathname === '/connectors') {
+    return {
+      title: '连接器',
+      breadcrumb: ['首页', 'AI 功能', '连接器'],
+      element: <ConnectorsPage />
+    };
+  }
+
+  if (pathname === '/agent-audit') {
+    return {
+      title: '智能体审计',
+      breadcrumb: ['首页', 'AI 功能', '智能体审计'],
+      element: <AgentAuditPage />
     };
   }
 
@@ -257,7 +275,8 @@ export function resolveRoute(pathname: string): ResolvedRoute {
 }
 
 const routeTitleByPath: Record<string, string> = {
-  '/bots': '智能体 Bots',
+  '/bots': '智能体',
+  '/connectors': '连接器',
   '/prompts': 'Prompt',
   '/knowledge': '知识库',
   '/research/templates': '编研模板',

@@ -386,6 +386,15 @@ java -jar aiworkflow-server.jar \
 
 ### 5.2 Admin Token 管理（JWT）
 
+Admin API 的 JWT 来源于 **AGI 自身的认证系统**，通过"服务账号代登录"机制获取，流程如下：
+
+1. **创建服务账号**：在 AGI 的 `tenant_archive` 租户下预先创建服务账号（如 `svc_archive_admin`），设置密码（对应 Phase 1 的"创建 iframe 代登录服务账号"步骤）。
+2. **BFF 代登录换 JWT**：档案馆后端 `AgiAuthService` 拿服务账号的用户名/密码，调 AGI 的 `/api/auth/*` 登录接口，换取 JWT `accessToken`。
+3. **缓存复用**：获取到的 JWT 缓存在 BFF 内存中，每次使用前检查是否快过期（提前 60 秒），快过期时自动重新代登录刷新。
+4. **注入 Feign 请求**：JWT 通过 `RequestInterceptor` 以 `Bearer <token>` 形式注入到 Admin Feign Client 的请求头中。
+
+> **安全保证**：JWT 全程只存在于档案馆 BFF 内存中，不下发到浏览器，不暴露给前端。
+
 档案馆 BFF 内部维护一个服务账号的 JWT，用于调用管理 API：
 
 ```java

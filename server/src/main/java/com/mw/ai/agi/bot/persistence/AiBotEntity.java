@@ -19,6 +19,8 @@ public class AiBotEntity {
     private String knowledgeBaseIds;
     private String systemPrompt;
     private String openingMessage;
+    private String capabilityHint;
+    private String suggestedQuestions;
     private String status;
     private Integer conversationCount;
     private Instant publishedAt;
@@ -113,6 +115,22 @@ public class AiBotEntity {
 
     public void setOpeningMessage(String openingMessage) {
         this.openingMessage = openingMessage;
+    }
+
+    public String getCapabilityHint() {
+        return capabilityHint;
+    }
+
+    public void setCapabilityHint(String capabilityHint) {
+        this.capabilityHint = capabilityHint;
+    }
+
+    public String getSuggestedQuestions() {
+        return suggestedQuestions;
+    }
+
+    public void setSuggestedQuestions(String suggestedQuestions) {
+        this.suggestedQuestions = suggestedQuestions;
     }
 
     public String getStatus() {

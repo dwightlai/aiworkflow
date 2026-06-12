@@ -86,6 +86,61 @@ class OpenAiCompatibleChatModelClientTest {
         assertThat(captured.body).contains("\"temperature\":0.2");
     }
 
+    @Test
+    void streamsOpenAiCompatibleChatCompletionDeltas() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        StringBuilder capturedBody = new StringBuilder();
+        server.createContext("/v1/chat/completions", exchange -> {
+            capturedBody.append(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] response = """
+                    data: {"choices":[{"delta":{"content":"你"}}]}
+
+                    data: {"choices":[{"delta":{"content":"好"}}]}
+
+                    data: [DONE]
+
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        InMemoryModelProviderStore store = new InMemoryModelProviderStore();
+        store.save(new ModelProvider(
+                "provider-1",
+                "tenant_default",
+                null,
+                "deepseek-chat",
+                "DeepSeek",
+                "CHAT",
+                null,
+                false,
+                BigDecimal.ONE,
+                "http://localhost:" + server.getAddress().getPort() + "/v1",
+                "deepseek-chat",
+                "secret-key",
+                true,
+                null,
+                null,
+                Instant.now(),
+                Instant.now()
+        ));
+        OpenAiCompatibleChatModelClient client = new OpenAiCompatibleChatModelClient(
+                new ModelProviderService(store),
+                new ObjectMapper(),
+                HttpClient.newHttpClient()
+        );
+        StringBuilder streamed = new StringBuilder();
+
+        String answer = client.generateStream("provider-1", "ignored-model", "hello", Map.of(), streamed::append);
+
+        assertThat(answer).isEqualTo("你好");
+        assertThat(streamed).hasToString("你好");
+        assertThat(capturedBody).contains("\"stream\":true");
+    }
+
     private static class CapturedRequest {
         String authorization;
         String body;

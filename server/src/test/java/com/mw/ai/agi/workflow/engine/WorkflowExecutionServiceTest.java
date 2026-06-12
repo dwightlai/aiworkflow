@@ -38,7 +38,9 @@ class WorkflowExecutionServiceTest {
                     new EndNodeExecutor(),
                     new TextTransformNodeExecutor(),
                     new ConditionNodeExecutor()
-            ))
+            )),
+            null,
+            null
     );
 
     @BeforeEach
@@ -132,7 +134,7 @@ class WorkflowExecutionServiceTest {
                         new TextTransformNodeExecutor(),
                         new EndNodeExecutor()
                 ))
-        );
+        , null, null);
         Workflow workflow = createAndPublishWorkflow(questionClassifierDefinition());
 
         WorkflowExecutionResult result = classifierExecutionService.runWorkflow(new WorkflowExecutionRequest(
@@ -158,7 +160,7 @@ class WorkflowExecutionServiceTest {
                         new TextTransformNodeExecutor(),
                         new EndNodeExecutor()
                 ))
-        );
+        , null, null);
         Workflow workflow = createAndPublishWorkflow(new WorkflowDefinition(
                 List.of(
                         node("start", WorkflowNodeType.START, Map.of()),
@@ -220,7 +222,7 @@ class WorkflowExecutionServiceTest {
                         new LlmNodeExecutor((provider, model, prompt, options) -> "llm:" + prompt, modelProviderService),
                         new EndNodeExecutor()
                 ))
-        );
+        , null, null);
         Workflow workflow = createAndPublishWorkflow(aiflowyStyleAiDefinition(knowledgeBase.id(), providerId));
 
         WorkflowExecutionResult result = aiExecutionService.runWorkflow(new WorkflowExecutionRequest(

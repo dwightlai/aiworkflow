@@ -4,13 +4,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-final class TemplateRenderer {
+public final class TemplateRenderer {
     private static final Pattern TEMPLATE_TOKEN_PATTERN = Pattern.compile("\\{\\{\\s*([^{}\\s]+)\\s*}}|\\$\\{\\s*([^{}\\s]+)\\s*}|\\{\\s*([\\p{L}\\p{N}_.\\-\\[\\]]+)\\s*}");
 
     private TemplateRenderer() {
     }
 
-    static String render(String template, Map<String, Object> context) {
+    public static String render(String template, Map<String, Object> context) {
         Matcher matcher = TEMPLATE_TOKEN_PATTERN.matcher(template == null ? "" : template);
         StringBuilder rendered = new StringBuilder();
         while (matcher.find()) {

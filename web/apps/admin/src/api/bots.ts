@@ -25,6 +25,8 @@ export interface Bot {
   knowledgeBaseIds: string[];
   systemPrompt: string;
   openingMessage: string;
+  capabilityHint?: string | null;
+  suggestedQuestions?: string[];
   status: BotStatus;
   conversationCount: number;
   publishedAt?: string | null;
@@ -49,6 +51,8 @@ export interface BotMessage {
   botId: string;
   role: BotMessageRole;
   content: string;
+  messageType?: string;
+  metadata?: Record<string, unknown>;
   createdAt?: string;
 }
 
@@ -62,6 +66,8 @@ export interface SaveBotRequest {
   knowledgeBaseIds: string[];
   systemPrompt: string;
   openingMessage: string;
+  capabilityHint?: string | null;
+  suggestedQuestions?: string[];
   status: BotStatus;
 }
 
@@ -130,5 +136,47 @@ export async function chatBot(id: string, request: ChatBotRequest): Promise<BotC
     method: 'POST',
     body: JSON.stringify(request)
   });
+}
+
+export interface BotCapability {
+  id: string;
+  botId: string;
+  capabilityType: string;
+  capabilityId: string;
+  capabilityCode: string | null;
+  routingKeywords: string | null;
+  primaryCapability: boolean;
+  enabled: boolean;
+}
+
+export interface SaveBotCapabilityRequest {
+  capabilityType?: string;
+  capabilityId: string;
+  capabilityCode?: string | null;
+  routingKeywords?: string | null;
+  primaryCapability?: boolean;
+  enabled?: boolean;
+}
+
+export async function listBotCapabilities(botId: string): Promise<PageResponse<BotCapability>> {
+  return requestJson<PageResponse<BotCapability>>(`/api/bots/${botId}/capabilities`);
+}
+
+export async function createBotCapability(botId: string, request: SaveBotCapabilityRequest): Promise<BotCapability> {
+  return requestJson<BotCapability>(`/api/bots/${botId}/capabilities`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function updateBotCapability(botId: string, capabilityId: string, request: SaveBotCapabilityRequest): Promise<BotCapability> {
+  return requestJson<BotCapability>(`/api/bots/${botId}/capabilities/${capabilityId}`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function deleteBotCapability(botId: string, capabilityId: string): Promise<void> {
+  await requestJson<void>(`/api/bots/${botId}/capabilities/${capabilityId}`, { method: 'DELETE' });
 }
 

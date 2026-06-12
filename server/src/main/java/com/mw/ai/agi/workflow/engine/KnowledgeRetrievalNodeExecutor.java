@@ -30,7 +30,7 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
         String queryKey = optionalStringConfig(node, "queryKey", "question");
         String outputKey = optionalStringConfig(node, "outputKey", "documents");
         int topK = intConfig(node, "fetchCount", intConfig(node, "topK", 3));
-        double similarityThreshold = doubleConfig(node, "similarityThreshold", 0.0d);
+        double similarityThreshold = doubleConfig(node, "similarityThreshold", 0.35d);
         Map<String, Object> nodeContext = new LinkedHashMap<>(context.context());
         nodeContext.putAll(resolveInputParams(node, context.context()));
         String queryTemplate = optionalStringConfig(node, "queryText", optionalStringConfig(node, "keywordTemplate", ""));
@@ -50,6 +50,7 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
                 .sorted((left, right) -> Integer.compare(right.score(), left.score()))
                 .limit(topK)
                 .toList();
+        WorkflowStreamCitationSupport.emitKnowledgeResults(results);
         return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, results));
     }
 

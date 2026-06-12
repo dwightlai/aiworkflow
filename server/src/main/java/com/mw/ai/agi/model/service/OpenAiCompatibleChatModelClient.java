@@ -7,11 +7,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -50,6 +54,42 @@ public class OpenAiCompatibleChatModelClient implements ChatModelClient {
         if (actualModel == null) {
             throw new IllegalStateException("Chat model is required for provider: " + providerId);
         }
+        Map<String, Object> request = buildChatRequest(actualModel, prompt, options);
+        HttpResponse<String> response = postJson(normalizeEndpoint(provider.baseUrl()) + "/chat/completions", provider.apiKeyRef(), request);
+        assertSuccessful(response);
+        return parseAnswer(response.body());
+    }
+
+    @Override
+    public String generateStream(
+            String providerId,
+            String model,
+            String prompt,
+            Map<String, Object> options,
+            ChatModelStreamConsumer consumer
+    ) {
+        ModelProvider provider = modelProviderService.get(providerId);
+        if (ModelProviderStubSupport.isStubPlaceholder(provider)) {
+            return new StubChatModelClient().generateStream(providerId, model, prompt, options, consumer);
+        }
+        validateProvider(provider);
+        String actualModel = firstNonBlank(provider.model(), model);
+        if (actualModel == null) {
+            throw new IllegalStateException("Chat model is required for provider: " + providerId);
+        }
+        Map<String, Object> request = buildChatRequest(actualModel, prompt, options);
+        request.put("stream", true);
+
+        HttpResponse<InputStream> response = postJsonStream(
+                normalizeEndpoint(provider.baseUrl()) + "/chat/completions",
+                provider.apiKeyRef(),
+                request
+        );
+        assertSuccessfulStream(response);
+        return readStreamDeltas(response.body(), consumer);
+    }
+
+    private Map<String, Object> buildChatRequest(String actualModel, String prompt, Map<String, Object> options) {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("model", actualModel);
         request.put("messages", new Object[]{
@@ -62,10 +102,7 @@ public class OpenAiCompatibleChatModelClient implements ChatModelClient {
             copySupportedOption(options, request, "presence_penalty");
             copySupportedOption(options, request, "frequency_penalty");
         }
-
-        HttpResponse<String> response = postJson(normalizeEndpoint(provider.baseUrl()) + "/chat/completions", provider.apiKeyRef(), request);
-        assertSuccessful(response);
-        return parseAnswer(response.body());
+        return request;
     }
 
     private HttpResponse<String> postJson(String uri, String apiKey, Map<String, Object> body) {
@@ -84,6 +121,84 @@ public class OpenAiCompatibleChatModelClient implements ChatModelClient {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Chat model provider call was interrupted", exception);
         }
+    }
+
+    private HttpResponse<InputStream> postJsonStream(String uri, String apiKey, Map<String, Object> body) {
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri))
+                    .timeout(Duration.ofMinutes(2))
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "text/event-stream")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(objectMapper.writeValueAsBytes(body)));
+            if (apiKey != null && !apiKey.isBlank()) {
+                builder.header("Authorization", "Bearer " + apiKey.strip());
+            }
+            return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to call chat model provider", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Chat model provider call was interrupted", exception);
+        }
+    }
+
+    private String readStreamDeltas(InputStream body, ChatModelStreamConsumer consumer) {
+        StringBuilder full = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data:")) {
+                    continue;
+                }
+                String payload = line.substring(5).trim();
+                if (payload.isEmpty() || "[DONE]".equals(payload)) {
+                    continue;
+                }
+                String delta = parseStreamDelta(payload);
+                if (delta == null || delta.isEmpty()) {
+                    continue;
+                }
+                full.append(delta);
+                if (consumer != null) {
+                    consumer.onDelta(delta);
+                }
+            }
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to read chat model stream", exception);
+        }
+        return full.toString();
+    }
+
+    private String parseStreamDelta(String payload) {
+        try {
+            JsonNode choices = objectMapper.readTree(payload).path("choices");
+            if (!choices.isArray() || choices.isEmpty()) {
+                return null;
+            }
+            JsonNode deltaNode = choices.get(0).path("delta").path("content");
+            if (deltaNode.isTextual()) {
+                return deltaNode.asText();
+            }
+            JsonNode textNode = choices.get(0).path("text");
+            return textNode.isTextual() ? textNode.asText() : null;
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to parse chat model stream chunk", exception);
+        }
+    }
+
+    private void assertSuccessfulStream(HttpResponse<InputStream> response) {
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            return;
+        }
+        String errorBody = "";
+        try (InputStream body = response.body()) {
+            if (body != null) {
+                errorBody = new String(body.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        } catch (IOException ignored) {
+        }
+        throw new IllegalStateException("Chat model provider stream request failed: "
+                + response.statusCode() + " " + errorBody);
     }
 
     private String parseAnswer(String body) {

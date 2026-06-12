@@ -1,10 +1,12 @@
 package com.mw.ai.agi.workflow.engine;
 
+import com.mw.ai.agi.connector.service.ConnectorRuntimeService;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -27,10 +29,17 @@ public class HttpToolNodeExecutor implements WorkflowNodeExecutor {
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final ConnectorRuntimeService connectorRuntimeService;
 
     public HttpToolNodeExecutor(ObjectMapper objectMapper) {
+        this(objectMapper, null);
+    }
+
+    @Autowired
+    public HttpToolNodeExecutor(ObjectMapper objectMapper, ConnectorRuntimeService connectorRuntimeService) {
         this.httpClient = HttpClient.newHttpClient();
         this.objectMapper = objectMapper;
+        this.connectorRuntimeService = connectorRuntimeService;
     }
 
     @Override
@@ -40,7 +49,24 @@ public class HttpToolNodeExecutor implements WorkflowNodeExecutor {
 
     @Override
     public NodeExecutionResult execute(WorkflowNode node, NodeExecutionContext context) {
-        return NodeExecutionResult.output(Map.of(optionalStringConfig(node, "outputKey", "toolResult"), executeRequest(node.config(), context.context())));
+        Map<String, Object> config = node.config();
+        String connectorCode = stringValue(config.get("connectorCode"), "");
+        String operationCode = stringValue(config.get("operationCode"), "");
+        String outputKey = optionalStringConfig(node, "outputKey", "toolResult");
+        if (!connectorCode.isBlank() && !operationCode.isBlank()) {
+            if (connectorRuntimeService == null) {
+                throw new IllegalStateException("Connector runtime is unavailable");
+            }
+            Map<String, Object> result = connectorRuntimeService.execute(
+                    connectorCode,
+                    operationCode,
+                    config,
+                    context.context(),
+                    node.id()
+            );
+            return NodeExecutionResult.output(Map.of(outputKey, result));
+        }
+        return NodeExecutionResult.output(Map.of(outputKey, executeRequest(config, context.context())));
     }
 
     Map<String, Object> executeInline(Map<String, Object> config, Map<String, Object> context) {

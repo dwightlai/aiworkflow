@@ -22,6 +22,8 @@ public interface BotStore {
 
     Optional<BotSession> findSessionById(String botId, String sessionId);
 
+    void deleteSession(String botId, String sessionId);
+
     BotMessage saveMessage(BotMessage message);
 
     List<BotMessage> listMessages(String botId, String sessionId);

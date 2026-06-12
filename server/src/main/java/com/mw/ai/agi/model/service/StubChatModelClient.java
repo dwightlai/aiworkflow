@@ -11,6 +11,24 @@ public class StubChatModelClient implements ChatModelClient {
     private static final Pattern CORPUS_PATTERN = Pattern.compile("档案馆资料[：:]([\\s\\S]*?)(?:\\n\\n知识库内容|$)");
 
     @Override
+    public String generateStream(
+            String providerId,
+            String model,
+            String prompt,
+            Map<String, Object> options,
+            ChatModelStreamConsumer consumer
+    ) {
+        String full = generate(providerId, model, prompt, options);
+        if (consumer != null && full != null && !full.isEmpty()) {
+            int chunkSize = 12;
+            for (int index = 0; index < full.length(); index += chunkSize) {
+                consumer.onDelta(full.substring(index, Math.min(index + chunkSize, full.length())));
+            }
+        }
+        return full == null ? "" : full;
+    }
+
+    @Override
     public String generate(String providerId, String model, String prompt, Map<String, Object> options) {
         if (prompt == null || prompt.isBlank()) {
             return "（模型未返回内容）";

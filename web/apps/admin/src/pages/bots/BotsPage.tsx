@@ -9,7 +9,7 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Avatar, Button, Card, Drawer, Empty, Form, Input, List, Radio, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Alert, Avatar, Button, Card, Drawer, Empty, Form, Input, Radio, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
 import { useMemo, useState } from 'react';
@@ -30,6 +30,9 @@ import {
 import { listKnowledgeBases } from '../../api/knowledge';
 import { listModelProviders } from '../../api/models';
 import { listWorkflows } from '../../api/workflows';
+import { BotCapabilitiesPanel } from './BotCapabilitiesPanel';
+import { BotRunChatDrawer } from '../../components/bot/BotRunChatDrawer';
+import '../../styles/botRunChat.css';
 
 const initialBotValues: SaveBotRequest = {
   name: '',
@@ -40,6 +43,8 @@ const initialBotValues: SaveBotRequest = {
   knowledgeBaseIds: [],
   systemPrompt: '',
   openingMessage: '你好，我是你的智能助手。',
+  capabilityHint: null,
+  suggestedQuestions: [],
   status: 'ENABLED'
 };
 
@@ -212,7 +217,7 @@ export function BotsPage() {
     <section style={pageStyle}>
       <div style={headerStyle}>
         <Space direction="vertical" size={4}>
-          <Typography.Title level={3} style={{ margin: 0 }}>智能体 Bots</Typography.Title>
+          <Typography.Title level={3} style={{ margin: 0 }}>智能体</Typography.Title>
           <Typography.Text type="secondary">把已发布工作流包装成可配置、可测试、可投放的对话式智能体。</Typography.Text>
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>新增智能体</Button>
@@ -292,6 +297,12 @@ export function BotsPage() {
           <Form.Item name="openingMessage" label="开场白">
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
           </Form.Item>
+          <Form.Item name="capabilityHint" label="能力说明">
+            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="我可以帮你查询档案、申请借阅..." />
+          </Form.Item>
+          <Form.Item name="suggestedQuestions" label="推荐问题">
+            <Select mode="tags" tokenSeparators={[',']} placeholder="输入后回车添加" />
+          </Form.Item>
           <Form.Item name="systemPrompt" label="系统提示词">
             <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} placeholder="约束智能体语气、范围和回答策略" />
           </Form.Item>
@@ -301,75 +312,38 @@ export function BotsPage() {
           <Form.Item name="avatar" hidden>
             <Input />
           </Form.Item>
+          {editingBot ? (
+            <BotCapabilitiesPanel
+              botId={editingBot.id}
+              workflowOptions={publishedWorkflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))}
+            />
+          ) : null}
         </Form>
       </Drawer>
 
-      <Drawer
-        title={runningBot ? `多轮对话 - ${runningBot.name}` : '多轮对话'}
+      <BotRunChatDrawer
         open={Boolean(runningBot)}
-        width={940}
-        onClose={() => {
-          setRunningBot(null);
-          setSelectedSession(null);
-          setLocalMessages([]);
-          setChatResult(null);
-          setRunError(null);
+        bot={runningBot}
+        sessions={sessions}
+        sessionsLoading={sessionsQuery.isLoading}
+        selectedSession={selectedSession}
+        messages={messages}
+        runError={runError}
+        executionStatus={chatResult?.execution.status}
+        chatLoading={chatMutation.isPending}
+        chatForm={chatForm}
+        onClose={closeRunDrawer}
+        onNewSession={startNewSession}
+        onSelectSession={selectSession}
+        onSubmit={(values) => {
+          const parsed = parseJsonObject(values.input || '{}');
+          if (!parsed.ok) {
+            setRunError(parsed.message);
+            return;
+          }
+          chatMutation.mutate(values);
         }}
-        footer={(
-          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setRunningBot(null)}>关闭</Button>
-            <Button type="primary" icon={<PlayCircleOutlined />} loading={chatMutation.isPending} onClick={() => chatForm.submit()}>发送消息</Button>
-          </Space>
-        )}
-      >
-        <div style={chatLayoutStyle}>
-          <aside style={sessionPaneStyle}>
-            <Button block icon={<PlusOutlined />} onClick={startNewSession} style={{ marginBottom: 12 }}>新会话</Button>
-            <List
-              loading={sessionsQuery.isLoading}
-              dataSource={sessions}
-              locale={{ emptyText: '暂无会话' }}
-              renderItem={(session) => (
-                <List.Item
-                  onClick={() => selectSession(session)}
-                  style={{
-                    ...sessionItemStyle,
-                    background: selectedSession?.id === session.id ? '#eef6ff' : '#fff'
-                  }}
-                >
-                  <List.Item.Meta
-                    title={<Typography.Text strong>{session.title}</Typography.Text>}
-                    description={`${session.messageCount} 条消息`}
-                  />
-                </List.Item>
-              )}
-            />
-          </aside>
-          <section style={messagePaneStyle}>
-            <div style={messageListStyle}>
-              {messages.length === 0 ? (
-                <Empty description={runningBot?.openingMessage || '发送第一条消息开始多轮对话'} />
-              ) : messages.map((item) => (
-                <div key={item.id} style={{ ...messageBubbleRowStyle, justifyContent: item.role === 'USER' ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ ...messageBubbleStyle, background: item.role === 'USER' ? '#1677ff' : '#f3f6fb', color: item.role === 'USER' ? '#fff' : '#1f2937' }}>
-                    <Typography.Text style={{ color: 'inherit', whiteSpace: 'pre-wrap' }}>{item.content}</Typography.Text>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {runError ? <Alert type="error" showIcon message={runError} style={{ marginBottom: 12 }} /> : null}
-            {chatResult ? <Typography.Text type="secondary">最近执行：{chatResult.execution.status}</Typography.Text> : null}
-            <Form form={chatForm} layout="vertical" initialValues={{ message: '', input: '{}' }} onFinish={(values) => chatMutation.mutate(values)}>
-              <Form.Item name="message" label="测试消息" rules={[{ required: true, message: '请输入测试消息' }]}>
-                <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} placeholder="输入一条用户消息，系统会携带当前会话历史" />
-              </Form.Item>
-              <Form.Item name="input" label="附加变量 JSON">
-                <Input.TextArea style={{ fontFamily: 'Consolas, monospace' }} autoSize={{ minRows: 3, maxRows: 6 }} />
-              </Form.Item>
-            </Form>
-          </section>
-        </div>
-      </Drawer>
+      />
     </section>
   );
 
@@ -398,6 +372,8 @@ export function BotsPage() {
       knowledgeBaseIds: bot.knowledgeBaseIds ?? [],
       systemPrompt: bot.systemPrompt || '',
       openingMessage: bot.openingMessage || '',
+      capabilityHint: bot.capabilityHint || null,
+      suggestedQuestions: bot.suggestedQuestions ?? [],
       status: bot.status
     });
     setDrawerOpen(true);
@@ -406,6 +382,14 @@ export function BotsPage() {
   function closeBotDrawer() {
     setDrawerOpen(false);
     setEditingBot(null);
+  }
+
+  function closeRunDrawer() {
+    setRunningBot(null);
+    setSelectedSession(null);
+    setLocalMessages([]);
+    setChatResult(null);
+    setRunError(null);
   }
 
   function openRunDrawer(bot: Bot) {
@@ -466,48 +450,4 @@ const metricRowStyle: React.CSSProperties = {
   gap: 12,
   gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   marginBottom: 16
-};
-
-const chatLayoutStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: '260px minmax(0, 1fr)'
-};
-
-const sessionPaneStyle: React.CSSProperties = {
-  borderRight: '1px solid #edf0f5',
-  paddingRight: 12
-};
-
-const sessionItemStyle: React.CSSProperties = {
-  border: '1px solid #edf0f5',
-  borderRadius: 8,
-  cursor: 'pointer',
-  marginBottom: 8,
-  padding: '10px 12px'
-};
-
-const messagePaneStyle: React.CSSProperties = {
-  minWidth: 0
-};
-
-const messageListStyle: React.CSSProperties = {
-  background: '#fbfdff',
-  border: '1px solid #edf0f5',
-  borderRadius: 8,
-  display: 'grid',
-  gap: 10,
-  marginBottom: 16,
-  minHeight: 280,
-  padding: 16
-};
-
-const messageBubbleRowStyle: React.CSSProperties = {
-  display: 'flex'
-};
-
-const messageBubbleStyle: React.CSSProperties = {
-  borderRadius: 8,
-  maxWidth: '78%',
-  padding: '10px 12px'
 };

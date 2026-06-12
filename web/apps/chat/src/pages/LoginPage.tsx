@@ -1,0 +1,57 @@
+import { LockOutlined, UserOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Form, Input, Typography, message } from 'antd';
+import { useState } from 'react';
+import { login, type AuthSession } from '../api/auth';
+
+export function LoginPage({ onLogin }: { onLogin: (session: AuthSession) => void }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleFinish(values: { username: string; password: string; tenantCode?: string }) {
+    setLoading(true);
+    try {
+      const session = await login(values.username, values.password, values.tenantCode);
+      onLogin(session);
+      message.success('登录成功');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '登录失败');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main
+      style={{
+        alignItems: 'center',
+        background: 'linear-gradient(135deg, #eef5ff 0%, #f7f9fc 52%, #edf7f2 100%)',
+        display: 'flex',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        padding: 24
+      }}
+    >
+      <Card style={{ borderRadius: 8, boxShadow: '0 18px 50px rgba(31, 42, 68, 0.12)', width: 420 }}>
+        <Typography.Title level={3} style={{ marginTop: 0 }}>
+          登录智能体对话
+        </Typography.Title>
+        <Typography.Paragraph type="secondary">
+          默认租户：admin / admin123（租户编码留空）
+        </Typography.Paragraph>
+        <Form layout="vertical" onFinish={handleFinish}>
+          <Form.Item name="tenantCode" label="租户编码">
+            <Input placeholder="留空则登录默认租户" autoComplete="organization" />
+          </Form.Item>
+          <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+            <Input prefix={<UserOutlined />} autoComplete="username" />
+          </Form.Item>
+          <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+            <Input.Password prefix={<LockOutlined />} autoComplete="current-password" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading} block>
+            登录
+          </Button>
+        </Form>
+      </Card>
+    </main>
+  );
+}

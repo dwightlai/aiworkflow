@@ -13,6 +13,8 @@ public class BotMessageEntity {
     private String botId;
     private String role;
     private String content;
+    private String metadata;
+    private String messageType;
     private Instant createdAt;
 
     public String getId() {
@@ -53,6 +55,22 @@ public class BotMessageEntity {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+
+    public String getMessageType() {
+        return messageType;
+    }
+
+    public void setMessageType(String messageType) {
+        this.messageType = messageType;
     }
 
     public Instant getCreatedAt() {

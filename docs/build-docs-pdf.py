@@ -16,6 +16,7 @@ DOCS = [
     ("aiworkflow-system-design.md", "AI Workflow 系统设计说明书", "aiworkflow-system-design.pdf"),
     ("aiworkflow-user-manual.md", "AI Workflow 操作手册", "aiworkflow-user-manual.pdf"),
     ("aiworkflow-tech-manual.md", "AI Workflow 技术手册", "aiworkflow-tech-manual.pdf"),
+    ("aiworkflow-business-presentation.md", "AI Workflow 平台商务介绍", "aiworkflow-business-presentation.pdf"),
 ]
 
 CSS = """

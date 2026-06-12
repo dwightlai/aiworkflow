@@ -2,6 +2,7 @@ package com.mw.ai.agi.workflow.engine;
 
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
+import com.mw.ai.agi.chat.service.HumanConfirmService;
 import com.mw.ai.agi.workflow.domain.WorkflowDefinition;
 import com.mw.ai.agi.workflow.domain.WorkflowEdge;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
@@ -20,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -34,58 +36,110 @@ public class WorkflowExecutionService {
     private final WorkflowExecutionStore executionStore;
     private final WorkflowNodeExecutorRegistry executorRegistry;
     private final TenantBusinessGuard tenantGuard;
+    private final HumanConfirmService humanConfirmService;
 
-    public WorkflowExecutionService(
-            WorkflowApplicationService workflowService,
-            WorkflowExecutionStore executionStore,
-            WorkflowNodeExecutorRegistry executorRegistry
-    ) {
-        this(workflowService, executionStore, executorRegistry, null);
-    }
-
-    @Autowired
     public WorkflowExecutionService(
             WorkflowApplicationService workflowService,
             WorkflowExecutionStore executionStore,
             WorkflowNodeExecutorRegistry executorRegistry,
-            TenantBusinessGuard tenantGuard
+            @Autowired(required = false) TenantBusinessGuard tenantGuard,
+            @Autowired(required = false) HumanConfirmService humanConfirmService
     ) {
         this.workflowService = workflowService;
         this.executionStore = executionStore;
         this.executorRegistry = executorRegistry;
         this.tenantGuard = tenantGuard;
+        this.humanConfirmService = humanConfirmService;
     }
 
     public WorkflowExecutionResult runWorkflow(WorkflowExecutionRequest request) {
         WorkflowVersion version = workflowService.getPublishedVersion(request.workflowId());
         WorkflowDefinition definition = version.definition();
         WorkflowNode currentNode = findStartNode(definition);
+        return runFromNode(request, version, definition, currentNode, new LinkedHashMap<>(request.input()), null);
+    }
+
+    public WorkflowExecutionResult resumeAfterConfirm(String executionId, String taskId) {
+        WorkflowExecution execution = executionStore.findWorkflowExecutionById(executionId)
+                .orElseThrow(() -> new WorkflowRunNotFoundException(executionId));
+        if (execution.status() != WorkflowExecutionStatus.WAITING_CONFIRM) {
+            throw new IllegalStateException("Workflow execution is not waiting for confirm");
+        }
+        if (humanConfirmService != null) {
+            humanConfirmService.getTask(taskId);
+        }
+        WorkflowVersion version = workflowService.getPublishedVersion(execution.workflowId());
+        WorkflowDefinition definition = version.definition();
+        Map<String, WorkflowNode> nodesById = definition.nodes().stream()
+                .collect(Collectors.toMap(WorkflowNode::id, Function.identity()));
+        WorkflowNode currentNode = nodesById.get(execution.currentNodeId());
+        if (currentNode == null) {
+            throw new IllegalStateException("Workflow node not found: " + execution.currentNodeId());
+        }
+        Map<String, Object> context = new LinkedHashMap<>(execution.context());
+        context.put("__confirmedTaskId", taskId);
+        WorkflowExecutionRequest request = new WorkflowExecutionRequest(execution.workflowId(), execution.input(), Map.of());
+        return runFromNode(request, version, definition, currentNode, context, execution);
+    }
+
+    public WorkflowExecutionResult rejectAfterConfirm(String executionId, String taskId) {
+        WorkflowExecution execution = executionStore.findWorkflowExecutionById(executionId)
+                .orElseThrow(() -> new WorkflowRunNotFoundException(executionId));
+        WorkflowExecution rejected = new WorkflowExecution(
+                execution.id(),
+                execution.workflowId(),
+                execution.workflowVersionId(),
+                WorkflowExecutionStatus.FAILED,
+                execution.input(),
+                Map.of("confirmRejected", true, "confirmTaskId", taskId),
+                "Confirm rejected by user",
+                execution.context(),
+                null,
+                execution.startedAt(),
+                Instant.now()
+        );
+        executionStore.saveWorkflowExecution(rejected);
+        return new WorkflowExecutionResult(rejected, executionStore.listNodeExecutions(executionId));
+    }
+
+    private WorkflowExecutionResult runFromNode(
+            WorkflowExecutionRequest request,
+            WorkflowVersion version,
+            WorkflowDefinition definition,
+            WorkflowNode currentNode,
+            Map<String, Object> initialContext,
+            WorkflowExecution existingExecution
+    ) {
         Map<String, WorkflowNode> nodesById = definition.nodes().stream()
                 .collect(Collectors.toMap(WorkflowNode::id, Function.identity()));
         Map<String, List<WorkflowEdge>> outgoingEdges = definition.edges().stream()
                 .collect(Collectors.groupingBy(WorkflowEdge::sourceNodeId));
 
-        Instant startedAt = Instant.now();
-        String executionId = UUID.randomUUID().toString();
-        WorkflowExecution execution = new WorkflowExecution(
+        Instant startedAt = existingExecution == null ? Instant.now() : existingExecution.startedAt();
+        String executionId = existingExecution == null ? UUID.randomUUID().toString() : existingExecution.id();
+        WorkflowExecution running = new WorkflowExecution(
                 executionId,
                 request.workflowId(),
                 version.id(),
                 WorkflowExecutionStatus.RUNNING,
-                request.input(),
+                existingExecution == null ? request.input() : existingExecution.input(),
                 Map.of(),
                 null,
+                initialContext,
+                currentNode.id(),
                 startedAt,
                 null
         );
-        executionStore.saveWorkflowExecution(execution);
+        executionStore.saveWorkflowExecution(running);
 
-        Map<String, Object> context = new LinkedHashMap<>(request.input());
+        Map<String, Object> context = new LinkedHashMap<>(initialContext);
         mergeGrantContext(context, request.systemVariables());
         context.put("系统变量", systemVariables(request.systemVariables()));
+        context.put("__workflowExecutionId", executionId);
         Map<String, Object> finalOutput = Map.of();
         try {
             while (currentNode != null) {
+                context.put("__currentNodeId", currentNode.id());
                 NodeExecutionResult nodeResult = executeNode(executionId, currentNode, request.input(), context);
                 mergeNodeOutput(context, currentNode, nodeResult.output());
                 if (currentNode.type() == WorkflowNodeType.END) {
@@ -96,28 +150,53 @@ public class WorkflowExecutionService {
             }
 
             WorkflowExecution succeeded = new WorkflowExecution(
-                    execution.id(),
-                    execution.workflowId(),
-                    execution.workflowVersionId(),
+                    executionId,
+                    request.workflowId(),
+                    version.id(),
                     WorkflowExecutionStatus.SUCCEEDED,
-                    execution.input(),
+                    running.input(),
                     finalOutput,
                     null,
-                    execution.startedAt(),
+                    context,
+                    null,
+                    startedAt,
                     Instant.now()
             );
             executionStore.saveWorkflowExecution(succeeded);
             return new WorkflowExecutionResult(succeeded, executionStore.listNodeExecutions(executionId));
+        } catch (ConfirmRequiredException ex) {
+            Map<String, Object> waitingOutput = new LinkedHashMap<>();
+            waitingOutput.put("confirmTaskId", ex.taskId());
+            waitingOutput.put("confirmSummary", ex.summary());
+            waitingOutput.put("connectorCode", ex.connectorCode());
+            waitingOutput.put("operationCode", ex.operationCode());
+            WorkflowExecution waiting = new WorkflowExecution(
+                    executionId,
+                    request.workflowId(),
+                    version.id(),
+                    WorkflowExecutionStatus.WAITING_CONFIRM,
+                    running.input(),
+                    waitingOutput,
+                    null,
+                    context,
+                    ex.nodeId(),
+                    startedAt,
+                    null
+            );
+            executionStore.saveWorkflowExecution(waiting);
+            return new WorkflowExecutionResult(waiting, executionStore.listNodeExecutions(executionId));
         } catch (RuntimeException ex) {
             WorkflowExecution failed = new WorkflowExecution(
-                    execution.id(),
-                    execution.workflowId(),
-                    execution.workflowVersionId(),
+                    executionId,
+                    request.workflowId(),
+                    version.id(),
                     WorkflowExecutionStatus.FAILED,
-                    execution.input(),
+                    running.input(),
                     Map.of(),
                     ex.getMessage(),
-                    execution.startedAt(),
+                    context,
+                    null,
+                    startedAt,
                     Instant.now()
             );
             executionStore.saveWorkflowExecution(failed);
@@ -212,6 +291,10 @@ public class WorkflowExecutionService {
             NodeExecutionContext context
     ) {
         int timeoutSeconds = intConfig(node, "timeoutSeconds", 60);
+        Optional<WorkflowStreamSink> streamSink = WorkflowStreamContext.current();
+        if (streamSink.isPresent()) {
+            return executor.execute(node, context);
+        }
         if (timeoutSeconds <= 0) {
             return executor.execute(node, context);
         }

@@ -29,7 +29,9 @@ export const menuGroups: AppMenuGroup[] = [
     title: 'AI 功能',
     items: [
       { key: 'dashboard', label: '工作台', path: '/' },
-      { key: 'bots', label: '智能体 Bots', path: '/bots' },
+      { key: 'bots', label: '智能体', path: '/bots' },
+      { key: 'connectors', label: '连接器', path: '/connectors' },
+      { key: 'agent-audit', label: '智能体审计', path: '/agent-audit' },
       { key: 'workflows', label: '工作流', path: '/workflows' },
       { key: 'workflow-runs', label: '运行监控', path: '/workflow-runs' },
       { key: 'knowledge', label: '知识库', path: '/knowledge' },

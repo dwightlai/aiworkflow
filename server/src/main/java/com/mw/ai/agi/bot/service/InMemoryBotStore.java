@@ -52,7 +52,8 @@ public class InMemoryBotStore implements BotStore {
     public List<BotSession> listSessions(String botId) {
         return sessions.values().stream()
                 .filter(session -> session.botId().equals(botId))
-                .sorted(Comparator.comparing(BotSession::updatedAt).reversed())
+                .sorted(Comparator.comparing(BotSession::pinned).reversed()
+                        .thenComparing(BotSession::updatedAt, Comparator.reverseOrder()))
                 .toList();
     }
 
@@ -60,6 +61,12 @@ public class InMemoryBotStore implements BotStore {
     public Optional<BotSession> findSessionById(String botId, String sessionId) {
         return Optional.ofNullable(sessions.get(sessionId))
                 .filter(session -> session.botId().equals(botId));
+    }
+
+    @Override
+    public void deleteSession(String botId, String sessionId) {
+        messages.values().removeIf(message -> message.botId().equals(botId) && message.sessionId().equals(sessionId));
+        sessions.remove(sessionId);
     }
 
     @Override

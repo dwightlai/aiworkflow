@@ -15,6 +15,8 @@ public record AiBot(
         List<String> knowledgeBaseIds,
         String systemPrompt,
         String openingMessage,
+        String capabilityHint,
+        List<String> suggestedQuestions,
         BotStatus status,
         int conversationCount,
         Instant publishedAt,

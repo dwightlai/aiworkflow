@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @aiworkflow/admin dev",
+    "dev:chat": "pnpm --filter @aiworkflow/chat dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test"
   },

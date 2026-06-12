@@ -83,7 +83,7 @@ public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
         entity.setTenantId(TenantContext.requireTenantId());
         entity.setStatus(execution.status().name());
         entity.setInputJson(jsonSupport.write(execution.input()));
-        entity.setContextJson(jsonSupport.write(Map.of()));
+        entity.setContextJson(jsonSupport.write(contextPayload(execution)));
         entity.setOutputJson(jsonSupport.write(execution.output()));
         entity.setErrorCode(null);
         entity.setErrorMessage(execution.errorMessage());
@@ -94,6 +94,13 @@ public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
     }
 
     private WorkflowExecution toDomain(WorkflowExecutionEntity entity) {
+        Map<String, Object> contextPayload = jsonSupport.readMap(entity.getContextJson());
+        String currentNodeId = contextPayload.containsKey("__currentNodeId")
+                ? String.valueOf(contextPayload.remove("__currentNodeId"))
+                : null;
+        if (currentNodeId != null && currentNodeId.isBlank()) {
+            currentNodeId = null;
+        }
         return new WorkflowExecution(
                 entity.getId(),
                 entity.getWorkflowId(),
@@ -102,9 +109,19 @@ public class MybatisWorkflowExecutionStore implements WorkflowExecutionStore {
                 jsonSupport.readMap(entity.getInputJson()),
                 jsonSupport.readMap(entity.getOutputJson()),
                 entity.getErrorMessage(),
+                contextPayload,
+                currentNodeId,
                 entity.getStartedAt(),
                 entity.getFinishedAt()
         );
+    }
+
+    private Map<String, Object> contextPayload(WorkflowExecution execution) {
+        java.util.LinkedHashMap<String, Object> payload = new java.util.LinkedHashMap<>(execution.context());
+        if (execution.currentNodeId() != null && !execution.currentNodeId().isBlank()) {
+            payload.put("__currentNodeId", execution.currentNodeId());
+        }
+        return payload;
     }
 
     private WorkflowNodeExecutionEntity toEntity(NodeExecution nodeExecution) {

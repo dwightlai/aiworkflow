@@ -156,6 +156,18 @@ public class AuthService {
         );
     }
 
+    public AuthTokenResponse issueTokenForUser(String userId) {
+        UserEntity user = findUserById(userId)
+                .orElseThrow(() -> new AuthException("AUTH_USER_NOT_FOUND", HttpStatus.NOT_FOUND, "User does not exist."));
+        if (!"ACTIVE".equals(user.getStatus())) {
+            throw new AuthException("AUTH_USER_DISABLED", HttpStatus.FORBIDDEN, "User is disabled.");
+        }
+        AuthUserPrincipal principal = loadPrincipal(user);
+        String accessToken = jwtTokenService.issueAccessToken(principal);
+        String refreshToken = jwtTokenService.issueRefreshToken(principal, "embed_" + UUID.randomUUID().toString().replace("-", ""));
+        return new AuthTokenResponse(accessToken, refreshToken, jwtTokenService.accessTokenSeconds(), principal);
+    }
+
     private AuthUserPrincipal loadPrincipal(UserEntity user) {
         List<String> organizationIds = userOrganizationMapper().selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
                         .eq(UserOrganizationEntity::getUserId, user.getId()))

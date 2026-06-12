@@ -12,8 +12,18 @@ public class BotSessionEntity {
     private String botId;
     private String title;
     private Integer messageCount;
+    private Boolean pinned;
+    private String userId;
     private Instant createdAt;
     private Instant updatedAt;
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
 
     public String getId() {
         return id;
@@ -45,6 +55,14 @@ public class BotSessionEntity {
 
     public void setMessageCount(Integer messageCount) {
         this.messageCount = messageCount;
+    }
+
+    public Boolean getPinned() {
+        return pinned;
+    }
+
+    public void setPinned(Boolean pinned) {
+        this.pinned = pinned;
     }
 
     public Instant getCreatedAt() {
