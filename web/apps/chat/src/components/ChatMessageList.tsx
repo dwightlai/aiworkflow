@@ -16,6 +16,7 @@ import {
   citationsFromMessages,
   mergeCitations
 } from './MessageCards';
+import { MarkdownContent } from './MarkdownContent';
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(
@@ -170,7 +171,7 @@ function StructuredCard({
   if (type === 'error' || type === 'ERROR') {
     return <ErrorCard msg={msg} />;
   }
-  return <div className="chat-assistant-content">{msg.content}</div>;
+  return <MarkdownContent content={msg.content} className="chat-assistant-content" />;
 }
 
 function AssistantTurn({
@@ -197,10 +198,10 @@ function AssistantTurn({
         onToggle={() => setThinkingExpanded((prev) => !prev)}
       />
       {hasAnswer ? (
-        <div className="chat-assistant-content">
-          {parts.answer}
+        <>
+          <MarkdownContent content={parts.answer} className="chat-assistant-content" />
           {msg.streaming ? <span className="chat-stream-cursor">▍</span> : null}
-        </div>
+        </>
       ) : waitingForAnswer ? null : (
         <div className="chat-assistant-content chat-assistant-empty">暂无回复内容</div>
       )}

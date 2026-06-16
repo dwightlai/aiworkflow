@@ -50,4 +50,27 @@ public final class OpenApiRequestContext {
         map.put("authType", context.authType());
         return map;
     }
+
+    public static Map<String, Object> grantContext(RuntimeIdentityContext context) {
+        Map<String, Object> map = new LinkedHashMap<>(auditContext(context));
+        if (context == null) {
+            return map;
+        }
+        if (context.tenantId() != null && !context.tenantId().isBlank()) {
+            map.put("tenantId", context.tenantId());
+        }
+        if (context.activeUnitId() != null && !context.activeUnitId().isBlank()) {
+            map.put("activeUnitId", context.activeUnitId());
+        }
+        if (!context.unitIds().isEmpty()) {
+            map.put("unitIds", context.unitIds());
+        }
+        if (!context.departmentIds().isEmpty()) {
+            map.put("departmentIds", context.departmentIds());
+        }
+        if (!context.roleIds().isEmpty()) {
+            map.put("roleIds", context.roleIds());
+        }
+        return map;
+    }
 }

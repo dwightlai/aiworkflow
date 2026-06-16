@@ -81,7 +81,7 @@ paths:
   /api/open/bots/{id}/chat:
     post:
       tags: [智能体]
-      summary: 智能体对话
+      summary: 多轮对话（同步）
       operationId: chatBot
       parameters:
         - $ref: '#/components/parameters/ResourceId'
@@ -97,6 +97,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BotChatResponse'
+
+  /api/open/bots/{id}/capabilities:
+    get:
+      tags: [智能体]
+      summary: 列出智能体多工作流路由能力
+      operationId: listBotCapabilities
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotCapabilityPageResponse'
+
+  /api/open/bots/{id}/sessions:
+    get:
+      tags: [智能体]
+      summary: 列出用户会话
+      description: 需携带 X-AGI-User-Id 或请求体 userId
+      operationId: listBotSessions
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotSessionPageResponse'
+    post:
+      tags: [智能体]
+      summary: 创建会话
+      operationId: createBotSession
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenBotCreateSessionRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotSessionResponse'
+
+  /api/open/bots/{id}/sessions/{sessionId}/messages:
+    get:
+      tags: [智能体]
+      summary: 列出会话消息
+      operationId: listBotMessages
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotMessagePageResponse'
+
+  /api/open/bots/{id}/sessions/{sessionId}/messages/stream:
+    post:
+      tags: [智能体]
+      summary: 多轮对话（SSE 流式）
+      description: |
+        SSE 事件类型：message.delta、message.completed、citation.added、tool.completed、
+        confirm.required、job.progress、job.completed、error、done
+      operationId: streamBotMessage
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenBotStreamRequest'
+      responses:
+        '200':
+          description: SSE 流
+          content:
+            text/event-stream:
+              schema:
+                type: string
 
   /api/open/knowledge-bases:
     get:
@@ -336,11 +433,79 @@ components:
         description: { type: string }
         avatar: { type: string }
         workflowId: { type: string }
+        modelProviderId: { type: string }
         knowledgeBaseIds:
           type: array
           items: { type: string }
         openingMessage: { type: string }
+        capabilityHint: { type: string }
+        suggestedQuestions:
+          type: array
+          items: { type: string }
         status: { type: string }
+
+    OpenBotCapabilityView:
+      type: object
+      properties:
+        id: { type: string }
+        capabilityType: { type: string }
+        capabilityId: { type: string }
+        capabilityCode: { type: string }
+        routingKeywords: { type: string }
+        primaryCapability: { type: boolean }
+        enabled: { type: boolean }
+
+    OpenBotCreateSessionRequest:
+      type: object
+      properties:
+        title: { type: string }
+        userId: { type: string }
+
+    OpenBotStreamRequest:
+      allOf:
+        - $ref: '#/components/schemas/OpenBotRunRequest'
+        - type: object
+          properties:
+            message: { type: string }
+
+    BotSession:
+      type: object
+      properties:
+        id: { type: string }
+        botId: { type: string }
+        title: { type: string }
+        messageCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        pinned: { type: boolean }
+
+    BotMessage:
+      type: object
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        botId: { type: string }
+        role: { type: string, enum: [USER, ASSISTANT] }
+        content: { type: string }
+        messageType: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+
+    OpenBotChatResponseData:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/BotSession'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/BotMessage'
+        reply:
+          $ref: '#/components/schemas/BotMessage'
+        execution:
+          $ref: '#/components/schemas/WorkflowExecutionResponse'
 
     OpenBotRunRequest:
       type: object
@@ -510,6 +675,63 @@ components:
     BotChatResponse:
       allOf:
         - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OpenBotChatResponseData'
+
+    BotCapabilityPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageResponse'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/OpenBotCapabilityView'
+
+    BotSessionPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageResponse'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/BotSession'
+
+    BotSessionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/BotSession'
+
+    BotMessagePageResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageResponse'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/BotMessage'
 
     KnowledgeBasePageResponse:
       allOf:

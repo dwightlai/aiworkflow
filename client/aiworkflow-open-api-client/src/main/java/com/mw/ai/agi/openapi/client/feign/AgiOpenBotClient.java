@@ -2,8 +2,10 @@ package com.mw.ai.agi.openapi.client.feign;
 
 import com.mw.ai.agi.openapi.client.model.ApiResponse;
 import com.mw.ai.agi.openapi.client.model.PageResponse;
+import com.mw.ai.agi.openapi.client.model.bot.OpenBotCapabilityView;
 import com.mw.ai.agi.openapi.client.model.bot.OpenBotChatRequest;
 import com.mw.ai.agi.openapi.client.model.bot.OpenBotChatResponse;
+import com.mw.ai.agi.openapi.client.model.bot.OpenBotCreateSessionRequest;
 import com.mw.ai.agi.openapi.client.model.bot.OpenBotRunRequest;
 import com.mw.ai.agi.openapi.client.model.bot.OpenBotRunResponse;
 import com.mw.ai.agi.openapi.client.model.bot.OpenBotView;
@@ -25,6 +27,24 @@ public interface AgiOpenBotClient {
 
     @GetMapping("/api/open/bots/{id}")
     ApiResponse<OpenBotView> getBot(@PathVariable("id") String id);
+
+    @GetMapping("/api/open/bots/{id}/capabilities")
+    ApiResponse<PageResponse<OpenBotCapabilityView>> listBotCapabilities(@PathVariable("id") String id);
+
+    @GetMapping("/api/open/bots/{id}/sessions")
+    ApiResponse<PageResponse<Object>> listBotSessions(@PathVariable("id") String id);
+
+    @PostMapping("/api/open/bots/{id}/sessions")
+    ApiResponse<Object> createBotSession(
+            @PathVariable("id") String id,
+            @RequestBody(required = false) OpenBotCreateSessionRequest request
+    );
+
+    @GetMapping("/api/open/bots/{id}/sessions/{sessionId}/messages")
+    ApiResponse<PageResponse<Object>> listBotMessages(
+            @PathVariable("id") String id,
+            @PathVariable("sessionId") String sessionId
+    );
 
     @PostMapping("/api/open/bots/{id}/run")
     ApiResponse<OpenBotRunResponse> runBot(@PathVariable("id") String id, @RequestBody(required = false) OpenBotRunRequest request);

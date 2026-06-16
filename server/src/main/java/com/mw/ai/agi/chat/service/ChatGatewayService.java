@@ -143,31 +143,50 @@ public class ChatGatewayService {
     }
 
     public SseEmitter streamChat(String botId, String sessionId, String message, HttpServletRequest request) {
+        getBot(botId, request);
+        String userId = requireUserId(request);
+        Map<String, Object> input = buildStreamInput(request, sessionId);
+        return streamChat(botId, sessionId, message, input, userId);
+    }
+
+    public SseEmitter streamChat(
+            String botId,
+            String sessionId,
+            String message,
+            Map<String, Object> input,
+            String userId
+    ) {
         SseEmitter emitter = new SseEmitter(120_000L);
-        CompletableFuture.runAsync(() -> streamChatAsync(emitter, botId, sessionId, message, request));
+        CompletableFuture.runAsync(() -> streamChatCore(emitter, botId, sessionId, message, input, userId));
         return emitter;
     }
 
-    private void streamChatAsync(
+    private Map<String, Object> buildStreamInput(HttpServletRequest request, String sessionId) {
+        String traceId = UUID.randomUUID().toString();
+        Map<String, Object> input = new LinkedHashMap<>(identitySupport.mergeGrantContext(request, Map.of()));
+        input.put("__traceId", traceId);
+        input.put("__conversationId", sessionId);
+        return input;
+    }
+
+    private void streamChatCore(
             SseEmitter emitter,
             String botId,
             String sessionId,
             String message,
-            HttpServletRequest request
+            Map<String, Object> input,
+            String userId
     ) {
         try {
-            getBot(botId, request);
-            String userId = requireUserId(request);
+            if (userId == null || userId.isBlank()) {
+                throw new IllegalArgumentException("Authentication required");
+            }
             if (sessionId != null && !sessionId.isBlank()) {
                 botService.ensureSessionForUser(botId, sessionId, userId);
             }
-            String traceId = UUID.randomUUID().toString();
-            Map<String, Object> input = new LinkedHashMap<>(identitySupport.mergeGrantContext(request, Map.of()));
-            input.put("__traceId", traceId);
-            input.put("__conversationId", sessionId);
-            RequestIdentity identity = identitySupport.resolve(request).orElse(null);
+            String traceId = String.valueOf(input.getOrDefault("__traceId", UUID.randomUUID().toString()));
             agentAuditService.log(
-                    identity == null ? null : identity.userId(),
+                    userId,
                     botId,
                     sessionId,
                     null,
@@ -193,7 +212,7 @@ public class ChatGatewayService {
             )));
 
             agentAuditService.log(
-                    identity == null ? null : identity.userId(),
+                    userId,
                     botId,
                     result.session().id(),
                     result.reply().id(),

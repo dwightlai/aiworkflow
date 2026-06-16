@@ -8,8 +8,11 @@ public record OpenBotView(
         String description,
         String avatar,
         String workflowId,
+        String modelProviderId,
         List<String> knowledgeBaseIds,
         String openingMessage,
+        String capabilityHint,
+        List<String> suggestedQuestions,
         String status
 ) {
 }

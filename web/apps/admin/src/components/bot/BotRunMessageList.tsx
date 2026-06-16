@@ -1,6 +1,7 @@
 import { Empty, Typography } from 'antd';
 import type { BotMessage } from '../../api/bots';
 import { groupBotMessages } from '../../utils/botMessageView';
+import { MarkdownContent } from '../MarkdownContent';
 import '../../styles/botRunChat.css';
 
 function CitationFoot({ citations }: { citations: { id: string; title: string }[] }) {
@@ -34,7 +35,9 @@ export function BotRunMessageList({ messages, emptyText }: { messages: BotMessag
           </div>
         ) : (
           <div key={`assistant-${index}`} className="bot-run-assistant-block">
-            {item.content ? <div className="bot-run-assistant-content">{item.content}</div> : null}
+            {item.content ? (
+              <MarkdownContent content={item.content} className="bot-run-assistant-content" />
+            ) : null}
             <CitationFoot citations={item.citations} />
           </div>
         )
