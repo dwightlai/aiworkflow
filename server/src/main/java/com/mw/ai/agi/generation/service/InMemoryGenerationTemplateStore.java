@@ -78,8 +78,57 @@ public class InMemoryGenerationTemplateStore implements GenerationTemplateStore 
                 "数字档案馆智能编研模板",
                 "RESEARCH",
                 "unit_default",
-                "MARKDOWN",
+                "DOCX",
+                "report",
+                """
+                {"showCover":true,"showToc":true,"tocDepth":2,"showPageNumber":true,"showReferenceSection":true,"lineSpacingPt":28}
+                """,
+                """
+                {"defaultTab":"docx","enableHtmlPreview":true}
+                """,
+                null,
                 SEED_TEMPLATE_SCHEMA,
+                "workflow_research_mvp",
+                SEED_WORKFLOW_SNAPSHOT,
+                "ENABLED",
+                1,
+                "user_admin",
+                "user_admin",
+                now,
+                now
+        ));
+        templates.add(new GenerationTemplate(
+                "template_research_topic_collection_001",
+                "tenant_default",
+                "专题汇编编研模板",
+                "research_topic_collection",
+                "基于 DOCX 母版的档案专题汇编成果，绑定 workflow_research_mvp",
+                "RESEARCH",
+                "unit_default",
+                "DOCX",
+                "topic_collection",
+                """
+                {"masterFile":"research/docx-masters/archive_topic_collection.docx","templateType":"archive_topic_collection"}
+                """,
+                """
+                {"defaultTab":"docx","enableHtmlPreview":false}
+                """,
+                null,
+                """
+                {
+                  "title": "专题汇编编研模板",
+                  "variables": [
+                    { "name": "topic", "label": "主题", "type": "string", "required": true }
+                  ],
+                  "sections": [
+                    { "key": "background", "title": "一、专题背景", "instruction": "说明专题形成背景、业务意义和编研目的。", "citationRequired": true },
+                    { "key": "scope", "title": "二、资料范围与编排说明", "instruction": "说明资料来源、时间范围、筛选标准和编排方式。", "citationRequired": true },
+                    { "key": "core_documents", "title": "三、核心文件汇编", "instruction": "根据档案馆资料输出核心文件条目，每条含题名、档号、形成时间、责任单位、摘要。", "outputFormat": "document_collection", "citationRequired": true },
+                    { "key": "gallery", "title": "六、图片与实物档案", "instruction": "输出图片展品，每条含题名、图片引用、说明。", "outputFormat": "gallery", "citationRequired": true },
+                    { "key": "interpretation", "title": "七、资料解读", "instruction": "提炼主题价值、业务特点和历史意义。", "outputFormat": "analysis", "citationRequired": false }
+                  ]
+                }
+                """,
                 "workflow_research_mvp",
                 SEED_WORKFLOW_SNAPSHOT,
                 "ENABLED",

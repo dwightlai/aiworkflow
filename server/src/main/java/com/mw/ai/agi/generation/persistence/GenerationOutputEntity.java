@@ -14,7 +14,9 @@ public class GenerationOutputEntity {
     private String title;
     private String outputType;
     private String contentMarkdown;
+    private String contentJson;
     private String contentDocxPath;
+    private String outputTemplateId;
     private String citations;
     private String sourceSnapshot;
     private String status;
@@ -32,8 +34,12 @@ public class GenerationOutputEntity {
     public void setOutputType(String outputType) { this.outputType = outputType; }
     public String getContentMarkdown() { return contentMarkdown; }
     public void setContentMarkdown(String contentMarkdown) { this.contentMarkdown = contentMarkdown; }
+    public String getContentJson() { return contentJson; }
+    public void setContentJson(String contentJson) { this.contentJson = contentJson; }
     public String getContentDocxPath() { return contentDocxPath; }
     public void setContentDocxPath(String contentDocxPath) { this.contentDocxPath = contentDocxPath; }
+    public String getOutputTemplateId() { return outputTemplateId; }
+    public void setOutputTemplateId(String outputTemplateId) { this.outputTemplateId = outputTemplateId; }
     public String getCitations() { return citations; }
     public void setCitations(String citations) { this.citations = citations; }
     public String getSourceSnapshot() { return sourceSnapshot; }

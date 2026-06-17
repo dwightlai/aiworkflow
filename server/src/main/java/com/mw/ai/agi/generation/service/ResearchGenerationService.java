@@ -4,13 +4,17 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
+import com.mw.ai.agi.config.AgiStorageProperties;
+import com.mw.ai.agi.config.AgiStorageSettingsService;
 import com.mw.ai.agi.generation.domain.GenerationJob;
 import com.mw.ai.agi.generation.domain.GenerationOutput;
 import com.mw.ai.agi.generation.domain.GenerationTemplate;
+import com.mw.ai.agi.knowledge.domain.KnowledgeDataset;
+import com.mw.ai.agi.knowledge.service.KnowledgeDatasetService;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionRequest;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionResult;
-import com.mw.ai.agi.workflow.engine.WorkflowExecutionStatus;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionService;
+import com.mw.ai.agi.workflow.engine.WorkflowExecutionStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +38,10 @@ public class ResearchGenerationService {
     private final WorkflowExecutionService workflowExecutionService;
     private final ResearchDocxExporter docxExporter;
     private final ResearchOutputFileStorage outputFileStorage;
+    private final ResearchContentJsonBuilder contentJsonBuilder;
+    private final ResearchOutputTemplateRegistry outputTemplateRegistry;
+    private final ResearchHtmlPreviewRenderer htmlPreviewRenderer;
+    private KnowledgeDatasetService knowledgeDatasetService;
 
     public ResearchGenerationService() {
         this(
@@ -43,8 +51,11 @@ public class ResearchGenerationService {
                 new ObjectMapper(),
                 null,
                 null,
-                new ResearchDocxExporter(),
-                new ResearchOutputFileStorage("./target/test-outputs")
+                new ResearchDocxExporter(new ResearchDocxMasterRenderer()),
+                new ResearchOutputFileStorage(AgiStorageSettingsService.withDefaults(new AgiStorageProperties(), new ObjectMapper())),
+                new ResearchContentJsonBuilder(new ObjectMapper()),
+                new ResearchOutputTemplateRegistry(new ObjectMapper()),
+                new ResearchHtmlPreviewRenderer()
         );
     }
 
@@ -57,7 +68,10 @@ public class ResearchGenerationService {
             TenantBusinessGuard tenantGuard,
             @Autowired(required = false) WorkflowExecutionService workflowExecutionService,
             ResearchDocxExporter docxExporter,
-            ResearchOutputFileStorage outputFileStorage
+            ResearchOutputFileStorage outputFileStorage,
+            ResearchContentJsonBuilder contentJsonBuilder,
+            ResearchOutputTemplateRegistry outputTemplateRegistry,
+            ResearchHtmlPreviewRenderer htmlPreviewRenderer
     ) {
         this.templateStore = templateStore;
         this.jobStore = jobStore;
@@ -67,6 +81,44 @@ public class ResearchGenerationService {
         this.workflowExecutionService = workflowExecutionService;
         this.docxExporter = docxExporter;
         this.outputFileStorage = outputFileStorage;
+        this.contentJsonBuilder = contentJsonBuilder;
+        this.outputTemplateRegistry = outputTemplateRegistry;
+        this.htmlPreviewRenderer = htmlPreviewRenderer;
+    }
+
+    @Autowired(required = false)
+    public void setKnowledgeDatasetService(KnowledgeDatasetService knowledgeDatasetService) {
+        this.knowledgeDatasetService = knowledgeDatasetService;
+    }
+
+    public GenerationJob runFromKnowledgeDataset(
+            String templateId,
+            String knowledgeBaseId,
+            String datasetId,
+            String unitId,
+            String userId,
+            Map<String, Object> variables
+    ) {
+        if (knowledgeDatasetService == null) {
+            throw new IllegalStateException("数据集服务不可用");
+        }
+        KnowledgeDataset dataset = knowledgeDatasetService.getRequired(datasetId);
+        if (!knowledgeBaseId.equals(dataset.knowledgeBaseId())) {
+            throw new IllegalArgumentException("数据集不属于指定知识库");
+        }
+        Map<String, Object> runtimeVariables = variables == null ? new LinkedHashMap<>() : new LinkedHashMap<>(variables);
+        runtimeVariables.put("datasetId", datasetId);
+        if (!runtimeVariables.containsKey("topic") || String.valueOf(runtimeVariables.get("topic")).isBlank()) {
+            runtimeVariables.put("topic", dataset.topicTitle() == null || dataset.topicTitle().isBlank() ? dataset.name() : dataset.topicTitle());
+        }
+        runtimeVariables.putIfAbsent("audience", "档案管理人员");
+        Map<String, Object> externalCorpus = new LinkedHashMap<>();
+        if (dataset.topicId() != null && !dataset.topicId().isBlank()) {
+            externalCorpus.put("id", dataset.topicId());
+            externalCorpus.put("type", "ARCHIVE_THEME_LIBRARY");
+        }
+        externalCorpus.put("datasetId", datasetId);
+        return run(null, templateId, unitId, userId, List.of(knowledgeBaseId), externalCorpus, runtimeVariables);
     }
 
     public GenerationJob run(
@@ -151,7 +203,12 @@ public class ResearchGenerationService {
 
         Map<String, Object> workflowOutput = executionResult.execution().output();
         List<Map<String, Object>> sections = readSectionsFromWorkflow(workflowOutput, template);
-        List<Map<String, Object>> sectionOutputs = mapWorkflowSectionOutputs(sections, workflowOutput.get("sectionOutputs"));
+        List<Map<String, Object>> corpusItems = readCorpusItems(workflowOutput);
+        List<Map<String, Object>> sectionOutputs = mapWorkflowSectionOutputs(
+                sections,
+                workflowOutput.get("sectionOutputs"),
+                corpusItems
+        );
         String outlineText = stringValue(workflowOutput.get("outlineText"), "");
         Map<String, Object> outline = buildOutline(topic, sections);
         String contentMarkdown = mergeMarkdown(sectionOutputs);
@@ -159,7 +216,27 @@ public class ResearchGenerationService {
             contentMarkdown = outlineText + "\n\n" + contentMarkdown;
         }
         List<Map<String, Object>> citations = collectCitations(sectionOutputs);
-        String outputType = stringValue(workflowOutput.get("outputType"), template.outputType());
+        if (citations.isEmpty()) {
+            citations = mapCorpusCitations(corpusItems);
+        }
+        String templateCategory = resolveTemplateCategory(template);
+        String outputTitle = ("topic_collection".equals(templateCategory) || "archive_topic_collection".equals(templateCategory))
+                ? topic + "专题资料汇编"
+                : topic + "编研成果";
+        Map<String, Object> contentJson = contentJsonBuilder.build(
+                templateCategory,
+                outputTitle,
+                topic,
+                audience,
+                sections,
+                sectionOutputs,
+                citations,
+                corpusItems
+        );
+        String contentJsonText = contentJsonBuilder.writeJson(contentJson);
+        String outputType = resolveOutputType(stringValue(workflowOutput.get("outputType"), template.outputType()));
+        String outputTemplateId = resolveDefaultOutputTemplateId(templateCategory);
+        Map<String, Object> docxConfig = readDocxConfig(template, outputTemplateId);
         Instant completedAt = Instant.now();
         String jobId = "gen_job_" + UUID.randomUUID();
         String workflowRunSnapshot = writeJson(Map.of(
@@ -193,8 +270,8 @@ public class ResearchGenerationService {
 
         String outputId = "gen_out_" + UUID.randomUUID();
         String contentDocxPath = null;
-        if (isDocxOutput(outputType)) {
-            byte[] docxBytes = docxExporter.export(topic + "编研成果", contentMarkdown);
+        if (shouldGenerateDocx(outputType)) {
+            byte[] docxBytes = docxExporter.exportFromContentJson(contentJson, docxConfig);
             contentDocxPath = outputFileStorage.saveDocx(outputId, docxBytes);
         }
 
@@ -202,14 +279,17 @@ public class ResearchGenerationService {
                 outputId,
                 tenantId,
                 jobId,
-                topic + "编研成果",
+                outputTitle,
                 outputType,
                 contentMarkdown,
+                contentJsonText,
                 contentDocxPath,
+                outputTemplateId,
                 writeJson(citations),
                 writeJson(Map.of(
                         "corpusItems", workflowOutput.get("corpusItems"),
-                        "workflowOutput", workflowOutput
+                        "workflowOutput", workflowOutput,
+                        "templateCategory", templateCategory
                 )),
                 "DRAFT",
                 completedAt
@@ -265,10 +345,12 @@ public class ResearchGenerationService {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> mapWorkflowSectionOutputs(
             List<Map<String, Object>> sections,
-            Object rawSectionOutputs
+            Object rawSectionOutputs,
+            List<Map<String, Object>> corpusItems
     ) {
         List<Map<String, Object>> outputs = new ArrayList<>();
         List<?> loopOutputs = rawSectionOutputs instanceof List<?> items ? items : List.of();
+        List<Map<String, Object>> corpusCitations = mapCorpusCitations(corpusItems);
         for (int index = 0; index < sections.size(); index++) {
             Map<String, Object> section = sections.get(index);
             String key = stringValue(section.get("key"), "section");
@@ -277,14 +359,66 @@ public class ResearchGenerationService {
             if (index < loopOutputs.size() && loopOutputs.get(index) instanceof Map<?, ?> loopOutput) {
                 contentMarkdown = stringValue(loopOutput.get("sectionMarkdown"), contentMarkdown);
             }
-            outputs.add(Map.of(
-                    "key", key,
-                    "title", title,
-                    "contentMarkdown", contentMarkdown,
-                    "citations", List.of()
-            ));
+            boolean citationRequired = Boolean.parseBoolean(String.valueOf(section.getOrDefault("citationRequired", false)));
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("key", key);
+            output.put("title", title);
+            output.put("contentMarkdown", contentMarkdown);
+            if (citationRequired && !corpusCitations.isEmpty()) {
+                output.put("citations", corpusCitations);
+            } else {
+                output.put("citations", List.of());
+            }
+            outputs.add(output);
         }
         return outputs;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> readCorpusItems(Map<String, Object> workflowOutput) {
+        Object corpusItems = workflowOutput.get("corpusItems");
+        if (!(corpusItems instanceof List<?> items)) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object item : items) {
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> corpusItem = new LinkedHashMap<>();
+                map.forEach((key, value) -> corpusItem.put(String.valueOf(key), value));
+                result.add(corpusItem);
+            }
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> mapCorpusCitations(List<Map<String, Object>> corpusItems) {
+        if (corpusItems == null || corpusItems.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> citations = new ArrayList<>();
+        int refNo = 1;
+        for (Map<String, Object> item : corpusItems) {
+            Map<String, Object> citation = new LinkedHashMap<>();
+            citation.put("refNo", refNo++);
+            citation.put("title", item.get("title"));
+            citation.put("archiveCode", firstNonBlank(
+                    stringValue(item.get("archiveCode"), ""),
+                    stringValue(item.get("archiveItemCode"), "")
+            ));
+            citation.put("sourceType", "档案文件");
+            citation.put("quote", item.getOrDefault("summary", ""));
+            citations.add(citation);
+        }
+        return citations;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     public List<GenerationJob> listJobs() {
@@ -316,6 +450,83 @@ public class ResearchGenerationService {
                 .orElseThrow(() -> new IllegalArgumentException("Generation output not found: " + id));
         assertTenantAccessible(output.tenantId());
         return output;
+    }
+
+    public List<Map<String, Object>> listOutputTemplates(String outputType, String templateCategory) {
+        return outputTemplateRegistry.list(outputType, templateCategory);
+    }
+
+    public GenerationOutput renderDocx(String outputId, String outputTemplateId) {
+        GenerationOutput output = getOutput(outputId);
+        Map<String, Object> contentJson = contentJsonBuilder.readJson(output.contentJson());
+        if (contentJson.isEmpty()) {
+            contentJson = Map.of(
+                    "title", output.title(),
+                    "sections", List.of(Map.of(
+                            "type", "text",
+                            "title", "",
+                            "content", output.contentMarkdown() == null ? "" : output.contentMarkdown()
+                    ))
+            );
+        }
+        String templateId = outputTemplateId == null || outputTemplateId.isBlank()
+                ? output.outputTemplateId()
+                : outputTemplateId;
+        if (templateId == null || templateId.isBlank()) {
+            templateId = "layout_report_docx";
+        }
+        Map<String, Object> docxConfig = outputTemplateRegistry.resolveDocxConfig(templateId, null);
+        byte[] docxBytes = docxExporter.exportFromContentJson(contentJson, docxConfig);
+        String contentDocxPath = outputFileStorage.saveDocx(output.id(), docxBytes);
+        GenerationOutput updated = new GenerationOutput(
+                output.id(),
+                output.tenantId(),
+                output.jobId(),
+                output.title(),
+                "DOCX",
+                output.contentMarkdown(),
+                output.contentJson(),
+                contentDocxPath,
+                templateId,
+                output.citations(),
+                output.sourceSnapshot(),
+                output.status(),
+                Instant.now()
+        );
+        return outputStore.save(updated);
+    }
+
+    public byte[] renderDemoTopicCollectionDocx(Map<String, Object> contentJson) {
+        Map<String, Object> docxConfig = outputTemplateRegistry.resolveDocxConfig("layout_topic_collection_docx", null);
+        return docxExporter.exportFromContentJson(contentJson, docxConfig);
+    }
+
+    public Map<String, Object> loadDemoTopicCollectionSampleJson() {
+        try (var inputStream = getClass().getClassLoader()
+                .getResourceAsStream("research/samples/archive_topic_collection_content.json")) {
+            if (inputStream == null) {
+                throw new IllegalStateException("Sample content_json not found.");
+            }
+            return objectMapper.readValue(inputStream, MAP_TYPE);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to load sample content_json.", exception);
+        }
+    }
+
+    public String renderHtmlPreview(String outputId) {
+        GenerationOutput output = getOutput(outputId);
+        Map<String, Object> contentJson = contentJsonBuilder.readJson(output.contentJson());
+        if (contentJson.isEmpty()) {
+            contentJson = Map.of(
+                    "title", output.title(),
+                    "sections", List.of(Map.of(
+                            "type", "text",
+                            "title", "",
+                            "content", output.contentMarkdown() == null ? "" : output.contentMarkdown()
+                    ))
+            );
+        }
+        return htmlPreviewRenderer.render(contentJson);
     }
 
     private GenerationTemplate getTemplate(String templateId) {
@@ -369,8 +580,43 @@ public class ResearchGenerationService {
         return stringValue(externalCorpus.get("id"), "theme_001");
     }
 
+    private boolean shouldGenerateDocx(String outputType) {
+        return outputType == null
+                || outputType.isBlank()
+                || "DOCX".equalsIgnoreCase(outputType);
+    }
+
+    private String resolveOutputType(String outputType) {
+        if (outputType == null || outputType.isBlank()) {
+            return "DOCX";
+        }
+        return outputType;
+    }
+
+    private String resolveTemplateCategory(GenerationTemplate template) {
+        if (template.templateCategory() != null && !template.templateCategory().isBlank()) {
+            return template.templateCategory();
+        }
+        return "report";
+    }
+
+    private String resolveDefaultOutputTemplateId(String templateCategory) {
+        return switch (templateCategory) {
+            case "gallery" -> "layout_gallery_docx";
+            case "timeline" -> "layout_timeline_docx";
+            case "topic_collection", "archive_topic_collection" -> "layout_topic_collection_docx";
+            default -> "layout_report_docx";
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readDocxConfig(GenerationTemplate template, String outputTemplateId) {
+        Map<String, Object> templateConfig = readMap(template.docxConfig());
+        return outputTemplateRegistry.resolveDocxConfig(outputTemplateId, writeJson(templateConfig));
+    }
+
     private boolean isDocxOutput(String outputType) {
-        return "DOCX".equalsIgnoreCase(outputType);
+        return shouldGenerateDocx(outputType);
     }
 
     @SuppressWarnings("unchecked")

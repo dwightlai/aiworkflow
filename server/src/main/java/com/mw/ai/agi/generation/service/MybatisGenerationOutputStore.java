@@ -49,7 +49,9 @@ public class MybatisGenerationOutputStore implements GenerationOutputStore {
         entity.setTitle(output.title());
         entity.setOutputType(output.outputType());
         entity.setContentMarkdown(output.contentMarkdown());
+        entity.setContentJson(output.contentJson());
         entity.setContentDocxPath(output.contentDocxPath());
+        entity.setOutputTemplateId(output.outputTemplateId());
         entity.setCitations(output.citations());
         entity.setSourceSnapshot(output.sourceSnapshot());
         entity.setStatus(output.status());
@@ -65,7 +67,9 @@ public class MybatisGenerationOutputStore implements GenerationOutputStore {
                 entity.getTitle(),
                 entity.getOutputType(),
                 entity.getContentMarkdown(),
+                entity.getContentJson(),
                 entity.getContentDocxPath(),
+                entity.getOutputTemplateId(),
                 entity.getCitations(),
                 entity.getSourceSnapshot(),
                 entity.getStatus(),

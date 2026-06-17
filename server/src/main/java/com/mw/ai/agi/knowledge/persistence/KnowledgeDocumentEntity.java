@@ -24,6 +24,24 @@ public class KnowledgeDocumentEntity {
     private String splitterConfig;
     private String rawContent;
     private String errorMessage;
+    private String storagePath;
+    private String datasetId;
+    private String sourceIndexId;
+    private String topicId;
+    private String docType;
+    private String sourceSystem;
+    private String sourceType;
+    private String sourceRefId;
+    private String materialSourceType;
+    private String materialType;
+    private String sourceArchiveFileId;
+    private String sourceVersion;
+    private String titleSnapshot;
+    private String metadataJson;
+    private String summaryText;
+    private String securityLevel;
+    private String ownerUnitId;
+    private Instant lastIndexTime;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -57,4 +75,40 @@ public class KnowledgeDocumentEntity {
     public void setRawContent(String rawContent) { this.rawContent = rawContent; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public String getStoragePath() { return storagePath; }
+    public void setStoragePath(String storagePath) { this.storagePath = storagePath; }
+    public String getDatasetId() { return datasetId; }
+    public void setDatasetId(String datasetId) { this.datasetId = datasetId; }
+    public String getSourceIndexId() { return sourceIndexId; }
+    public void setSourceIndexId(String sourceIndexId) { this.sourceIndexId = sourceIndexId; }
+    public String getTopicId() { return topicId; }
+    public void setTopicId(String topicId) { this.topicId = topicId; }
+    public String getDocType() { return docType; }
+    public void setDocType(String docType) { this.docType = docType; }
+    public String getSourceSystem() { return sourceSystem; }
+    public void setSourceSystem(String sourceSystem) { this.sourceSystem = sourceSystem; }
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+    public String getSourceRefId() { return sourceRefId; }
+    public void setSourceRefId(String sourceRefId) { this.sourceRefId = sourceRefId; }
+    public String getMaterialSourceType() { return materialSourceType; }
+    public void setMaterialSourceType(String materialSourceType) { this.materialSourceType = materialSourceType; }
+    public String getMaterialType() { return materialType; }
+    public void setMaterialType(String materialType) { this.materialType = materialType; }
+    public String getSourceArchiveFileId() { return sourceArchiveFileId; }
+    public void setSourceArchiveFileId(String sourceArchiveFileId) { this.sourceArchiveFileId = sourceArchiveFileId; }
+    public String getSourceVersion() { return sourceVersion; }
+    public void setSourceVersion(String sourceVersion) { this.sourceVersion = sourceVersion; }
+    public String getTitleSnapshot() { return titleSnapshot; }
+    public void setTitleSnapshot(String titleSnapshot) { this.titleSnapshot = titleSnapshot; }
+    public String getMetadataJson() { return metadataJson; }
+    public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
+    public String getSummaryText() { return summaryText; }
+    public void setSummaryText(String summaryText) { this.summaryText = summaryText; }
+    public String getSecurityLevel() { return securityLevel; }
+    public void setSecurityLevel(String securityLevel) { this.securityLevel = securityLevel; }
+    public String getOwnerUnitId() { return ownerUnitId; }
+    public void setOwnerUnitId(String ownerUnitId) { this.ownerUnitId = ownerUnitId; }
+    public Instant getLastIndexTime() { return lastIndexTime; }
+    public void setLastIndexTime(Instant lastIndexTime) { this.lastIndexTime = lastIndexTime; }
 }

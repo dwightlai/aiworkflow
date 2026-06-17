@@ -11,7 +11,7 @@ import {
   updateKnowledgeChunk,
   type KnowledgeChunk
 } from '../../api/knowledge';
-import { navigateTo } from '../../navigation';
+import { navigateTo, readDatasetIdFromSearch, withDatasetQuery } from '../../navigation';
 
 interface KnowledgeDocumentEditPageProps {
   knowledgeBaseId: string;
@@ -89,16 +89,21 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
     setEditingChunkContent(chunk.content);
   }
 
+  function navigateBackToDocuments() {
+    const datasetId = readDatasetIdFromSearch() ?? document?.datasetId ?? null;
+    navigateTo(withDatasetQuery(`/knowledge/${knowledgeBaseId}/documents`, datasetId));
+  }
+
   return (
     <section style={pageStyle}>
       <div style={headerStyle}>
         <Space direction="vertical" size={8}>
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigateTo(`/knowledge/${knowledgeBaseId}/documents`)}
+            onClick={navigateBackToDocuments}
             style={{ width: 'fit-content' }}
           >
-            返回文档列表
+            返回资料列表
           </Button>
           <Space wrap>
             <Typography.Title level={3} style={{ margin: 0 }}>

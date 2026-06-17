@@ -48,6 +48,10 @@ export interface GenerationTemplate {
   category: string;
   ownerUnitId?: string | null;
   outputType: string;
+  templateCategory?: string | null;
+  docxConfig?: string | Record<string, unknown> | null;
+  layoutConfig?: string | Record<string, unknown> | null;
+  linkedHtmlTemplateId?: string | null;
   templateSchema: GenerationTemplateSchema | string;
   workflowId?: string | null;
   workflowSnapshot?: WorkflowSnapshot | string | null;
@@ -64,6 +68,10 @@ export interface SaveGenerationTemplateRequest {
   description: string | null;
   category: string;
   outputType: string;
+  templateCategory?: string | null;
+  docxConfig?: string | null;
+  layoutConfig?: string | null;
+  linkedHtmlTemplateId?: string | null;
   templateSchema: GenerationTemplateSchema | string;
   workflowId?: string | null;
   workflowSnapshot?: WorkflowSnapshot | string | null;
@@ -114,6 +122,25 @@ export async function deleteGenerationTemplate(id: string): Promise<void> {
 
 export async function getGenerationTemplateRuntime(id: string): Promise<GenerationTemplateRuntimeView> {
   return requestJson<GenerationTemplateRuntimeView>(`/api/generation-templates/${id}/runtime`);
+}
+
+export interface UploadDocxMasterResult {
+  templateId: string;
+  masterFile: string;
+  fileName: string;
+  docxConfig: string;
+}
+
+export async function uploadGenerationTemplateDocxMaster(
+  id: string,
+  file: File
+): Promise<UploadDocxMasterResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return requestJson<UploadDocxMasterResult>(`/api/generation-templates/${id}/docx-master`, {
+    method: 'POST',
+    body: formData
+  }, { jsonHeaders: false });
 }
 
 export function parseTemplateSchemaText(value: string): ParsedTemplateSchemaText {

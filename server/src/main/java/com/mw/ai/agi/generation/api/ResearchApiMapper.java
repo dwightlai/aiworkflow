@@ -48,11 +48,26 @@ public final class ResearchApiMapper {
                 output.title(),
                 output.outputType(),
                 output.contentMarkdown(),
+                output.contentJson() != null && !output.contentJson().isBlank()
+                        ? readMap(output.contentJson(), objectMapper)
+                        : null,
                 output.contentDocxPath() != null && !output.contentDocxPath().isBlank(),
+                output.outputTemplateId(),
                 readListMap(output.citations(), objectMapper),
                 output.status(),
                 output.createdAt()
         );
+    }
+
+    private static Map<String, Object> readMap(String json, ObjectMapper objectMapper) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, MAP_TYPE);
+        } catch (Exception exception) {
+            return Map.of();
+        }
     }
 
     private static List<Map<String, Object>> readOutline(String json, ObjectMapper objectMapper) {
@@ -140,17 +155,6 @@ public final class ResearchApiMapper {
         }
     }
 
-    private static Map<String, Object> readMap(String json, ObjectMapper objectMapper) {
-        if (json == null || json.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(json, MAP_TYPE);
-        } catch (Exception exception) {
-            return Map.of();
-        }
-    }
-
     private static List<Map<String, Object>> readListMap(String json, ObjectMapper objectMapper) {
         if (json == null || json.isBlank()) {
             return List.of();
@@ -208,7 +212,9 @@ public final class ResearchApiMapper {
             String title,
             String outputType,
             String contentMarkdown,
+            Map<String, Object> contentJson,
             boolean hasDocx,
+            String outputTemplateId,
             List<Map<String, Object>> citations,
             String status,
             java.time.Instant createdAt

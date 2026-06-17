@@ -27,8 +27,55 @@ export interface KnowledgeBase {
   status?: string;
   documentCount: number;
   chunkCount: number;
+  kbType?: string;
+  datasetMode?: string;
+  defaultDatasetId?: string | null;
+  datasetCount?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface KnowledgeDataset {
+  id: string;
+  knowledgeBaseId: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  topicId?: string | null;
+  topicTitle?: string | null;
+  datasetType: string;
+  documentCount: number;
+  chunkCount: number;
+  sourceCount: number;
+  indexStatus: string;
+  lastSyncTime?: string | null;
+  lastIndexTime?: string | null;
+  status: string;
+}
+
+export interface KnowledgeSourceIndex {
+  id: string;
+  datasetId: string;
+  topicId?: string | null;
+  sourceTitleSnapshot?: string | null;
+  materialSourceType?: string | null;
+  materialType?: string | null;
+  sourceArchiveFileId?: string | null;
+  sourceRefId: string;
+  indexStatus: string;
+  documentId?: string | null;
+  errorMessage?: string | null;
+  lastSyncTime?: string | null;
+  lastIndexTime?: string | null;
+}
+
+export interface SyncArchiveTopicResult {
+  datasetId: string;
+  sourceCount: number;
+  newCount: number;
+  changedCount: number;
+  unchangedCount: number;
+  failedCount: number;
 }
 
 export interface KnowledgeDocument {
@@ -37,6 +84,7 @@ export interface KnowledgeDocument {
   name: string;
   chunkCount: number;
   datasetType?: string;
+  datasetId?: string | null;
   processingStatus?: string;
   tags?: string | null;
   category?: string | null;
@@ -120,6 +168,8 @@ export interface SaveKnowledgeBaseRequest {
   chunkOverlap?: number;
   retrievalMode?: string;
   topK?: number;
+  kbType?: string;
+  datasetMode?: string;
 }
 
 export interface AddKnowledgeDocumentRequest {
@@ -140,6 +190,7 @@ export interface KnowledgeSplitOptions {
   splitterType?: string;
   chunkSize?: number;
   separator?: string | null;
+  datasetId?: string;
 }
 
 export interface ManualDatasetEntryRequest {
@@ -150,13 +201,56 @@ export interface ManualDatasetEntryRequest {
   source?: string | null;
 }
 
+export interface CreateKnowledgeDatasetRequest {
+  name: string;
+  code?: string;
+  description?: string;
+  topicId?: string;
+  topicTitle?: string;
+}
+
+export interface AddManualKnowledgeSourceRequest {
+  title: string;
+  content: string;
+}
+
 export interface AddManualDatasetRequest {
   entries: ManualDatasetEntryRequest[];
+  datasetId?: string;
+}
+
+export interface UpdateKnowledgeDatasetRequest {
+  name: string;
+  description?: string;
 }
 
 export interface SearchKnowledgeBaseRequest {
   query: string;
   topK: number;
+  datasetId?: string;
+}
+
+export interface KnowledgeRetrievalRequest {
+  knowledgeBaseId: string;
+  datasetId?: string;
+  query: string;
+  retrievalMode?: string;
+  topK?: number;
+  filters?: Record<string, unknown>;
+}
+
+export interface KnowledgeRetrievalItem {
+  chunkId: string;
+  documentId?: string | null;
+  sourceIndexId?: string | null;
+  content: string;
+  score: number;
+  sourceTitle?: string | null;
+  sourceRefId?: string | null;
+  sourceArchiveFileId?: string | null;
+  sourcePage?: string | null;
+  citationText?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PreviewKnowledgeChunksRequest {
@@ -254,6 +348,40 @@ export async function uploadKnowledgeDocumentFile(
   }, false);
 }
 
+export async function createKnowledgeDataset(
+  knowledgeBaseId: string,
+  request: CreateKnowledgeDatasetRequest
+): Promise<KnowledgeDataset> {
+  return requestJson<KnowledgeDataset>(`/api/knowledge-bases/${knowledgeBaseId}/datasets`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function addManualKnowledgeSource(
+  datasetId: string,
+  request: AddManualKnowledgeSourceRequest
+): Promise<KnowledgeSourceIndex> {
+  return requestJson<KnowledgeSourceIndex>(`/api/knowledge-datasets/${datasetId}/sources/manual`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function updateKnowledgeDataset(
+  datasetId: string,
+  request: UpdateKnowledgeDatasetRequest
+): Promise<KnowledgeDataset> {
+  return requestJson<KnowledgeDataset>(`/api/knowledge-datasets/${datasetId}`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function deleteKnowledgeDataset(datasetId: string): Promise<void> {
+  await requestJson<void>(`/api/knowledge-datasets/${datasetId}`, { method: 'DELETE' });
+}
+
 export async function addManualKnowledgeDataset(
   knowledgeBaseId: string,
   request: AddManualDatasetRequest
@@ -324,8 +452,12 @@ export async function previewUploadedKnowledgeDocumentFile(
   }, false);
 }
 
-export async function listKnowledgeDocuments(knowledgeBaseId: string): Promise<PageResponse<KnowledgeDocument>> {
-  return requestJson<PageResponse<KnowledgeDocument>>(`/api/knowledge-bases/${knowledgeBaseId}/documents`);
+export async function listKnowledgeDocuments(
+  knowledgeBaseId: string,
+  datasetId?: string
+): Promise<PageResponse<KnowledgeDocument>> {
+  const query = datasetId ? `?datasetId=${encodeURIComponent(datasetId)}` : '';
+  return requestJson<PageResponse<KnowledgeDocument>>(`/api/knowledge-bases/${knowledgeBaseId}/documents${query}`);
 }
 
 export async function deleteKnowledgeDocument(knowledgeBaseId: string, documentId: string): Promise<void> {
@@ -380,6 +512,29 @@ export async function searchKnowledgeDocument(
   });
 }
 
+export async function listKnowledgeDatasets(knowledgeBaseId: string): Promise<PageResponse<KnowledgeDataset>> {
+  return requestJson<PageResponse<KnowledgeDataset>>(`/api/knowledge-bases/${knowledgeBaseId}/datasets`);
+}
+
+export async function getKnowledgeDataset(datasetId: string): Promise<KnowledgeDataset> {
+  return requestJson<KnowledgeDataset>(`/api/knowledge-datasets/${datasetId}`);
+}
+
+export async function listKnowledgeSourceIndexes(datasetId: string): Promise<PageResponse<KnowledgeSourceIndex>> {
+  return requestJson<PageResponse<KnowledgeSourceIndex>>(`/api/knowledge-datasets/${datasetId}/sources`);
+}
+
+export async function reindexKnowledgeSource(sourceIndexId: string): Promise<void> {
+  await requestJson<void>(`/api/knowledge-sources/${sourceIndexId}/reindex`, { method: 'POST' });
+}
+
+export async function retrieveKnowledge(request: KnowledgeRetrievalRequest): Promise<{ items: KnowledgeRetrievalItem[] }> {
+  return requestJson<{ items: KnowledgeRetrievalItem[] }>('/api/knowledge/retrieval', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
 async function requestJson<T>(url: string, init?: RequestInit, jsonHeaders = true): Promise<T> {
   return authRequestJson<T>(url, init, { jsonHeaders });
 }
@@ -399,6 +554,9 @@ function uploadDatasetFile<T>(
   }
   if (options.separator) {
     formData.append('separator', options.separator);
+  }
+  if (options.datasetId) {
+    formData.append('datasetId', options.datasetId);
   }
   return requestJson<T>(url, {
     method: 'POST',

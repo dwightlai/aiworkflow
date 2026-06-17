@@ -53,3 +53,10 @@ third-party:
   auth:
     service-name: ${AUTH_SERVICE_NAME:auth-service}
     base-url: ${AUTH_SERVICE_BASE_URL:}
+
+agi:
+  storage:
+    knowledge-document-dir: ${AGI_STORAGE_KNOWLEDGE_DOCUMENT_DIR:./data/knowledge-documents}
+    knowledge-document-save-original: ${AGI_STORAGE_KNOWLEDGE_DOCUMENT_SAVE_ORIGINAL:true}
+    research-output-dir: ${AGI_STORAGE_RESEARCH_OUTPUT_DIR:./data/generation-outputs}
+    research-docx-master-dir: ${AGI_STORAGE_RESEARCH_DOCX_MASTER_DIR:./data/generation-docx-masters}

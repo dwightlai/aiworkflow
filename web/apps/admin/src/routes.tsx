@@ -17,6 +17,7 @@ import { LogsPage } from './pages/system/LogsPage';
 import { MenusPage } from './pages/system/MenusPage';
 import { OpenApiDocsPage } from './pages/system/OpenApiDocsPage';
 import { IntegrationAppsPage } from './pages/system/IntegrationAppsPage';
+import { StorageSettingsPage } from './pages/system/StorageSettingsPage';
 import { TenantsPage } from './pages/system/TenantsPage';
 import { TenantWorkspacePage } from './pages/system/TenantWorkspacePage';
 import { WorkflowCardsPage } from './pages/workflows/WorkflowCardsPage';
@@ -231,11 +232,28 @@ export function resolveRoute(pathname: string): ResolvedRoute {
     };
   }
 
+  if (pathname === '/system/storage-settings') {
+    return {
+      title: '存储路径配置',
+      breadcrumb: ['首页', '系统管理', '存储路径配置'],
+      element: <StorageSettingsPage />
+    };
+  }
+
   if (pathname === '/system/logs') {
     return {
       title: '日志管理',
       breadcrumb: ['首页', '系统管理', '日志管理'],
       element: <LogsPage />
+    };
+  }
+
+  if (pathname.startsWith('/knowledge/') && pathname.endsWith('/archive-topics')) {
+    const knowledgeBaseId = pathname.split('/')[2] ?? '';
+    return {
+      title: '知识库资料',
+      breadcrumb: ['首页', 'AI 功能', '知识库', '资料管理'],
+      element: <KnowledgeDocumentsPage knowledgeBaseId={knowledgeBaseId} />
     };
   }
 
@@ -260,8 +278,8 @@ export function resolveRoute(pathname: string): ResolvedRoute {
   if (pathname.startsWith('/knowledge/') && pathname.endsWith('/documents')) {
     const knowledgeBaseId = pathname.split('/')[2] ?? '';
     return {
-      title: '知识库文档',
-      breadcrumb: ['首页', 'AI 功能', '知识库', '文档管理'],
+      title: '知识库资料',
+      breadcrumb: ['首页', 'AI 功能', '知识库', '资料管理'],
       element: <KnowledgeDocumentsPage knowledgeBaseId={knowledgeBaseId} />
     };
   }
@@ -293,6 +311,7 @@ const routeTitleByPath: Record<string, string> = {
   '/system/menus': '菜单管理',
   '/system/departments': '组织用户',
   '/system/dictionary': '数据字典',
+  '/system/storage-settings': '存储路径配置',
   '/system/jobs': '定时任务',
   '/system/logs': '日志管理'
 };

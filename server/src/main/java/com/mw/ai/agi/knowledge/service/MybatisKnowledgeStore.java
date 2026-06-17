@@ -217,6 +217,12 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setUpdatedBy(knowledgeBase.updatedBy());
         entity.setCreatedAt(knowledgeBase.createdAt());
         entity.setUpdatedAt(knowledgeBase.updatedAt());
+        entity.setKbType(knowledgeBase.kbType());
+        entity.setBizScope(knowledgeBase.bizScope());
+        entity.setDatasetMode(knowledgeBase.datasetMode());
+        entity.setDefaultDatasetId(knowledgeBase.defaultDatasetId());
+        entity.setDatasetCount(knowledgeBase.datasetCount());
+        entity.setMetadataJson(knowledgeBase.metadataJson());
         return entity;
     }
 
@@ -241,7 +247,13 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 entity.getCreatedBy(),
                 entity.getUpdatedBy(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                defaultString(entity.getKbType(), "NORMAL"),
+                entity.getBizScope(),
+                defaultString(entity.getDatasetMode(), "SINGLE"),
+                entity.getDefaultDatasetId(),
+                entity.getDatasetCount() == null ? 0 : entity.getDatasetCount(),
+                entity.getMetadataJson()
         );
     }
 
@@ -263,6 +275,24 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setSplitterConfig(document.splitterConfig());
         entity.setRawContent(document.rawContent());
         entity.setErrorMessage(document.errorMessage());
+        entity.setStoragePath(document.storagePath());
+        entity.setDatasetId(document.datasetId());
+        entity.setSourceIndexId(document.sourceIndexId());
+        entity.setTopicId(document.topicId());
+        entity.setDocType(document.docType());
+        entity.setSourceSystem(document.sourceSystem());
+        entity.setSourceType(document.sourceType());
+        entity.setSourceRefId(document.sourceRefId());
+        entity.setMaterialSourceType(document.materialSourceType());
+        entity.setMaterialType(document.materialType());
+        entity.setSourceArchiveFileId(document.sourceArchiveFileId());
+        entity.setSourceVersion(document.sourceVersion());
+        entity.setTitleSnapshot(document.titleSnapshot());
+        entity.setMetadataJson(document.metadataJson());
+        entity.setSummaryText(document.summaryText());
+        entity.setSecurityLevel(document.securityLevel());
+        entity.setOwnerUnitId(document.ownerUnitId());
+        entity.setLastIndexTime(document.lastIndexTime());
         return entity;
     }
 
@@ -283,7 +313,25 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 defaultString(entity.getSplitterType(), "FIXED_LENGTH"),
                 defaultString(entity.getSplitterConfig(), "{}"),
                 entity.getRawContent(),
-                entity.getErrorMessage()
+                entity.getErrorMessage(),
+                entity.getStoragePath(),
+                entity.getDatasetId(),
+                entity.getSourceIndexId(),
+                entity.getTopicId(),
+                entity.getDocType(),
+                entity.getSourceSystem(),
+                entity.getSourceType(),
+                entity.getSourceRefId(),
+                entity.getMaterialSourceType(),
+                entity.getMaterialType(),
+                entity.getSourceArchiveFileId(),
+                entity.getSourceVersion(),
+                entity.getTitleSnapshot(),
+                entity.getMetadataJson(),
+                entity.getSummaryText(),
+                entity.getSecurityLevel(),
+                entity.getOwnerUnitId(),
+                entity.getLastIndexTime()
         );
     }
 
@@ -297,6 +345,22 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setChunkIndex(chunk.index());
         entity.setEnabled(chunk.enabled());
         entity.setTokenEstimate(chunk.tokenEstimate());
+        entity.setDatasetId(chunk.datasetId());
+        entity.setSourceIndexId(chunk.sourceIndexId());
+        entity.setTopicId(chunk.topicId());
+        entity.setChunkTitle(chunk.chunkTitle());
+        entity.setChunkType(chunk.chunkType());
+        entity.setSourceSystem(chunk.sourceSystem());
+        entity.setSourceType(chunk.sourceType());
+        entity.setSourceRefId(chunk.sourceRefId());
+        entity.setMaterialSourceType(chunk.materialSourceType());
+        entity.setMaterialType(chunk.materialType());
+        entity.setSourceArchiveFileId(chunk.sourceArchiveFileId());
+        entity.setSourcePage(chunk.sourcePage());
+        entity.setSourcePosition(chunk.sourcePosition());
+        entity.setCitationText(chunk.citationText());
+        entity.setMetadataJson(chunk.metadataJson());
+        entity.setSecurityLevel(chunk.securityLevel());
         return entity;
     }
 
@@ -309,7 +373,23 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 entity.getContent(),
                 entity.getChunkIndex(),
                 Boolean.TRUE.equals(entity.getEnabled()),
-                entity.getTokenEstimate()
+                entity.getTokenEstimate(),
+                entity.getDatasetId(),
+                entity.getSourceIndexId(),
+                entity.getTopicId(),
+                entity.getChunkTitle(),
+                entity.getChunkType(),
+                entity.getSourceSystem(),
+                entity.getSourceType(),
+                entity.getSourceRefId(),
+                entity.getMaterialSourceType(),
+                entity.getMaterialType(),
+                entity.getSourceArchiveFileId(),
+                entity.getSourcePage(),
+                entity.getSourcePosition(),
+                entity.getCitationText(),
+                entity.getMetadataJson(),
+                entity.getSecurityLevel()
         );
     }
 

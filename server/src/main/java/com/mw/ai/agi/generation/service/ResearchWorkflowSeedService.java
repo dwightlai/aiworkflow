@@ -1,6 +1,7 @@
 package com.mw.ai.agi.generation.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mw.ai.agi.generation.persistence.GenerationTemplateEntity;
 import com.mw.ai.agi.generation.persistence.GenerationTemplateMapper;
 import com.mw.ai.agi.model.persistence.ModelProviderEntity;
 import com.mw.ai.agi.model.persistence.ModelProviderMapper;
@@ -27,7 +28,29 @@ import java.util.Optional;
 @Order(20)
 public class ResearchWorkflowSeedService implements ApplicationRunner {
     private static final String TEMPLATE_ID = "template_research_001";
+    private static final String TOPIC_COLLECTION_TEMPLATE_ID = "template_research_topic_collection_001";
     private static final String TENANT_ID = "tenant_default";
+    private static final String TOPIC_COLLECTION_DOCX_CONFIG = """
+            {"masterFile":"research/docx-masters/archive_topic_collection.docx","templateType":"archive_topic_collection"}
+            """;
+    private static final String TOPIC_COLLECTION_LAYOUT_CONFIG = """
+            {"defaultTab":"docx","enableHtmlPreview":false}
+            """;
+    private static final String TOPIC_COLLECTION_SCHEMA = """
+            {
+              "title": "专题汇编编研模板",
+              "variables": [
+                { "name": "topic", "label": "主题", "type": "string", "required": true }
+              ],
+              "sections": [
+                { "key": "background", "title": "一、专题背景", "instruction": "说明专题形成背景、业务意义和编研目的。", "citationRequired": true },
+                { "key": "scope", "title": "二、资料范围与编排说明", "instruction": "说明资料来源、时间范围、筛选标准和编排方式。", "citationRequired": true },
+                { "key": "core_documents", "title": "三、核心文件汇编", "instruction": "根据档案馆资料输出核心文件条目，每条含题名、档号、形成时间、责任单位、摘要。", "outputFormat": "document_collection", "citationRequired": true },
+                { "key": "gallery", "title": "六、图片与实物档案", "instruction": "输出图片展品，每条含题名、图片引用、说明。", "outputFormat": "gallery", "citationRequired": true },
+                { "key": "interpretation", "title": "七、资料解读", "instruction": "提炼主题价值、业务特点和历史意义。", "outputFormat": "analysis", "citationRequired": false }
+              ]
+            }
+            """;
 
     private final Optional<WorkflowMapper> workflowMapper;
     private final Optional<WorkflowVersionMapper> workflowVersionMapper;
@@ -63,6 +86,7 @@ public class ResearchWorkflowSeedService implements ApplicationRunner {
         seedModelProvider(now);
         seedWorkflow(definition, now);
         bindGenerationTemplate(now);
+        seedTopicCollectionTemplate(now);
     }
 
     private void seedModelProvider(Instant now) {
@@ -193,5 +217,85 @@ public class ResearchWorkflowSeedService implements ApplicationRunner {
             entity.setWorkflowSnapshot(null);
         }
         generationTemplateMapper.get().updateById(entity);
+    }
+
+    private void seedTopicCollectionTemplate(Instant now) {
+        if (generationTemplateMapper.isEmpty()) {
+            return;
+        }
+        GenerationTemplateMapper mapper = generationTemplateMapper.get();
+        GenerationTemplateEntity entity = mapper.selectById(TOPIC_COLLECTION_TEMPLATE_ID);
+        if (entity == null) {
+            entity = new GenerationTemplateEntity();
+            entity.setId(TOPIC_COLLECTION_TEMPLATE_ID);
+            entity.setTenantId(TENANT_ID);
+            entity.setName("专题汇编编研模板");
+            entity.setCode("research_topic_collection");
+            entity.setDescription("基于 DOCX 母版的档案专题汇编成果（04_专题汇编）");
+            entity.setCategory("RESEARCH");
+            entity.setOwnerUnitId("unit_default");
+            entity.setOutputType("DOCX");
+            entity.setTemplateCategory("topic_collection");
+            entity.setDocxConfig(TOPIC_COLLECTION_DOCX_CONFIG.trim());
+            entity.setLayoutConfig(TOPIC_COLLECTION_LAYOUT_CONFIG.trim());
+            entity.setTemplateSchema(TOPIC_COLLECTION_SCHEMA.trim());
+            entity.setWorkflowId(ResearchWorkflowDefinitionBuilder.WORKFLOW_ID);
+            entity.setStatus("ENABLED");
+            entity.setVersion(1);
+            entity.setCreatedBy("user_admin");
+            entity.setUpdatedBy("user_admin");
+            entity.setCreatedAt(now);
+            entity.setUpdatedAt(now);
+            entity.setWorkflowSnapshot(buildWorkflowSnapshot(now));
+            mapper.insert(entity);
+            return;
+        }
+        entity.setName("专题汇编编研模板");
+        entity.setCode("research_topic_collection");
+        entity.setDescription("基于 DOCX 母版的档案专题汇编成果（04_专题汇编）");
+        entity.setOutputType("DOCX");
+        entity.setTemplateCategory("topic_collection");
+        entity.setDocxConfig(TOPIC_COLLECTION_DOCX_CONFIG.trim());
+        entity.setLayoutConfig(TOPIC_COLLECTION_LAYOUT_CONFIG.trim());
+        entity.setTemplateSchema(TOPIC_COLLECTION_SCHEMA.trim());
+        entity.setWorkflowId(ResearchWorkflowDefinitionBuilder.WORKFLOW_ID);
+        entity.setStatus("ENABLED");
+        entity.setUpdatedBy("user_admin");
+        entity.setUpdatedAt(now);
+        if (entity.getWorkflowSnapshot() == null || entity.getWorkflowSnapshot().isBlank()) {
+            entity.setWorkflowSnapshot(buildWorkflowSnapshot(now));
+        }
+        mapper.updateById(entity);
+    }
+
+    private String buildWorkflowSnapshot(Instant now) {
+        try {
+            Workflow workflow = new Workflow(
+                    ResearchWorkflowDefinitionBuilder.WORKFLOW_ID,
+                    TENANT_ID,
+                    "org_default_unit",
+                    "档案智能编研工作流",
+                    "HTTP 拉取模板与资料、知识库检索、大模型生成大纲与分章正文",
+                    WorkflowStatus.PUBLISHED,
+                    ResearchWorkflowDefinitionBuilder.WORKFLOW_VERSION_ID,
+                    "user_admin",
+                    "user_admin",
+                    now,
+                    now
+            );
+            WorkflowVersion version = new WorkflowVersion(
+                    ResearchWorkflowDefinitionBuilder.WORKFLOW_VERSION_ID,
+                    ResearchWorkflowDefinitionBuilder.WORKFLOW_ID,
+                    1,
+                    ResearchWorkflowDefinitionBuilder.build(),
+                    WorkflowVersionStatus.PUBLISHED,
+                    "user_admin",
+                    now,
+                    now
+            );
+            return GenerationWorkflowSnapshotBuilder.build(workflow, version, objectMapper);
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 }

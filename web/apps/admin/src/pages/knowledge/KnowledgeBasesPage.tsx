@@ -1,4 +1,4 @@
-﻿import {
+import {
   BookOutlined,
   CheckCircleOutlined,
   DatabaseOutlined,
@@ -187,11 +187,8 @@ export function KnowledgeBasesPage() {
         description: values.description || null,
         embeddingModelId: values.embeddingModelId || null,
         vectorStoreConfigId: values.vectorStoreConfigId || null,
-        splitterType: 'SIMPLE_TEXT',
-        chunkSize: 500,
-        chunkOverlap: 50,
-        retrievalMode: 'HYBRID',
-        topK: 3
+        kbType: 'NORMAL',
+        datasetMode: 'MULTI'
       };
       return editingBase ? updateKnowledgeBase(editingBase.id, request) : createKnowledgeBase(request);
     },
@@ -469,8 +466,8 @@ export function KnowledgeBasesPage() {
       splitterType: base.splitterType || 'SIMPLE_TEXT',
       chunkSize: base.chunkSize || 500,
       chunkOverlap: base.chunkOverlap ?? 50,
-      retrievalMode: 'HYBRID',
-      topK: 3
+      retrievalMode: base.retrievalMode || 'HYBRID',
+      topK: base.topK || 3
     });
     setCreateOpen(true);
   }
@@ -587,6 +584,11 @@ export function KnowledgeBasesPage() {
       )
     },
     {
+      title: '分类',
+      width: 90,
+      render: (_, base) => base.datasetCount ?? 0
+    },
+    {
       title: '向量库配置',
       width: 180,
       render: (_, base) => {
@@ -623,7 +625,7 @@ export function KnowledgeBasesPage() {
     },
     {
       title: '操作',
-      width: 280,
+      width: 360,
       render: (_, base) => (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
           <Button size="small" icon={<EditOutlined />} aria-label="编辑知识库" onClick={() => openEditDrawer(base)}>
@@ -632,12 +634,9 @@ export function KnowledgeBasesPage() {
           <Button
             size="small"
             icon={<FileAddOutlined />}
-            onClick={() => {
-              openDocumentDrawer(base);
-              navigateTo(`/knowledge/${base.id}/documents`);
-            }}
+            onClick={() => navigateTo(`/knowledge/${base.id}/documents`)}
           >
-            管理文档
+            管理资料
           </Button>
           <Button size="small" danger icon={<DeleteOutlined />} aria-label="删除知识库" onClick={() => deleteBaseMutation.mutate(base)}>
             删除

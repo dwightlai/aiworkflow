@@ -28,6 +28,12 @@ public class KnowledgeBaseEntity {
     private String updatedBy;
     private Instant createdAt;
     private Instant updatedAt;
+    private String kbType;
+    private String bizScope;
+    private String datasetMode;
+    private String defaultDatasetId;
+    private Integer datasetCount;
+    private String metadataJson;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -69,4 +75,16 @@ public class KnowledgeBaseEntity {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public String getKbType() { return kbType; }
+    public void setKbType(String kbType) { this.kbType = kbType; }
+    public String getBizScope() { return bizScope; }
+    public void setBizScope(String bizScope) { this.bizScope = bizScope; }
+    public String getDatasetMode() { return datasetMode; }
+    public void setDatasetMode(String datasetMode) { this.datasetMode = datasetMode; }
+    public String getDefaultDatasetId() { return defaultDatasetId; }
+    public void setDefaultDatasetId(String defaultDatasetId) { this.defaultDatasetId = defaultDatasetId; }
+    public Integer getDatasetCount() { return datasetCount; }
+    public void setDatasetCount(Integer datasetCount) { this.datasetCount = datasetCount; }
+    public String getMetadataJson() { return metadataJson; }
+    public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
 }

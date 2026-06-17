@@ -26,7 +26,10 @@ public class MockArchiveCorpusService implements ArchiveCorpusService {
 
     public List<Map<String, Object>> listThemeLibraryItems(String themeLibraryId) {
         if ("theme_002".equals(themeLibraryId)) {
-            return List.of(archiveItem("archive_002", "档案数字化建设方案", "A002-2023-0001", "2023-06-15"));
+            return List.of(
+                    archiveItem("archive_002", "档案数字化建设方案", "2021-XX-001", "2021-03-12"),
+                    archiveItem("archive_004", "数字化加工现场照片", "2021-IMG-001", "2021-06-18")
+            );
         }
         return List.of(
                 archiveItem("archive_001", "关于加强电子文件归档管理的通知", "A001-2024-0001", "2024-01-12"),
@@ -39,10 +42,18 @@ public class MockArchiveCorpusService implements ArchiveCorpusService {
             case "archive_002" -> fullArchiveItem(
                     "archive_002",
                     "档案数字化建设方案",
-                    "A002-2023-0001",
-                    "2023-06-15",
-                    "某单位",
-                    "提出档案数字化建设目标、实施步骤和保障措施。"
+                    "2021-XX-001",
+                    "2021-03-12",
+                    "档案中心",
+                    "明确数字化建设目标、任务和实施路径。"
+            );
+            case "archive_004" -> fullArchiveItem(
+                    "archive_004",
+                    "数字化加工现场照片",
+                    "2021-IMG-001",
+                    "2021-06-18",
+                    "项目组",
+                    "反映数字化加工现场组织情况，可作为图片展品引用 img_001。"
             );
             case "archive_003" -> fullArchiveItem(
                     "archive_003",
@@ -110,21 +121,25 @@ public class MockArchiveCorpusService implements ArchiveCorpusService {
             String responsibleParty,
             String summary
     ) {
-        return Map.of(
-                "sourceType", "ARCHIVE_ITEM",
-                "sourceId", id,
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("sourceType", "ARCHIVE_ITEM");
+        item.put("sourceId", id);
+        item.put("id", id);
+        item.put("title", title);
+        item.put("summary", summary);
+        item.put("contentText", summary);
+        item.put("archiveCode", archiveNo);
+        item.put("formationDate", formedAt);
+        item.put("responsibleUnit", responsibleParty);
+        item.put("metadata", Map.of(
+                "档号", archiveNo,
+                "责任者", responsibleParty,
+                "形成时间", formedAt
+        ));
+        item.put("citation", Map.of(
                 "title", title,
-                "summary", summary,
-                "contentText", summary,
-                "metadata", Map.of(
-                        "档号", archiveNo,
-                        "责任者", responsibleParty,
-                        "形成时间", formedAt
-                ),
-                "citation", Map.of(
-                        "title", title,
-                        "locator", "档号 " + archiveNo
-                )
-        );
+                "locator", "档号 " + archiveNo
+        ));
+        return item;
     }
 }

@@ -6,7 +6,8 @@ import {
   EyeOutlined,
   FileTextOutlined,
   LinkOutlined,
-  PlusOutlined
+  PlusOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,6 +23,7 @@ import {
   Table,
   Tag,
   Typography,
+  Upload,
   message
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -37,6 +39,7 @@ import {
   parseWorkflowSnapshot,
   runtimeViewToSchema,
   updateGenerationTemplate,
+  uploadGenerationTemplateDocxMaster,
   type GenerationTemplate,
   type GenerationTemplateSchema,
   type SaveGenerationTemplateRequest
@@ -75,12 +78,35 @@ const defaultTemplateSchema: GenerationTemplateSchema = {
   ]
 };
 
+const defaultDocxConfig = JSON.stringify({
+  showCover: true,
+  showToc: true,
+  tocDepth: 2,
+  showPageNumber: true,
+  showReferenceSection: true,
+  lineSpacingPt: 28
+}, null, 2);
+
+const defaultLayoutConfig = JSON.stringify({
+  defaultTab: 'docx',
+  enableHtmlPreview: true
+}, null, 2);
+
+const defaultTopicCollectionDocxConfig = JSON.stringify({
+  masterFile: '',
+  templateType: 'archive_topic_collection'
+}, null, 2);
+
 const initialValues = {
   templateName: defaultTemplateSchema.title ?? '',
   code: '',
   description: null,
   category: 'RESEARCH',
-  outputType: 'MARKDOWN',
+  outputType: 'DOCX',
+  templateCategory: 'report',
+  docxConfigText: defaultDocxConfig,
+  layoutConfigText: defaultLayoutConfig,
+  linkedHtmlTemplateId: null,
   templateSchema: defaultTemplateSchema,
   workflowId: null,
   status: 'ENABLED',
@@ -90,6 +116,8 @@ const initialValues = {
 type GenerationTemplateFormValues = SaveGenerationTemplateRequest & {
   templateName: string;
   templateSchemaText: string;
+  docxConfigText: string;
+  layoutConfigText: string;
 };
 
 function resolveTemplateName(template: GenerationTemplate): string {
@@ -108,6 +136,9 @@ export function GenerationTemplatesPage() {
   const outputType = Form.useWatch('outputType', form) ?? 'MARKDOWN';
   const templateName = Form.useWatch('templateName', form) ?? '';
   const workflowId = Form.useWatch('workflowId', form) ?? null;
+  const templateCategory = Form.useWatch('templateCategory', form) ?? 'report';
+  const docxConfigText = Form.useWatch('docxConfigText', form) ?? '';
+  const masterFileLabel = useMemo(() => parseMasterFileLabel(docxConfigText), [docxConfigText]);
   const parsedSchemaResult = useMemo(() => parseTemplateSchemaText(templateSchemaText), [templateSchemaText]);
   const parsedSchema = parsedSchemaResult.schema ?? defaultTemplateSchema;
 
@@ -203,6 +234,16 @@ export function GenerationTemplatesPage() {
     }
   });
 
+  const uploadDocxMasterMutation = useMutation({
+    mutationFn: (file: File) => uploadGenerationTemplateDocxMaster(editingTemplate!.id, file),
+    onSuccess: (result) => {
+      form.setFieldValue('docxConfigText', JSON.stringify(JSON.parse(result.docxConfig), null, 2));
+      message.success(`DOCX 母版已上传：${result.fileName}`);
+      void queryClient.invalidateQueries({ queryKey: ['generation-templates'] });
+    },
+    onError: (error: Error) => message.error(error.message || 'DOCX 母版上传失败')
+  });
+
   function openCreateDrawer() {
     setEditingTemplate(null);
     form.setFieldsValue(initialValues);
@@ -218,6 +259,10 @@ export function GenerationTemplatesPage() {
       description: template.description,
       category: template.category,
       outputType: template.outputType,
+      templateCategory: template.templateCategory ?? 'report',
+      docxConfigText: stringifyConfig(template.docxConfig, defaultDocxConfig),
+      layoutConfigText: stringifyConfig(template.layoutConfig, defaultLayoutConfig),
+      linkedHtmlTemplateId: template.linkedHtmlTemplateId ?? null,
       workflowId: template.workflowId ?? null,
       status: template.status,
       templateSchemaText: JSON.stringify(schema, null, 2)
@@ -246,6 +291,19 @@ export function GenerationTemplatesPage() {
       dataIndex: 'code',
       width: 160,
       render: (value: string) => <Typography.Text code>{value}</Typography.Text>
+    },
+    {
+      title: '版式',
+      width: 110,
+      render: (_, template) => (
+        <Tag color="purple">{formatTemplateCategory(template.templateCategory)}</Tag>
+      )
+    },
+    {
+      title: '输出',
+      width: 90,
+      dataIndex: 'outputType',
+      render: (value: string) => <Tag color={value === 'DOCX' ? 'blue' : 'default'}>{value}</Tag>
     },
     {
       title: '章节',
@@ -309,7 +367,7 @@ export function GenerationTemplatesPage() {
           <Statistic title="章节总数" value={sectionCount} prefix={<ApartmentOutlined />} />
         </Card>
         <Card variant="borderless" style={metricCardStyle}>
-          <Statistic title="输出格式" value="Markdown" prefix={<CheckCircleOutlined />} valueStyle={{ fontSize: 18 }} />
+          <Statistic title="默认输出" value="DOCX" prefix={<CheckCircleOutlined />} valueStyle={{ fontSize: 18 }} />
         </Card>
       </div>
 
@@ -418,13 +476,66 @@ export function GenerationTemplatesPage() {
             </Form.Item>
             <Form.Item name="outputType" label="输出类型" rules={[{ required: true, message: '请选择输出类型' }]}>
               <Select options={[
-                { value: 'MARKDOWN', label: 'Markdown' },
                 { value: 'DOCX', label: 'Word (DOCX)' },
-                { value: 'HTML', label: 'HTML' },
-                { value: 'JSON', label: 'JSON' }
+                { value: 'MARKDOWN', label: 'Markdown' },
+                { value: 'HTML', label: 'HTML' }
               ]} />
             </Form.Item>
+            <Form.Item name="templateCategory" label="成果版式" rules={[{ required: true, message: '请选择成果版式' }]}>
+              <Select
+                options={[
+                  { value: 'report', label: '普通报告' },
+                  { value: 'gallery', label: '图文展陈' },
+                  { value: 'timeline', label: '时间轴专题' },
+                  { value: 'topic_collection', label: '专题汇编 (DOCX母版)' }
+                ]}
+                onChange={(value) => {
+                  if (value === 'topic_collection') {
+                    const current = form.getFieldValue('docxConfigText');
+                    if (!current?.trim() || current.includes('"showCover"')) {
+                      form.setFieldValue('docxConfigText', defaultTopicCollectionDocxConfig);
+                    }
+                  }
+                }}
+              />
+            </Form.Item>
           </Space>
+          {templateCategory === 'topic_collection' ? (
+            <Form.Item label="DOCX 母版文件">
+              {editingTemplate ? (
+                <Upload
+                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  maxCount={1}
+                  showUploadList={false}
+                  beforeUpload={(file) => {
+                    uploadDocxMasterMutation.mutate(file);
+                    return false;
+                  }}
+                >
+                  <Button icon={<UploadOutlined />} loading={uploadDocxMasterMutation.isPending}>
+                    上传 DOCX 母版
+                  </Button>
+                </Upload>
+              ) : (
+                <Typography.Text type="secondary">请先保存模板，再上传 DOCX 母版。</Typography.Text>
+              )}
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                当前母版：{masterFileLabel}
+              </Typography.Text>
+            </Form.Item>
+          ) : null}
+          <Form.Item
+            name="docxConfigText"
+            label={templateCategory === 'topic_collection' ? 'DOCX 版式配置 JSON（上传后自动写入 masterFile）' : 'DOCX 版式配置 JSON'}
+          >
+            <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} />
+          </Form.Item>
+          <Form.Item name="layoutConfigText" label="前端展示配置 JSON">
+            <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
+          </Form.Item>
+          <Form.Item name="linkedHtmlTemplateId" label="关联 HTML 预览模板 ID">
+            <Input placeholder="layout_report_html" />
+          </Form.Item>
           <Form.Item name="status" label="状态" rules={[{ required: true, message: '请选择状态' }]}>
             <Select options={[
               { value: 'ENABLED', label: '启用' },
@@ -484,10 +595,23 @@ function normalizeValues(values: GenerationTemplateFormValues): SaveGenerationTe
     description: values.description || null,
     category: values.category,
     outputType: values.outputType,
+    templateCategory: values.templateCategory ?? 'report',
+    docxConfig: values.docxConfigText?.trim() || null,
+    layoutConfig: values.layoutConfigText?.trim() || null,
+    linkedHtmlTemplateId: values.linkedHtmlTemplateId || null,
     workflowId: values.workflowId ?? null,
     status: values.status,
     templateSchema: values.templateSchemaText
   };
+}
+
+function stringifyConfig(
+  value: string | Record<string, unknown> | null | undefined,
+  fallback: string
+): string {
+  if (!value) return fallback;
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
 }
 
 const pageStyle: React.CSSProperties = {
@@ -517,3 +641,26 @@ const metricRowStyle: React.CSSProperties = {
 const metricCardStyle: React.CSSProperties = {
   border: '1px solid #e7ecf3'
 };
+
+function formatTemplateCategory(category?: string | null): string {
+  if (category === 'gallery') return '图文展陈';
+  if (category === 'timeline') return '时间轴专题';
+  if (category === 'topic_collection' || category === 'archive_topic_collection') return '专题汇编';
+  return category ?? '普通报告';
+}
+
+function parseMasterFileLabel(docxConfigText?: string | null): string {
+  if (!docxConfigText?.trim()) {
+    return '未上传';
+  }
+  try {
+    const config = JSON.parse(docxConfigText) as { masterFile?: string };
+    if (!config.masterFile?.trim()) {
+      return '未上传';
+    }
+    const parts = config.masterFile.replace(/\\/g, '/').split('/');
+    return parts[parts.length - 1] || config.masterFile;
+  } catch {
+    return '未上传';
+  }
+}

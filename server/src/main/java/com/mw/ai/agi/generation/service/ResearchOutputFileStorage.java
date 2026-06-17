@@ -1,6 +1,6 @@
 package com.mw.ai.agi.generation.service;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.mw.ai.agi.config.AgiStorageSettingsService;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
@@ -9,14 +9,15 @@ import java.nio.file.Paths;
 
 @Service
 public class ResearchOutputFileStorage {
-    private final Path outputDir;
+    private final AgiStorageSettingsService storageSettingsService;
 
-    public ResearchOutputFileStorage(@Value("${agi.generation.output-dir:./data/generation-outputs}") String outputDir) {
-        this.outputDir = Paths.get(outputDir);
+    public ResearchOutputFileStorage(AgiStorageSettingsService storageSettingsService) {
+        this.storageSettingsService = storageSettingsService;
     }
 
     public String saveDocx(String outputId, byte[] content) {
         try {
+            Path outputDir = Paths.get(storageSettingsService.getEffective().researchOutputDir());
             Files.createDirectories(outputDir);
             Path file = outputDir.resolve(outputId + ".docx");
             Files.write(file, content);

@@ -16,6 +16,10 @@ public class GenerationTemplateEntity {
     private String category;
     private String ownerUnitId;
     private String outputType;
+    private String templateCategory;
+    private String docxConfig;
+    private String layoutConfig;
+    private String linkedHtmlTemplateId;
     private String templateSchema;
     private String workflowId;
     private String workflowSnapshot;
@@ -42,6 +46,14 @@ public class GenerationTemplateEntity {
     public void setOwnerUnitId(String ownerUnitId) { this.ownerUnitId = ownerUnitId; }
     public String getOutputType() { return outputType; }
     public void setOutputType(String outputType) { this.outputType = outputType; }
+    public String getTemplateCategory() { return templateCategory; }
+    public void setTemplateCategory(String templateCategory) { this.templateCategory = templateCategory; }
+    public String getDocxConfig() { return docxConfig; }
+    public void setDocxConfig(String docxConfig) { this.docxConfig = docxConfig; }
+    public String getLayoutConfig() { return layoutConfig; }
+    public void setLayoutConfig(String layoutConfig) { this.layoutConfig = layoutConfig; }
+    public String getLinkedHtmlTemplateId() { return linkedHtmlTemplateId; }
+    public void setLinkedHtmlTemplateId(String linkedHtmlTemplateId) { this.linkedHtmlTemplateId = linkedHtmlTemplateId; }
     public String getTemplateSchema() { return templateSchema; }
     public void setTemplateSchema(String templateSchema) { this.templateSchema = templateSchema; }
     public String getWorkflowId() { return workflowId; }

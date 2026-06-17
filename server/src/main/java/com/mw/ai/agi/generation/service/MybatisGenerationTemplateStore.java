@@ -56,6 +56,10 @@ public class MybatisGenerationTemplateStore implements GenerationTemplateStore {
         entity.setCategory(template.category());
         entity.setOwnerUnitId(template.ownerUnitId());
         entity.setOutputType(template.outputType());
+        entity.setTemplateCategory(template.templateCategory());
+        entity.setDocxConfig(template.docxConfig());
+        entity.setLayoutConfig(template.layoutConfig());
+        entity.setLinkedHtmlTemplateId(template.linkedHtmlTemplateId());
         entity.setTemplateSchema(template.templateSchema());
         entity.setWorkflowId(template.workflowId());
         entity.setWorkflowSnapshot(template.workflowSnapshot());
@@ -78,6 +82,10 @@ public class MybatisGenerationTemplateStore implements GenerationTemplateStore {
                 entity.getCategory(),
                 entity.getOwnerUnitId(),
                 entity.getOutputType(),
+                entity.getTemplateCategory(),
+                entity.getDocxConfig(),
+                entity.getLayoutConfig(),
+                entity.getLinkedHtmlTemplateId(),
                 entity.getTemplateSchema(),
                 entity.getWorkflowId(),
                 entity.getWorkflowSnapshot(),

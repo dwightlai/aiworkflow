@@ -46,12 +46,31 @@ public class ElasticsearchVectorStoreClient {
         document.put("content", chunk.content());
         document.put("chunkIndex", chunk.index());
         document.put("enabled", chunk.enabled());
+        if (chunk.datasetId() != null && !chunk.datasetId().isBlank()) {
+            document.put("datasetId", chunk.datasetId());
+        }
+        if (chunk.topicId() != null && !chunk.topicId().isBlank()) {
+            document.put("topicId", chunk.topicId());
+        }
+        if (chunk.sourceRefId() != null && !chunk.sourceRefId().isBlank()) {
+            document.put("sourceRefId", chunk.sourceRefId());
+        }
         document.put("embeddingModelId", vector.embeddingModelId());
         document.put("embedding", vector.embedding());
         send(config, "PUT", "/" + config.indexName() + "/_doc/" + chunk.id(), document, false);
     }
 
     public List<SearchHit> search(VectorStoreConfig config, String knowledgeBaseId, List<Double> queryEmbedding, int topK) {
+        return search(config, knowledgeBaseId, null, queryEmbedding, topK);
+    }
+
+    public List<SearchHit> search(VectorStoreConfig config, String knowledgeBaseId, String datasetId, List<Double> queryEmbedding, int topK) {
+        List<Map<String, Object>> filters = new ArrayList<>();
+        filters.add(Map.of("term", Map.of("knowledgeBaseId", knowledgeBaseId)));
+        filters.add(Map.of("term", Map.of("enabled", true)));
+        if (datasetId != null && !datasetId.isBlank()) {
+            filters.add(Map.of("term", Map.of("datasetId", datasetId)));
+        }
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("size", topK);
         request.put("_source", List.of("chunkId", "documentId", "documentName", "content"));
@@ -59,10 +78,7 @@ public class ElasticsearchVectorStoreClient {
                 "script_score", Map.of(
                         "query", Map.of(
                                 "bool", Map.of(
-                                        "filter", List.of(
-                                                Map.of("term", Map.of("knowledgeBaseId", knowledgeBaseId)),
-                                                Map.of("term", Map.of("enabled", true))
-                                        )
+                                        "filter", filters
                                 )
                         ),
                         "script", Map.of(
@@ -133,19 +149,22 @@ public class ElasticsearchVectorStoreClient {
     }
 
     private void createIndex(VectorStoreConfig config, int dimensions) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("chunkId", Map.of("type", "keyword"));
+        properties.put("knowledgeBaseId", Map.of("type", "keyword"));
+        properties.put("documentId", Map.of("type", "keyword"));
+        properties.put("documentName", Map.of("type", "keyword"));
+        properties.put("content", Map.of("type", "text"));
+        properties.put("chunkIndex", Map.of("type", "integer"));
+        properties.put("enabled", Map.of("type", "boolean"));
+        properties.put("datasetId", Map.of("type", "keyword"));
+        properties.put("topicId", Map.of("type", "keyword"));
+        properties.put("sourceRefId", Map.of("type", "keyword"));
+        properties.put("embeddingModelId", Map.of("type", "keyword"));
+        properties.put("embedding", Map.of("type", "dense_vector", "dims", dimensions, "index", false));
         Map<String, Object> mapping = Map.of(
                 "mappings", Map.of(
-                        "properties", Map.of(
-                                "chunkId", Map.of("type", "keyword"),
-                                "knowledgeBaseId", Map.of("type", "keyword"),
-                                "documentId", Map.of("type", "keyword"),
-                                "documentName", Map.of("type", "keyword"),
-                                "content", Map.of("type", "text"),
-                                "chunkIndex", Map.of("type", "integer"),
-                                "enabled", Map.of("type", "boolean"),
-                                "embeddingModelId", Map.of("type", "keyword"),
-                                "embedding", Map.of("type", "dense_vector", "dims", dimensions, "index", false)
-                        )
+                        "properties", properties
                 )
         );
         send(config, "PUT", "/" + config.indexName(), mapping, false);

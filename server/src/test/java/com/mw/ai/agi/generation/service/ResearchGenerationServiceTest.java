@@ -3,6 +3,8 @@ package com.mw.ai.agi.generation.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mw.ai.agi.auth.service.TenantContext;
+import com.mw.ai.agi.config.AgiStorageProperties;
+import com.mw.ai.agi.config.AgiStorageSettingsService;
 import com.mw.ai.agi.generation.api.ResearchApiMapper;
 import com.mw.ai.agi.generation.domain.GenerationJob;
 import com.mw.ai.agi.generation.domain.GenerationOutput;
@@ -44,8 +46,11 @@ class ResearchGenerationServiceTest {
                 objectMapper,
                 null,
                 stubWorkflowExecutionService(),
-                new ResearchDocxExporter(),
-                new ResearchOutputFileStorage("./target/test-outputs")
+                new ResearchDocxExporter(new ResearchDocxMasterRenderer()),
+                new ResearchOutputFileStorage(AgiStorageSettingsService.withDefaults(new AgiStorageProperties(), objectMapper)),
+                new ResearchContentJsonBuilder(objectMapper),
+                new ResearchOutputTemplateRegistry(objectMapper),
+                new ResearchHtmlPreviewRenderer()
         );
     }
 
@@ -76,6 +81,8 @@ class ResearchGenerationServiceTest {
 
         GenerationOutput output = service.getFirstOutput(job.id());
         assertThat(output.contentMarkdown()).contains("背景概述");
+        assertThat(output.contentJson()).contains("templateCategory");
+        assertThat(output.contentDocxPath()).isNotBlank();
     }
 
     @Test
@@ -90,6 +97,10 @@ class ResearchGenerationServiceTest {
                 template.category(),
                 template.ownerUnitId(),
                 "DOCX",
+                template.templateCategory(),
+                template.docxConfig(),
+                template.layoutConfig(),
+                template.linkedHtmlTemplateId(),
                 template.templateSchema(),
                 template.workflowId(),
                 template.workflowSnapshot(),

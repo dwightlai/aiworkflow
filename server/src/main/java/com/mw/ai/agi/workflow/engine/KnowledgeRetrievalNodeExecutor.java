@@ -40,12 +40,24 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
             return NodeExecutionResult.output(knowledgeOutput(outputKey, queryText, List.of()));
         }
         List<KnowledgeSearchResult> results = knowledgeBaseIds.stream()
-                .flatMap(knowledgeBaseId -> knowledgeBaseService.search(
-                        knowledgeBaseId,
-                        queryText,
-                        topK,
-                        grantContext(context.context())
-                ).stream())
+                .flatMap(knowledgeBaseId -> {
+                    String datasetId = datasetId(context.context());
+                    if (datasetId != null && !datasetId.isBlank()) {
+                        return knowledgeBaseService.search(
+                                knowledgeBaseId,
+                                datasetId,
+                                queryText,
+                                topK,
+                                grantContext(context.context())
+                        ).stream();
+                    }
+                    return knowledgeBaseService.search(
+                            knowledgeBaseId,
+                            queryText,
+                            topK,
+                            grantContext(context.context())
+                    ).stream();
+                })
                 .filter(result -> similarityThreshold <= 0 || result.score() >= Math.round(similarityThreshold * 1000))
                 .sorted((left, right) -> Integer.compare(right.score(), left.score()))
                 .limit(topK)
@@ -68,6 +80,14 @@ public class KnowledgeRetrievalNodeExecutor implements WorkflowNodeExecutor {
         if (source.containsKey(key) && source.get(key) != null) {
             target.put(key, source.get(key));
         }
+    }
+
+    private String datasetId(Map<String, Object> context) {
+        Object value = context.get("datasetId");
+        if (value instanceof String stringValue && !stringValue.isBlank()) {
+            return stringValue;
+        }
+        return null;
     }
 
     private List<String> knowledgeBaseIds(WorkflowNode node, Map<String, Object> context) {

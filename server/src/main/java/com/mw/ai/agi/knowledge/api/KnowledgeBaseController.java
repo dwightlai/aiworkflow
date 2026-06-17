@@ -55,7 +55,9 @@ public class KnowledgeBaseController {
                 body.chunkSize(),
                 body.chunkOverlap(),
                 body.retrievalMode(),
-                body.topK()
+                body.topK(),
+                body.kbType(),
+                body.datasetMode()
         ));
     }
 
@@ -153,8 +155,11 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/{id}/documents")
-    public ApiResponse<PageResponse<KnowledgeDocument>> documents(@PathVariable String id) {
-        List<KnowledgeDocument> documents = knowledgeBaseService.listDocuments(id);
+    public ApiResponse<PageResponse<KnowledgeDocument>> documents(
+            @PathVariable String id,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String datasetId
+    ) {
+        List<KnowledgeDocument> documents = knowledgeBaseService.listDocuments(id, datasetId);
         return ApiResponse.success(new PageResponse<>(documents, documents.size()));
     }
 
@@ -169,7 +174,8 @@ public class KnowledgeBaseController {
                 request.content(),
                 request.splitterType(),
                 request.chunkSize(),
-                request.chunkOverlap()
+                request.chunkOverlap(),
+                request.datasetId()
         ));
     }
 
@@ -188,7 +194,8 @@ public class KnowledgeBaseController {
                                 entry.category(),
                                 entry.source()
                         ))
-                        .toList()
+                        .toList(),
+                request.datasetId()
         ));
     }
 
@@ -198,7 +205,8 @@ public class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) String splitterType,
             @RequestParam(defaultValue = "0") int chunkSize,
-            @RequestParam(defaultValue = "-1") int chunkOverlap
+            @RequestParam(defaultValue = "-1") int chunkOverlap,
+            @RequestParam(required = false) String datasetId
     ) throws IOException {
         String fileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
                 ? "uploaded-document"
@@ -212,7 +220,8 @@ public class KnowledgeBaseController {
                         splitterType == null || splitterType.isBlank() ? "FIXED_LENGTH" : splitterType,
                         chunkSize <= 0 ? 200 : chunkSize,
                         null
-                )
+                ),
+                datasetId
         ));
     }
 
@@ -222,14 +231,16 @@ public class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "FIXED_LENGTH") String splitterType,
             @RequestParam(defaultValue = "200") int chunkSize,
-            @RequestParam(required = false) String separator
+            @RequestParam(required = false) String separator,
+            @RequestParam(required = false) String datasetId
     ) throws IOException {
         return ApiResponse.success(knowledgeBaseService.addTextDocumentFile(
                 id,
                 fileName(file),
                 file.getContentType(),
                 file.getInputStream(),
-                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(splitterType, chunkSize, separator)
+                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(splitterType, chunkSize, separator),
+                datasetId
         ));
     }
 
@@ -237,14 +248,16 @@ public class KnowledgeBaseController {
     public ApiResponse<KnowledgeDocument> uploadTableDocument(
             @PathVariable String id,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(defaultValue = "200") int chunkSize
+            @RequestParam(defaultValue = "200") int chunkSize,
+            @RequestParam(required = false) String datasetId
     ) throws IOException {
         return ApiResponse.success(knowledgeBaseService.addTableDocumentFile(
                 id,
                 fileName(file),
                 file.getContentType(),
                 file.getInputStream(),
-                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest("STRUCTURED_TABLE", chunkSize, null)
+                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest("STRUCTURED_TABLE", chunkSize, null),
+                datasetId
         ));
     }
 
@@ -324,7 +337,9 @@ public class KnowledgeBaseController {
             int chunkSize,
             int chunkOverlap,
             String retrievalMode,
-            int topK
+            int topK,
+            String kbType,
+            String datasetMode
     ) {
     }
 
@@ -333,11 +348,12 @@ public class KnowledgeBaseController {
             @NotBlank String content,
             String splitterType,
             int chunkSize,
-            int chunkOverlap
+            int chunkOverlap,
+            String datasetId
     ) {
     }
 
-    public record AddManualDatasetRequest(List<ManualDatasetEntryRequest> entries) {
+    public record AddManualDatasetRequest(List<ManualDatasetEntryRequest> entries, String datasetId) {
     }
 
     public record ManualDatasetEntryRequest(

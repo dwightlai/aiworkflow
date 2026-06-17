@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -53,6 +55,10 @@ public class GenerationTemplateController {
                 request.category(),
                 request.ownerUnitId(),
                 request.outputType(),
+                request.templateCategory(),
+                request.docxConfig(),
+                request.layoutConfig(),
+                request.linkedHtmlTemplateId(),
                 request.templateSchema(),
                 request.workflowId(),
                 request.workflowSnapshot(),
@@ -75,6 +81,10 @@ public class GenerationTemplateController {
                 request.category(),
                 request.ownerUnitId(),
                 request.outputType(),
+                request.templateCategory(),
+                request.docxConfig(),
+                request.layoutConfig(),
+                request.linkedHtmlTemplateId(),
                 request.templateSchema(),
                 request.workflowId(),
                 request.workflowSnapshot(),
@@ -89,6 +99,14 @@ public class GenerationTemplateController {
         return ApiResponse.success(null);
     }
 
+    @PostMapping(value = "/{id}/docx-master", consumes = "multipart/form-data")
+    public ApiResponse<Map<String, Object>> uploadDocxMaster(
+            @PathVariable String id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ApiResponse.success(generationTemplateService.uploadDocxMaster(id, file));
+    }
+
     public record SaveGenerationTemplateRequest(
             @NotBlank String name,
             @NotBlank String code,
@@ -96,6 +114,10 @@ public class GenerationTemplateController {
             @NotBlank String category,
             String ownerUnitId,
             @NotBlank String outputType,
+            String templateCategory,
+            String docxConfig,
+            String layoutConfig,
+            String linkedHtmlTemplateId,
             String templateSchema,
             String workflowId,
             String workflowSnapshot,

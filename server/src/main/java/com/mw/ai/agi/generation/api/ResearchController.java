@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.file.Files;
@@ -64,6 +65,21 @@ public class ResearchController {
         return ApiResponse.success(mockArchiveCorpusService.listThemeLibraryItems(libraryId));
     }
 
+    @PostMapping("/compile/from-knowledge-dataset")
+    public ApiResponse<ResearchApiMapper.ResearchJobView> compileFromKnowledgeDataset(
+            @Valid @RequestBody CompileFromKnowledgeDatasetRequest request
+    ) {
+        GenerationJob job = researchGenerationService.runFromKnowledgeDataset(
+                request.templateId(),
+                request.knowledgeBaseId(),
+                request.datasetId(),
+                request.unitId(),
+                request.userId(),
+                request.variables()
+        );
+        return ApiResponse.success(ResearchApiMapper.toJobView(job, objectMapper));
+    }
+
     @PostMapping("/jobs")
     public ApiResponse<ResearchApiMapper.ResearchJobView> createJob(@Valid @RequestBody CreateResearchJobRequest request) {
         GenerationJob job = researchGenerationService.run(
@@ -76,6 +92,51 @@ public class ResearchController {
                 request.variables()
         );
         return ApiResponse.success(ResearchApiMapper.toJobView(job, objectMapper));
+    }
+
+    @GetMapping("/output-templates")
+    public ApiResponse<PageResponse<Map<String, Object>>> listOutputTemplates(
+            @RequestParam(required = false) String outputType,
+            @RequestParam(required = false) String templateCategory
+    ) {
+        List<Map<String, Object>> items = researchGenerationService.listOutputTemplates(outputType, templateCategory);
+        return ApiResponse.success(new PageResponse<>(items, items.size()));
+    }
+
+    @PostMapping("/outputs/{outputId}/render-docx")
+    public ApiResponse<ResearchApiMapper.GenerationOutputView> renderDocx(
+            @PathVariable String outputId,
+            @RequestBody(required = false) RenderDocxRequest request
+    ) {
+        String templateId = request == null ? null : request.outputTemplateId();
+        GenerationOutput output = researchGenerationService.renderDocx(outputId, templateId);
+        return ApiResponse.success(ResearchApiMapper.toOutputView(output, objectMapper));
+    }
+
+    @GetMapping(value = "/outputs/{outputId}/html-preview", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> htmlPreview(@PathVariable String outputId) {
+        return ResponseEntity.ok(researchGenerationService.renderHtmlPreview(outputId));
+    }
+
+    @GetMapping("/demo/topic-collection/sample-json")
+    public ApiResponse<Map<String, Object>> demoTopicCollectionSampleJson() {
+        return ApiResponse.success(researchGenerationService.loadDemoTopicCollectionSampleJson());
+    }
+
+    @PostMapping("/demo/topic-collection/render-docx")
+    public ResponseEntity<Resource> demoTopicCollectionRenderDocx(
+            @RequestBody(required = false) Map<String, Object> contentJson
+    ) {
+        Map<String, Object> payload = contentJson == null || contentJson.isEmpty()
+                ? researchGenerationService.loadDemoTopicCollectionSampleJson()
+                : contentJson;
+        byte[] docxBytes = researchGenerationService.renderDemoTopicCollectionDocx(payload);
+        String title = payload.get("title") == null ? "topic_collection" : String.valueOf(payload.get("title"));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + title + ".docx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .body(new org.springframework.core.io.ByteArrayResource(docxBytes));
     }
 
     @GetMapping("/jobs")
@@ -143,6 +204,18 @@ public class ResearchController {
         return corpus;
     }
 
+    public record CompileFromKnowledgeDatasetRequest(
+            @NotBlank String templateId,
+            @NotBlank String knowledgeBaseId,
+            @NotBlank String datasetId,
+            String compileType,
+            String outputTemplateCode,
+            String unitId,
+            String userId,
+            Map<String, Object> variables
+    ) {
+    }
+
     public record CreateResearchJobRequest(
             String botId,
             @NotBlank String templateId,
@@ -153,6 +226,9 @@ public class ResearchController {
             Map<String, Object> externalCorpus,
             Map<String, Object> variables
     ) {
+    }
+
+    public record RenderDocxRequest(String outputTemplateId) {
     }
 
     public record PageResponse<T>(List<T> items, long total) {

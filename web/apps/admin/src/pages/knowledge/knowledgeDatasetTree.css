@@ -1,0 +1,61 @@
+.knowledge-dataset-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.knowledge-dataset-tree__item {
+  align-items: center;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px;
+  transition: background 0.15s;
+}
+
+.knowledge-dataset-tree__item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.knowledge-dataset-tree__item.is-selected {
+  background: #e6f4ff;
+}
+
+.knowledge-dataset-tree__item.is-selected .knowledge-dataset-tree__icon,
+.knowledge-dataset-tree__item.is-selected .knowledge-dataset-tree__label {
+  color: #1677ff;
+}
+
+.knowledge-dataset-tree__icon {
+  color: #8c8c8c;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.knowledge-dataset-tree__label {
+  flex: 1;
+  font-size: 14px;
+  line-height: 22px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-dataset-tree__actions {
+  align-items: center;
+  display: none;
+  flex-shrink: 0;
+}
+
+.knowledge-dataset-tree__item:hover .knowledge-dataset-tree__actions {
+  display: flex;
+}
+
+.knowledge-dataset-tree__actions .ant-btn {
+  height: 24px;
+  padding-inline: 4px;
+  width: 24px;
+}

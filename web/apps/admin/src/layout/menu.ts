@@ -50,6 +50,7 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'open-api-docs', label: '开放 API 文档', path: '/system/open-api-docs' },
       { key: 'menus', label: '菜单管理', path: '/system/menus' },
       { key: 'dictionary', label: '数据字典', path: '/system/dictionary' },
+      { key: 'storage-settings', label: '存储路径配置', path: '/system/storage-settings' },
       { key: 'logs', label: '日志管理', path: '/system/logs' }
     ]
   }

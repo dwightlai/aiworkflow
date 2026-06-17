@@ -1,6 +1,7 @@
 package com.mw.ai.agi.knowledge.service;
 
 import com.mw.ai.agi.common.audit.OperatorContext;
+import com.mw.ai.agi.config.AgiStorageSettingsService;
 import com.mw.ai.agi.knowledge.domain.KnowledgeBase;
 import com.mw.ai.agi.knowledge.domain.KnowledgeChunk;
 import com.mw.ai.agi.knowledge.domain.KnowledgeChunkPreview;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class KnowledgeBaseService {
@@ -48,6 +50,10 @@ public class KnowledgeBaseService {
     private final ElasticsearchVectorStoreClient elasticsearchVectorStoreClient;
     private final AssetGrantService assetGrantService;
     private final TenantBusinessGuard tenantGuard;
+    private final KnowledgeDocumentFileStorage knowledgeDocumentFileStorage;
+    private KnowledgeDatasetService datasetService;
+    private com.mw.ai.agi.knowledge.persistence.KnowledgeSourceIndexMapper sourceIndexMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public KnowledgeBaseService() {
         this(new KnowledgeSplitter(), new InMemoryKnowledgeStore(), new LocalEmbeddingClient());
@@ -68,7 +74,11 @@ public class KnowledgeBaseService {
                 new InMemoryVectorStoreConfigStore(),
                 new ElasticsearchVectorStoreClient(new ObjectMapper()),
                 null,
-                null
+                null,
+                new KnowledgeDocumentFileStorage(AgiStorageSettingsService.withDefaults(
+                        new com.mw.ai.agi.config.AgiStorageProperties(),
+                        new ObjectMapper()
+                ))
         );
     }
 
@@ -88,7 +98,11 @@ public class KnowledgeBaseService {
                 new InMemoryVectorStoreConfigStore(),
                 new ElasticsearchVectorStoreClient(new ObjectMapper()),
                 null,
-                null
+                null,
+                new KnowledgeDocumentFileStorage(AgiStorageSettingsService.withDefaults(
+                        new com.mw.ai.agi.config.AgiStorageProperties(),
+                        new ObjectMapper()
+                ))
         );
     }
 
@@ -103,7 +117,8 @@ public class KnowledgeBaseService {
             VectorStoreConfigStore vectorStoreConfigStore,
             ElasticsearchVectorStoreClient elasticsearchVectorStoreClient,
             AssetGrantService assetGrantService,
-            TenantBusinessGuard tenantGuard
+            TenantBusinessGuard tenantGuard,
+            KnowledgeDocumentFileStorage knowledgeDocumentFileStorage
     ) {
         this.splitter = splitter;
         this.store = store;
@@ -115,6 +130,79 @@ public class KnowledgeBaseService {
         this.elasticsearchVectorStoreClient = elasticsearchVectorStoreClient;
         this.assetGrantService = assetGrantService;
         this.tenantGuard = tenantGuard;
+        this.knowledgeDocumentFileStorage = knowledgeDocumentFileStorage;
+    }
+
+    @Autowired(required = false)
+    public void setDatasetService(KnowledgeDatasetService datasetService) {
+        this.datasetService = datasetService;
+    }
+
+    @Autowired(required = false)
+    public void setSourceIndexMapper(com.mw.ai.agi.knowledge.persistence.KnowledgeSourceIndexMapper sourceIndexMapper) {
+        this.sourceIndexMapper = sourceIndexMapper;
+    }
+
+    public KnowledgeBase create(
+            String name,
+            String description,
+            String ownerUnitId,
+            String embeddingModelId,
+            String vectorStoreConfigId,
+            int vectorDimension,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap,
+            String retrievalMode,
+            int topK,
+            String kbType,
+            String datasetMode
+    ) {
+        Instant now = Instant.now();
+        String operator = OperatorContext.currentUserId();
+        String effectiveKbType = defaultString(kbType, "NORMAL");
+        String effectiveDatasetMode = "MULTI";
+        KnowledgeBase knowledgeBase = new KnowledgeBase(
+                "kb_" + UUID.randomUUID(),
+                currentTenantId(),
+                name,
+                description,
+                blankToNull(ownerUnitId),
+                blankToNull(embeddingModelId),
+                blankToNull(vectorStoreConfigId),
+                normalizeVectorDimension(vectorDimension),
+                defaultString(splitterType, DEFAULT_SPLITTER_TYPE),
+                chunkSize <= 0 ? DEFAULT_CHUNK_SIZE : chunkSize,
+                chunkOverlap < 0 ? DEFAULT_CHUNK_OVERLAP : chunkOverlap,
+                defaultString(retrievalMode, DEFAULT_RETRIEVAL_MODE),
+                topK <= 0 ? DEFAULT_TOP_K : topK,
+                "READY",
+                0,
+                0,
+                operator,
+                operator,
+                now,
+                now,
+                effectiveKbType,
+                null,
+                effectiveDatasetMode,
+                null,
+                0,
+                null
+        );
+        KnowledgeBase saved = store.saveKnowledgeBase(knowledgeBase);
+        grantOwner(saved);
+        if (datasetService != null) {
+            com.mw.ai.agi.knowledge.domain.KnowledgeDataset dataset = datasetService.createDefaultDataset(saved);
+            saved = store.saveKnowledgeBase(new KnowledgeBase(
+                    saved.id(), saved.tenantId(), saved.name(), saved.description(), saved.ownerUnitId(),
+                    saved.embeddingModelId(), saved.vectorStoreConfigId(), saved.vectorDimension(), saved.splitterType(),
+                    saved.chunkSize(), saved.chunkOverlap(), saved.retrievalMode(), saved.topK(), saved.status(),
+                    saved.documentCount(), saved.chunkCount(), saved.createdBy(), operator, saved.createdAt(), now,
+                    saved.kbType(), saved.bizScope(), effectiveDatasetMode, dataset.id(), 1, saved.metadataJson()
+            ));
+        }
+        return saved;
     }
 
     public KnowledgeBase create(
@@ -130,33 +218,8 @@ public class KnowledgeBaseService {
             String retrievalMode,
             int topK
     ) {
-        Instant now = Instant.now();
-        String operator = OperatorContext.currentUserId();
-        KnowledgeBase knowledgeBase = new KnowledgeBase(
-                "kb_" + UUID.randomUUID(),
-                currentTenantId(),
-                name,
-                description,
-                blankToNull(ownerUnitId),
-                blankToNull(embeddingModelId),
-                blankToNull(vectorStoreConfigId),
-                normalizeVectorDimension(vectorDimension),
-                DEFAULT_SPLITTER_TYPE,
-                DEFAULT_CHUNK_SIZE,
-                DEFAULT_CHUNK_OVERLAP,
-                DEFAULT_RETRIEVAL_MODE,
-                DEFAULT_TOP_K,
-                "READY",
-                0,
-                0,
-                operator,
-                operator,
-                now,
-                now
-        );
-        KnowledgeBase saved = store.saveKnowledgeBase(knowledgeBase);
-        grantOwner(saved);
-        return saved;
+        return create(name, description, ownerUnitId, embeddingModelId, vectorStoreConfigId, vectorDimension,
+                splitterType, chunkSize, chunkOverlap, retrievalMode, topK, "NORMAL", "MULTI");
     }
 
     public KnowledgeBase create(String name, String description) {
@@ -235,18 +298,24 @@ public class KnowledgeBaseService {
                 blankToNull(embeddingModelId),
                 blankToNull(vectorStoreConfigId),
                 vectorDimension <= 0 ? current.vectorDimension() : vectorDimension,
-                DEFAULT_SPLITTER_TYPE,
-                DEFAULT_CHUNK_SIZE,
-                DEFAULT_CHUNK_OVERLAP,
-                DEFAULT_RETRIEVAL_MODE,
-                DEFAULT_TOP_K,
+                defaultString(splitterType, current.splitterType()),
+                chunkSize <= 0 ? current.chunkSize() : chunkSize,
+                chunkOverlap < 0 ? current.chunkOverlap() : chunkOverlap,
+                defaultString(retrievalMode, current.retrievalMode()),
+                topK <= 0 ? current.topK() : topK,
                 current.status(),
                 current.documentCount(),
                 current.chunkCount(),
                 current.createdBy(),
                 operator,
                 current.createdAt(),
-                Instant.now()
+                Instant.now(),
+                current.kbType(),
+                current.bizScope(),
+                current.datasetMode(),
+                current.defaultDatasetId(),
+                current.datasetCount(),
+                current.metadataJson()
         );
         KnowledgeBase saved = store.saveKnowledgeBase(updated);
         grantOwner(saved);
@@ -328,20 +397,22 @@ public class KnowledgeBaseService {
             String content,
             String splitterType,
             int chunkSize,
-            int chunkOverlap
+            int chunkOverlap,
+            String datasetId
     ) {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
         String effectiveSplitterType = defaultString(splitterType, knowledgeBase.splitterType());
         int effectiveChunkSize = chunkSize <= 0 ? knowledgeBase.chunkSize() : chunkSize;
         int effectiveChunkOverlap = chunkOverlap < 0 ? knowledgeBase.chunkOverlap() : chunkOverlap;
         List<KnowledgeChunkPreview> previews = splitter.preview(content, effectiveSplitterType, effectiveChunkSize, effectiveChunkOverlap);
+        String effectiveDatasetId = resolveDatasetId(knowledgeBase, datasetId);
         KnowledgeDocument document = new KnowledgeDocument(
                 "doc_" + UUID.randomUUID(),
                 knowledgeBaseId,
                 name,
                 previews.size(),
                 Instant.now()
-        );
+        ).withDatasetId(effectiveDatasetId);
         store.saveDocument(document);
         for (KnowledgeChunkPreview preview : previews) {
             KnowledgeChunk chunk = store.saveChunk(new KnowledgeChunk(
@@ -353,6 +424,8 @@ public class KnowledgeBaseService {
                     preview.index(),
                     true,
                     preview.tokenEstimate()
+            ).withDatasetContext(
+                    document.datasetId(), null, null, null, null, null, null
             ));
             saveEmbeddingIfConfigured(knowledgeBase, chunk);
         }
@@ -360,8 +433,19 @@ public class KnowledgeBaseService {
         return document;
     }
 
+    public KnowledgeDocument addDocument(
+            String knowledgeBaseId,
+            String name,
+            String content,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap
+    ) {
+        return addDocument(knowledgeBaseId, name, content, splitterType, chunkSize, chunkOverlap, null);
+    }
+
     public KnowledgeDocument addDocument(String knowledgeBaseId, String name, String content) {
-        return addDocument(knowledgeBaseId, name, content, null, 0, -1);
+        return addDocument(knowledgeBaseId, name, content, null, 0, -1, null);
     }
 
     public KnowledgeDocument addDocumentFile(
@@ -378,6 +462,10 @@ public class KnowledgeBaseService {
     }
 
     public KnowledgeDocument addManualDataset(String knowledgeBaseId, List<ManualDatasetEntry> entries) {
+        return addManualDataset(knowledgeBaseId, entries, null);
+    }
+
+    public KnowledgeDocument addManualDataset(String knowledgeBaseId, List<ManualDatasetEntry> entries, String datasetId) {
         ensureKnowledgeBaseExists(knowledgeBaseId);
         if (entries == null || entries.isEmpty()) {
             throw new IllegalArgumentException("Manual dataset entries are required");
@@ -396,6 +484,7 @@ public class KnowledgeBaseService {
         KnowledgeSplitRequest splitRequest = new KnowledgeSplitRequest("MANUAL_ENTRY", DEFAULT_CHUNK_SIZE, null);
         KnowledgeDocument document = saveDocumentFromPreviews(
                 knowledgeBaseId,
+                "doc_" + UUID.randomUUID(),
                 manualDatasetName(entries),
                 previews,
                 "MANUAL",
@@ -405,7 +494,9 @@ public class KnowledgeBaseService {
                 previews.size(),
                 "MANUAL",
                 splitRequest,
-                previews.stream().map(KnowledgeChunkPreview::content).collect(java.util.stream.Collectors.joining("\n\n"))
+                previews.stream().map(KnowledgeChunkPreview::content).collect(java.util.stream.Collectors.joining("\n\n")),
+                null,
+                datasetId
         );
         refreshKnowledgeBaseStats(knowledgeBaseId);
         return document;
@@ -418,22 +509,49 @@ public class KnowledgeBaseService {
             java.io.InputStream inputStream,
             KnowledgeSplitRequest splitRequest
     ) {
-        String content = documentTextExtractor.extract(fileName, contentType, inputStream);
-        KnowledgeDocument document = saveDocumentFromPreviews(
-                knowledgeBaseId,
-                fileName,
-                documentSplitter.splitText(content, splitRequest),
-                "TEXT_DOCUMENT",
-                null,
-                null,
-                fileName,
-                0,
-                "TEXT",
-                splitRequest,
-                content
-        );
-        refreshKnowledgeBaseStats(knowledgeBaseId);
-        return document;
+        return addTextDocumentFile(knowledgeBaseId, fileName, contentType, inputStream, splitRequest, null);
+    }
+
+    public KnowledgeDocument addTextDocumentFile(
+            String knowledgeBaseId,
+            String fileName,
+            String contentType,
+            java.io.InputStream inputStream,
+            KnowledgeSplitRequest splitRequest,
+            String datasetId
+    ) {
+        try {
+            byte[] bytes = inputStream.readAllBytes();
+            String documentId = "doc_" + UUID.randomUUID();
+            String storagePath = knowledgeDocumentFileStorage
+                    .save(knowledgeBaseId, documentId, fileName, bytes)
+                    .orElse(null);
+            String content = documentTextExtractor.extract(
+                    fileName,
+                    contentType,
+                    new java.io.ByteArrayInputStream(bytes)
+            );
+            KnowledgeDocument document = saveDocumentFromPreviews(
+                    knowledgeBaseId,
+                    documentId,
+                    fileName,
+                    documentSplitter.splitText(content, splitRequest),
+                    "TEXT_DOCUMENT",
+                    null,
+                    null,
+                    fileName,
+                    0,
+                    "TEXT",
+                    splitRequest,
+                    content,
+                    storagePath,
+                    datasetId
+            );
+            refreshKnowledgeBaseStats(knowledgeBaseId);
+            return document;
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Failed to read uploaded knowledge document.", exception);
+        }
     }
 
     public KnowledgeDocument addTableDocumentFile(
@@ -443,28 +561,109 @@ public class KnowledgeBaseService {
             java.io.InputStream inputStream,
             KnowledgeSplitRequest splitRequest
     ) {
-        String content = documentTextExtractor.extract(fileName, contentType, inputStream);
-        List<TableDocumentParser.TableRow> rows = tableDocumentParser.parseText(content, sheetName(fileName));
-        KnowledgeDocument document = saveDocumentFromPreviews(
-                knowledgeBaseId,
-                fileName,
-                documentSplitter.splitTableRows(rows, splitRequest),
-                "TABLE_DOCUMENT",
-                null,
-                null,
-                fileName,
-                rows.size(),
-                "TABLE",
-                splitRequest,
-                content
-        );
-        refreshKnowledgeBaseStats(knowledgeBaseId);
-        return document;
+        return addTableDocumentFile(knowledgeBaseId, fileName, contentType, inputStream, splitRequest, null);
+    }
+
+    public KnowledgeDocument addTableDocumentFile(
+            String knowledgeBaseId,
+            String fileName,
+            String contentType,
+            java.io.InputStream inputStream,
+            KnowledgeSplitRequest splitRequest,
+            String datasetId
+    ) {
+        try {
+            byte[] bytes = inputStream.readAllBytes();
+            String documentId = "doc_" + UUID.randomUUID();
+            String storagePath = knowledgeDocumentFileStorage
+                    .save(knowledgeBaseId, documentId, fileName, bytes)
+                    .orElse(null);
+            String content = documentTextExtractor.extract(
+                    fileName,
+                    contentType,
+                    new java.io.ByteArrayInputStream(bytes)
+            );
+            List<TableDocumentParser.TableRow> rows = tableDocumentParser.parseText(content, sheetName(fileName));
+            KnowledgeDocument document = saveDocumentFromPreviews(
+                    knowledgeBaseId,
+                    documentId,
+                    fileName,
+                    documentSplitter.splitTableRows(rows, splitRequest),
+                    "TABLE_DOCUMENT",
+                    null,
+                    null,
+                    fileName,
+                    rows.size(),
+                    "TABLE",
+                    splitRequest,
+                    content,
+                    storagePath,
+                    datasetId
+            );
+            refreshKnowledgeBaseStats(knowledgeBaseId);
+            return document;
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Failed to read uploaded knowledge document.", exception);
+        }
     }
 
     public List<KnowledgeDocument> listDocuments(String knowledgeBaseId) {
+        return listDocuments(knowledgeBaseId, null);
+    }
+
+    public List<KnowledgeDocument> listDocuments(String knowledgeBaseId, String datasetId) {
         ensureKnowledgeBaseExists(knowledgeBaseId);
-        return store.listDocuments(knowledgeBaseId);
+        KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
+        List<KnowledgeDocument> documents = store.listDocuments(knowledgeBaseId);
+        if (datasetId == null || datasetId.isBlank()) {
+            return documents;
+        }
+        String defaultDatasetId = resolveDefaultDatasetId(knowledgeBase);
+        return documents.stream()
+                .filter(document -> matchesDocumentDataset(document, datasetId, defaultDatasetId))
+                .toList();
+    }
+
+    public KnowledgeBase ensureDefaultDataset(KnowledgeBase knowledgeBase) {
+        if (datasetService == null) {
+            return knowledgeBase;
+        }
+        boolean hasDefault = datasetService.listByKnowledgeBase(knowledgeBase.id()).stream()
+                .anyMatch(dataset -> "DEFAULT".equalsIgnoreCase(dataset.datasetType()));
+        if (hasDefault) {
+            if (knowledgeBase.defaultDatasetId() == null || knowledgeBase.defaultDatasetId().isBlank()) {
+                com.mw.ai.agi.knowledge.domain.KnowledgeDataset defaultDataset = datasetService.listByKnowledgeBase(knowledgeBase.id()).stream()
+                        .filter(dataset -> "DEFAULT".equalsIgnoreCase(dataset.datasetType()))
+                        .findFirst()
+                        .orElse(null);
+                if (defaultDataset != null) {
+                    return updateDefaultDatasetBinding(knowledgeBase, defaultDataset.id());
+                }
+            }
+            return knowledgeBase;
+        }
+        com.mw.ai.agi.knowledge.domain.KnowledgeDataset dataset = datasetService.createDefaultDataset(knowledgeBase);
+        return updateDefaultDatasetBinding(knowledgeBase, dataset.id());
+    }
+
+    private KnowledgeBase updateDefaultDatasetBinding(KnowledgeBase knowledgeBase, String defaultDatasetId) {
+        int datasetCount = datasetService.listByKnowledgeBase(knowledgeBase.id()).size();
+        return store.saveKnowledgeBase(new KnowledgeBase(
+                knowledgeBase.id(), knowledgeBase.tenantId(), knowledgeBase.name(), knowledgeBase.description(),
+                knowledgeBase.ownerUnitId(), knowledgeBase.embeddingModelId(), knowledgeBase.vectorStoreConfigId(),
+                knowledgeBase.vectorDimension(), knowledgeBase.splitterType(), knowledgeBase.chunkSize(),
+                knowledgeBase.chunkOverlap(), knowledgeBase.retrievalMode(), knowledgeBase.topK(), knowledgeBase.status(),
+                knowledgeBase.documentCount(), knowledgeBase.chunkCount(), knowledgeBase.createdBy(),
+                OperatorContext.currentUserId(), knowledgeBase.createdAt(), Instant.now(), knowledgeBase.kbType(),
+                knowledgeBase.bizScope(), "MULTI", defaultDatasetId, datasetCount, knowledgeBase.metadataJson()
+        ));
+    }
+
+    private boolean matchesDocumentDataset(KnowledgeDocument document, String datasetId, String defaultDatasetId) {
+        String effectiveDatasetId = document.datasetId() == null || document.datasetId().isBlank()
+                ? defaultDatasetId
+                : document.datasetId();
+        return datasetId.equals(effectiveDatasetId);
     }
 
     public List<KnowledgeChunk> listChunks(String knowledgeBaseId, String documentId) {
@@ -538,11 +737,32 @@ public class KnowledgeBaseService {
     }
 
     public List<KnowledgeSearchResult> search(String knowledgeBaseId, String query, int topK, Map<String, Object> context) {
+        return search(knowledgeBaseId, null, query, topK, context);
+    }
+
+    public List<KnowledgeSearchResult> search(String knowledgeBaseId, String datasetId, String query, int topK, Map<String, Object> context) {
+        return search(knowledgeBaseId, datasetId, query, topK, context, KnowledgeSearchOptions.empty());
+    }
+
+    public List<KnowledgeSearchResult> search(
+            String knowledgeBaseId,
+            String datasetId,
+            String query,
+            int topK,
+            Map<String, Object> context,
+            KnowledgeSearchOptions options
+    ) {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
         assertKnowledgeBaseUseAllowed(knowledgeBase, context);
+        KnowledgeSearchOptions effectiveOptions = options == null ? KnowledgeSearchOptions.empty() : options;
+        String effectiveRetrievalMode = resolveRetrievalMode(knowledgeBase, effectiveOptions.retrievalMode());
+        KnowledgeRetrievalFilters filters = effectiveOptions.filters() == null
+                ? KnowledgeRetrievalFilters.empty()
+                : effectiveOptions.filters();
+        String effectiveDatasetId = resolveDatasetId(knowledgeBase, datasetId);
         Set<String> terms = tokenize(query);
         int limit = Math.min(topK <= 0 ? knowledgeBase.topK() : topK, 50);
-        Optional<VectorStoreConfig> externalStore = shouldUseVector(knowledgeBase)
+        Optional<VectorStoreConfig> externalStore = shouldUseVector(knowledgeBase, effectiveRetrievalMode)
                 ? externalVectorStore(knowledgeBase)
                 : Optional.empty();
         if (externalStore.isPresent()) {
@@ -550,8 +770,9 @@ public class KnowledgeBaseService {
             List<KnowledgeSearchResult> vectorResults = elasticsearchVectorStoreClient.search(
                             externalStore.get(),
                             knowledgeBaseId,
+                            effectiveDatasetId,
                             queryEmbedding,
-                            "HYBRID".equalsIgnoreCase(knowledgeBase.retrievalMode()) ? Math.max(limit * 3, limit) : limit
+                            "HYBRID".equalsIgnoreCase(effectiveRetrievalMode) ? Math.max(limit * 3, limit) : limit
                     )
                     .stream()
                     .map(hit -> new KnowledgeSearchResult(
@@ -562,22 +783,29 @@ public class KnowledgeBaseService {
                     ))
                     .filter(result -> result.score() > 0)
                     .toList();
-            if (!"HYBRID".equalsIgnoreCase(knowledgeBase.retrievalMode())) {
+            vectorResults = filterSearchResults(knowledgeBaseId, vectorResults, filters);
+            if (!"HYBRID".equalsIgnoreCase(effectiveRetrievalMode)) {
                 return applyRelevanceThreshold(vectorResults.stream().limit(limit).toList());
             }
-            return applyRelevanceThreshold(mergeSearchResults(vectorResults, localKeywordResults(knowledgeBaseId, terms), limit));
+            return applyRelevanceThreshold(mergeSearchResults(
+                    vectorResults,
+                    localKeywordResults(knowledgeBaseId, effectiveDatasetId, terms, filters),
+                    limit
+            ));
         }
         Map<String, KnowledgeChunkVector> vectorsByChunkId = vectorsByChunkId(knowledgeBaseId);
-        List<Double> queryEmbedding = shouldUseVector(knowledgeBase)
+        List<Double> queryEmbedding = shouldUseVector(knowledgeBase, effectiveRetrievalMode)
                 ? embeddingClient.embed(knowledgeBase.embeddingModelId(), knowledgeBase.embeddingModelId(), query)
                 : List.of();
         List<KnowledgeSearchResult> results = store.listChunks(knowledgeBaseId).stream()
                 .filter(KnowledgeChunk::enabled)
+                .filter(chunk -> matchesDataset(chunk, effectiveDatasetId))
+                .filter(filters::matches)
                 .map(chunk -> new KnowledgeSearchResult(
                         chunk.id(),
                         chunk.documentName(),
                         chunk.content(),
-                        combinedScore(chunk, terms, vectorsByChunkId.get(chunk.id()), queryEmbedding, knowledgeBase.retrievalMode())
+                        combinedScore(chunk, terms, vectorsByChunkId.get(chunk.id()), queryEmbedding, effectiveRetrievalMode)
                 ))
                 .filter(result -> result.score() > 0)
                 .sorted(Comparator.comparingInt(KnowledgeSearchResult::score).reversed())
@@ -651,9 +879,16 @@ public class KnowledgeBaseService {
         return applyRelevanceThreshold(results);
     }
 
-    private List<KnowledgeSearchResult> localKeywordResults(String knowledgeBaseId, Set<String> terms) {
+    private List<KnowledgeSearchResult> localKeywordResults(
+            String knowledgeBaseId,
+            String datasetId,
+            Set<String> terms,
+            KnowledgeRetrievalFilters filters
+    ) {
         return store.listChunks(knowledgeBaseId).stream()
                 .filter(KnowledgeChunk::enabled)
+                .filter(chunk -> matchesDataset(chunk, datasetId))
+                .filter(filters::matches)
                 .map(chunk -> new KnowledgeSearchResult(
                         chunk.id(),
                         chunk.documentName(),
@@ -662,6 +897,33 @@ public class KnowledgeBaseService {
                 ))
                 .filter(result -> result.score() > 0)
                 .toList();
+    }
+
+    private List<KnowledgeSearchResult> filterSearchResults(
+            String knowledgeBaseId,
+            List<KnowledgeSearchResult> results,
+            KnowledgeRetrievalFilters filters
+    ) {
+        if (filters.isEmpty()) {
+            return results;
+        }
+        Map<String, KnowledgeChunk> chunksById = store.listChunks(knowledgeBaseId).stream()
+                .collect(Collectors.toMap(KnowledgeChunk::id, chunk -> chunk, (left, right) -> left));
+        return results.stream()
+                .filter(result -> filters.matches(chunksById.get(result.id())))
+                .toList();
+    }
+
+    private String resolveRetrievalMode(KnowledgeBase knowledgeBase, String requestedMode) {
+        if (requestedMode != null && !requestedMode.isBlank()) {
+            String normalized = requestedMode.trim().toUpperCase(Locale.ROOT);
+            if ("KEYWORD".equals(normalized) || "VECTOR".equals(normalized) || "HYBRID".equals(normalized)) {
+                return normalized;
+            }
+            throw new IllegalArgumentException("Unsupported retrievalMode: " + requestedMode);
+        }
+        String configured = knowledgeBase.retrievalMode();
+        return configured == null || configured.isBlank() ? DEFAULT_RETRIEVAL_MODE : configured.trim().toUpperCase(Locale.ROOT);
     }
 
     private List<KnowledgeSearchResult> mergeSearchResults(
@@ -690,7 +952,7 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
-    private KnowledgeBase getKnowledgeBase(String knowledgeBaseId) {
+    public KnowledgeBase getKnowledgeBase(String knowledgeBaseId) {
         KnowledgeBase knowledgeBase = store.findKnowledgeBaseById(knowledgeBaseId)
                 .orElseThrow(() -> new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId));
         assertTenantAccessible(knowledgeBase.tenantId());
@@ -739,7 +1001,13 @@ public class KnowledgeBaseService {
                 current.createdBy(),
                 current.updatedBy(),
                 current.createdAt(),
-                Instant.now()
+                Instant.now(),
+                current.kbType(),
+                current.bizScope(),
+                current.datasetMode(),
+                current.defaultDatasetId(),
+                current.datasetCount(),
+                current.metadataJson()
         ));
     }
 
@@ -773,9 +1041,76 @@ public class KnowledgeBaseService {
             KnowledgeSplitRequest splitRequest,
             String rawContent
     ) {
+        return saveDocumentFromPreviews(
+                knowledgeBaseId,
+                "doc_" + UUID.randomUUID(),
+                name,
+                previews,
+                datasetType,
+                tags,
+                category,
+                source,
+                rowCount,
+                parserType,
+                splitRequest,
+                rawContent,
+                null,
+                null
+        );
+    }
+
+    private KnowledgeDocument saveDocumentFromPreviews(
+            String knowledgeBaseId,
+            String documentId,
+            String name,
+            List<KnowledgeChunkPreview> previews,
+            String datasetType,
+            String tags,
+            String category,
+            String source,
+            int rowCount,
+            String parserType,
+            KnowledgeSplitRequest splitRequest,
+            String rawContent,
+            String storagePath
+    ) {
+        return saveDocumentFromPreviews(
+                knowledgeBaseId,
+                documentId,
+                name,
+                previews,
+                datasetType,
+                tags,
+                category,
+                source,
+                rowCount,
+                parserType,
+                splitRequest,
+                rawContent,
+                storagePath,
+                null
+        );
+    }
+
+    private KnowledgeDocument saveDocumentFromPreviews(
+            String knowledgeBaseId,
+            String documentId,
+            String name,
+            List<KnowledgeChunkPreview> previews,
+            String datasetType,
+            String tags,
+            String category,
+            String source,
+            int rowCount,
+            String parserType,
+            KnowledgeSplitRequest splitRequest,
+            String rawContent,
+            String storagePath,
+            String datasetId
+    ) {
         KnowledgeBase knowledgeBase = getKnowledgeBase(knowledgeBaseId);
         KnowledgeDocument document = store.saveDocument(new KnowledgeDocument(
-                "doc_" + UUID.randomUUID(),
+                documentId,
                 knowledgeBaseId,
                 name,
                 previews.size(),
@@ -790,7 +1125,10 @@ public class KnowledgeBaseService {
                 splitRequest.effectiveSplitterType(),
                 splitConfig(splitRequest),
                 rawContent,
-                null
+                null,
+                storagePath,
+                resolveDatasetId(knowledgeBase, datasetId),
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
         ));
         saveChunksForDocument(knowledgeBase, document, previews);
         return document;
@@ -807,9 +1145,220 @@ public class KnowledgeBaseService {
                     preview.index(),
                     true,
                     preview.tokenEstimate()
+            ).withDatasetContext(
+                    document.datasetId(),
+                    document.sourceIndexId(),
+                    document.topicId(),
+                    document.sourceRefId(),
+                    document.materialSourceType(),
+                    document.materialType(),
+                    document.sourceArchiveFileId()
             ));
             saveEmbeddingIfConfigured(knowledgeBase, chunk);
         }
+    }
+
+    public int countChunksByDataset(String knowledgeBaseId, String datasetId) {
+        return (int) store.listChunks(knowledgeBaseId).stream()
+                .filter(chunk -> matchesDataset(chunk, datasetId))
+                .count();
+    }
+
+    public void updateDatasetCount(String knowledgeBaseId, int datasetCount) {
+        KnowledgeBase current = getKnowledgeBase(knowledgeBaseId);
+        store.saveKnowledgeBase(new KnowledgeBase(
+                current.id(), current.tenantId(), current.name(), current.description(), current.ownerUnitId(),
+                current.embeddingModelId(), current.vectorStoreConfigId(), current.vectorDimension(), current.splitterType(),
+                current.chunkSize(), current.chunkOverlap(), current.retrievalMode(), current.topK(), current.status(),
+                current.documentCount(), current.chunkCount(), current.createdBy(), current.updatedBy(),
+                current.createdAt(), Instant.now(), current.kbType(), current.bizScope(), current.datasetMode(),
+                current.defaultDatasetId(), datasetCount, current.metadataJson()
+        ));
+    }
+
+    public KnowledgeDocument indexSourceMaterial(String sourceIndexId) {
+        if (sourceIndexMapper == null) {
+            throw new IllegalStateException("来源索引存储不可用");
+        }
+        com.mw.ai.agi.knowledge.persistence.KnowledgeSourceIndexEntity entity = sourceIndexMapper.selectById(sourceIndexId);
+        if (entity == null) {
+            throw new IllegalArgumentException("Knowledge source index not found: " + sourceIndexId);
+        }
+        KnowledgeBase knowledgeBase = getKnowledgeBase(entity.getKnowledgeBaseId());
+        String content = extractSourceContent(entity.getMetadataSnapshot(), entity.getSourceTitleSnapshot());
+        String documentId = entity.getDocumentId();
+        KnowledgeDocument document;
+        Instant now = Instant.now();
+        if (documentId == null || documentId.isBlank()) {
+            document = new KnowledgeDocument(
+                    "doc_" + UUID.randomUUID(),
+                    entity.getKnowledgeBaseId(),
+                    entity.getSourceTitleSnapshot(),
+                    0,
+                    now,
+                    "TEXT_DOCUMENT",
+                    "PROCESSING",
+                    null,
+                    null,
+                    entity.getSourceSystem(),
+                    0,
+                    "TEXT",
+                    knowledgeBase.splitterType(),
+                    "{}",
+                    content,
+                    null,
+                    null,
+                    entity.getDatasetId(),
+                    entity.getId(),
+                    entity.getTopicId(),
+                    "ARCHIVE_TOPIC_MATERIAL",
+                    entity.getSourceSystem(),
+                    entity.getSourceType(),
+                    entity.getSourceRefId(),
+                    entity.getMaterialSourceType(),
+                    entity.getMaterialType(),
+                    entity.getSourceArchiveFileId(),
+                    entity.getSourceVersion(),
+                    entity.getSourceTitleSnapshot(),
+                    entity.getMetadataSnapshot(),
+                    summarize(content),
+                    null,
+                    knowledgeBase.ownerUnitId(),
+                    now
+            );
+        } else {
+            document = store.listDocuments(entity.getKnowledgeBaseId()).stream()
+                    .filter(item -> item.id().equals(documentId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Knowledge document not found: " + documentId));
+            externalVectorStore(knowledgeBase)
+                    .ifPresent(config -> elasticsearchVectorStoreClient.deleteDocument(config, entity.getKnowledgeBaseId(), documentId));
+            store.deleteChunkVectors(entity.getKnowledgeBaseId(), documentId);
+            store.deleteChunks(entity.getKnowledgeBaseId(), documentId);
+            document = document.withProcessingStatus("PROCESSING", null);
+        }
+        store.saveDocument(document);
+        List<KnowledgeChunkPreview> previews = splitter.preview(
+                content,
+                knowledgeBase.splitterType(),
+                knowledgeBase.chunkSize(),
+                knowledgeBase.chunkOverlap()
+        );
+        document = document.withChunkCount(previews.size()).withProcessingStatus("READY", null);
+        store.saveDocument(document);
+        saveChunksForDocument(knowledgeBase, document, previews);
+        entity.setDocumentId(document.id());
+        entity.setIndexStatus("READY");
+        entity.setLastIndexTime(now);
+        entity.setUpdatedAt(now);
+        entity.setErrorMessage(null);
+        sourceIndexMapper.updateById(entity);
+        refreshKnowledgeBaseStats(entity.getKnowledgeBaseId());
+        return document;
+    }
+
+    public List<com.mw.ai.agi.knowledge.domain.KnowledgeRetrievalItem> retrieve(
+            String knowledgeBaseId,
+            String datasetId,
+            String query,
+            int topK,
+            Map<String, Object> context
+    ) {
+        return retrieve(knowledgeBaseId, datasetId, query, topK, null, null, context);
+    }
+
+    public List<com.mw.ai.agi.knowledge.domain.KnowledgeRetrievalItem> retrieve(
+            String knowledgeBaseId,
+            String datasetId,
+            String query,
+            int topK,
+            String retrievalMode,
+            Map<String, Object> filters,
+            Map<String, Object> context
+    ) {
+        KnowledgeSearchOptions options = KnowledgeSearchOptions.of(retrievalMode, filters);
+        Map<String, KnowledgeChunk> chunksById = store.listChunks(knowledgeBaseId).stream()
+                .collect(Collectors.toMap(KnowledgeChunk::id, chunk -> chunk, (left, right) -> left));
+        return search(knowledgeBaseId, datasetId, query, topK, context, options).stream()
+                .map(result -> {
+                    KnowledgeChunk chunk = chunksById.get(result.id());
+                    return new com.mw.ai.agi.knowledge.domain.KnowledgeRetrievalItem(
+                            result.id(),
+                            chunk == null ? null : chunk.documentId(),
+                            chunk == null ? null : chunk.sourceIndexId(),
+                            result.content(),
+                            result.score(),
+                            result.documentName(),
+                            chunk == null ? null : chunk.sourceRefId(),
+                            chunk == null ? null : chunk.sourceArchiveFileId(),
+                            chunk == null ? null : chunk.sourcePage(),
+                            chunk == null ? null : chunk.citationText(),
+                            parseMetadata(chunk)
+                    );
+                })
+                .toList();
+    }
+
+    private Map<String, Object> parseMetadata(KnowledgeChunk chunk) {
+        if (chunk == null || chunk.metadataJson() == null || chunk.metadataJson().isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(chunk.metadataJson(), Map.class);
+        } catch (Exception ignored) {
+            return Map.of();
+        }
+    }
+
+    private String resolveDefaultDatasetId(KnowledgeBase knowledgeBase) {
+        if (knowledgeBase.defaultDatasetId() != null && !knowledgeBase.defaultDatasetId().isBlank()) {
+            return knowledgeBase.defaultDatasetId();
+        }
+        return "ds_default_" + knowledgeBase.id();
+    }
+
+    private String resolveDatasetId(KnowledgeBase knowledgeBase, String datasetId) {
+        if (datasetId != null && !datasetId.isBlank()) {
+            return datasetId;
+        }
+        return resolveDefaultDatasetId(knowledgeBase);
+    }
+
+    private boolean matchesDataset(KnowledgeChunk chunk, String datasetId) {
+        if (datasetId == null || datasetId.isBlank()) {
+            return true;
+        }
+        String chunkDatasetId = chunk.datasetId();
+        if (chunkDatasetId == null || chunkDatasetId.isBlank()) {
+            return datasetId.equals("ds_default_" + chunk.knowledgeBaseId());
+        }
+        return datasetId.equals(chunkDatasetId);
+    }
+
+    private String extractSourceContent(String metadataSnapshot, String title) {
+        if (metadataSnapshot != null && !metadataSnapshot.isBlank()) {
+            try {
+                Map<?, ?> metadata = objectMapper.readValue(metadataSnapshot, Map.class);
+                Object contentText = metadata.get("contentText");
+                if (contentText != null && !String.valueOf(contentText).isBlank()) {
+                    return String.valueOf(contentText);
+                }
+                Object summary = metadata.get("summary");
+                if (summary != null && !String.valueOf(summary).isBlank()) {
+                    return String.valueOf(summary);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return title == null ? "" : title;
+    }
+
+    private String summarize(String content) {
+        if (content == null) {
+            return "";
+        }
+        String normalized = content.trim();
+        return normalized.length() <= 200 ? normalized : normalized.substring(0, 200) + "...";
     }
 
     private String manualEntryText(ManualDatasetEntry entry) {
@@ -857,45 +1406,11 @@ public class KnowledgeBaseService {
     }
 
     private KnowledgeDocument withStatus(KnowledgeDocument document, String status, String errorMessage) {
-        return new KnowledgeDocument(
-                document.id(),
-                document.knowledgeBaseId(),
-                document.name(),
-                document.chunkCount(),
-                document.createdAt(),
-                document.datasetType(),
-                status,
-                document.tags(),
-                document.category(),
-                document.source(),
-                document.rowCount(),
-                document.parserType(),
-                document.splitterType(),
-                document.splitterConfig(),
-                document.rawContent(),
-                errorMessage
-        );
+        return document.withProcessingStatus(status, errorMessage);
     }
 
     private KnowledgeDocument withChunkCount(KnowledgeDocument document, int chunkCount) {
-        return new KnowledgeDocument(
-                document.id(),
-                document.knowledgeBaseId(),
-                document.name(),
-                chunkCount,
-                document.createdAt(),
-                document.datasetType(),
-                document.processingStatus(),
-                document.tags(),
-                document.category(),
-                document.source(),
-                document.rowCount(),
-                document.parserType(),
-                document.splitterType(),
-                document.splitterConfig(),
-                document.rawContent(),
-                document.errorMessage()
-        );
+        return document.withChunkCount(chunkCount);
     }
 
     private KnowledgeSplitRequest splitRequestFrom(KnowledgeDocument document) {
@@ -994,8 +1509,15 @@ public class KnowledgeBaseService {
     }
 
     private boolean shouldUseVector(KnowledgeBase knowledgeBase) {
+        return shouldUseVector(knowledgeBase, knowledgeBase.retrievalMode());
+    }
+
+    private boolean shouldUseVector(KnowledgeBase knowledgeBase, String retrievalMode) {
+        String effectiveMode = retrievalMode == null || retrievalMode.isBlank()
+                ? DEFAULT_RETRIEVAL_MODE
+                : retrievalMode.trim().toUpperCase(Locale.ROOT);
         return knowledgeBase.embeddingModelId() != null && !knowledgeBase.embeddingModelId().isBlank()
-                && ("VECTOR".equalsIgnoreCase(knowledgeBase.retrievalMode()) || "HYBRID".equalsIgnoreCase(knowledgeBase.retrievalMode()));
+                && ("VECTOR".equalsIgnoreCase(effectiveMode) || "HYBRID".equalsIgnoreCase(effectiveMode));
     }
 
     private Map<String, KnowledgeChunkVector> vectorsByChunkId(String knowledgeBaseId) {
@@ -1021,7 +1543,7 @@ public class KnowledgeBaseService {
         if ("HYBRID".equalsIgnoreCase(retrievalMode)) {
             return keywordScore * 100 + vectorScore;
         }
-        return keywordScore;
+        return keywordScore * 1000;
     }
 
     private double cosine(List<Double> left, List<Double> right) {
