@@ -113,6 +113,37 @@ public class ConnectorRuntimeService {
         return doHttpCall(connector, operation, payload, context, traceId);
     }
 
+    public Map<String, Object> testOperation(
+            String connectorId,
+            String operationId,
+            Map<String, Object> testPayload,
+            Map<String, Object> context
+    ) {
+        Connector connector = connectorService.getConnector(connectorId);
+        ConnectorOperation operation = connectorService.getOperation(connectorId, operationId);
+        Map<String, Object> renderContext = new LinkedHashMap<>(context == null ? Map.of() : context);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (testPayload != null && !testPayload.isEmpty()) {
+            payload.putAll(testPayload);
+        } else if (operation.requestTemplate() != null && !operation.requestTemplate().isBlank()) {
+            String rendered = TemplateRenderer.render(operation.requestTemplate(), renderContext);
+            try {
+                Map<String, Object> parsed = objectMapper.readValue(rendered, new TypeReference<>() {});
+                payload.putAll(parsed);
+            } catch (IOException ex) {
+                payload.put("body", rendered);
+            }
+        }
+        String traceId = UUID.randomUUID().toString();
+        if (renderContext != null) {
+            String incoming = stringValue(renderContext.get("__traceId"), "");
+            if (!incoming.isBlank()) {
+                traceId = incoming;
+            }
+        }
+        return doHttpCall(connector, operation, payload, renderContext, traceId);
+    }
+
     private Map<String, Object> doHttpCall(
             Connector connector,
             ConnectorOperation operation,
@@ -125,10 +156,6 @@ public class ConnectorRuntimeService {
         Map<String, String> headers = buildHeaders(connector, context, traceId);
         int timeoutMs = intValue(context.get("__connectorTimeoutMs"), 10000);
 
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofMillis(timeoutMs));
-        headers.forEach(builder::header);
-
         String body = "";
         if (methodRequiresBody(method)) {
             try {
@@ -136,22 +163,35 @@ public class ConnectorRuntimeService {
             } catch (IOException ex) {
                 throw new IllegalArgumentException("Failed to serialize request payload", ex);
             }
+        } else {
+            url = appendQuery(url, toStringMap(payload));
+        }
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofMillis(timeoutMs));
+        headers.forEach(builder::header);
+
+        if (methodRequiresBody(method)) {
             builder.method(method, HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
             if (!headers.containsKey("Content-Type")) {
                 builder.header("Content-Type", "application/json");
             }
         } else {
-            url = appendQuery(url, toStringMap(payload));
             builder.method(method, HttpRequest.BodyPublishers.noBody());
         }
 
         try {
+            long startedAt = System.currentTimeMillis();
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            long durationMs = System.currentTimeMillis() - startedAt;
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", response.statusCode() >= 200 && response.statusCode() < 300);
             result.put("statusCode", response.statusCode());
             result.put("data", parseBody(response.body()));
             result.put("raw", response.body());
+            result.put("traceId", traceId);
+            result.put("requestUrl", url);
+            result.put("durationMs", durationMs);
             agentAuditService.log(
                     stringValue(context.get("userId"), null),
                     stringValue(context.get("botId"), null),

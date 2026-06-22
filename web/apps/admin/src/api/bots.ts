@@ -180,3 +180,17 @@ export async function deleteBotCapability(botId: string, capabilityId: string): 
   await requestJson<void>(`/api/bots/${botId}/capabilities/${capabilityId}`, { method: 'DELETE' });
 }
 
+export interface WorkflowRoutePreview {
+  workflowId: string;
+  workflowName: string;
+  capabilityCode: string | null;
+  matchReason: string;
+}
+
+export async function previewBotWorkflowRoute(botId: string, message: string): Promise<WorkflowRoutePreview> {
+  return requestJson<WorkflowRoutePreview>(`/api/bots/${botId}/capabilities/route-preview`, {
+    method: 'POST',
+    body: JSON.stringify({ message })
+  });
+}
+

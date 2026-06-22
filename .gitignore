@@ -7,4 +7,9 @@ dist/
 .npm-cache/
 .pnpm-store/
 maven-settings.xml
+server/data/
+.agents/
+.claude/
+.cursor/
+.vscode/
 

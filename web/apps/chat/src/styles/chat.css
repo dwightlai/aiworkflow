@@ -49,6 +49,78 @@ body {
   }
 }
 
+.chat-run-shell {
+  background: #fff;
+  display: grid;
+  gap: 0;
+  grid-template-columns: 260px minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-run-sidebar {
+  border-right: 1px solid #edf0f5;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.chat-run-session-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.chat-run-session-item {
+  border: 1px solid #edf0f5;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+}
+
+.chat-run-session-item.active {
+  background: #edf3fe;
+  border-color: #c7d2fe;
+}
+
+.chat-run-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.chat-run-header {
+  border-bottom: 1px solid #f0f2f5;
+  flex-shrink: 0;
+  padding: 14px 24px;
+}
+
+.chat-run-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 12px;
+}
+
+.chat-run-scroll-inner {
+  margin: 0 auto;
+  max-width: 768px;
+  width: 100%;
+}
+
+.chat-run-dock {
+  background: #fff;
+  border-top: 1px solid #f0f2f5;
+  flex-shrink: 0;
+  padding: 12px 24px 16px;
+}
+
 .chat-scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -130,7 +202,7 @@ body {
 .chat-message-list {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 28px;
   padding-bottom: 24px;
 }
 
@@ -345,9 +417,9 @@ body {
 }
 
 .chat-input-dock {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #fff 28%);
+  background: transparent;
   flex-shrink: 0;
-  padding: 8px 24px 18px;
+  padding: 0;
   width: 100%;
 }
 
@@ -429,7 +501,7 @@ body {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 50%;
-  bottom: 148px;
+  bottom: 120px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   color: #5c5c5c;
   cursor: pointer;
@@ -445,4 +517,19 @@ body {
 .chat-scroll-bottom:hover {
   background: #f8f9fc;
   color: #1b1b1c;
+}
+
+.chat-run-shell-embed {
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+}
+
+.chat-route-tag {
+  color: #64748b;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.chat-route-tag-reason {
+  color: #94a3b8;
 }

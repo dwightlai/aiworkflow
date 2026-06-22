@@ -37,4 +37,19 @@ public record WorkflowExecutionResponse(
                         .toList()
         );
     }
+
+    public static WorkflowExecutionResponse summaryFrom(WorkflowExecution execution) {
+        return new WorkflowExecutionResponse(
+                execution.id(),
+                execution.workflowId(),
+                execution.workflowVersionId(),
+                execution.status(),
+                Map.of(),
+                Map.of(),
+                execution.errorMessage(),
+                execution.startedAt(),
+                execution.finishedAt(),
+                List.of()
+        );
+    }
 }

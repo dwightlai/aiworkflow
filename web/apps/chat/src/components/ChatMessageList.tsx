@@ -17,6 +17,7 @@ import {
   mergeCitations
 } from './MessageCards';
 import { MarkdownContent } from './MarkdownContent';
+import { formatRouteMatchReason } from '../utils/routeLabel';
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(
@@ -43,10 +44,11 @@ function renderAssistantTurn(turnMsgs: PlatformMessage[]): RenderItem[] {
     }
     if (!msg.messageType) {
       if (textMsg) {
+        const merged: PlatformMessage = textMsg;
         textMsg = {
-          ...textMsg,
-          content: [textMsg.content, msg.content].filter(Boolean).join('\n\n'),
-          citations: mergeCitations(textMsg.citations ?? [], msg.citations ?? [])
+          ...merged,
+          content: [merged.content, msg.content].filter(Boolean).join('\n\n'),
+          citations: mergeCitations(merged.citations ?? [], msg.citations ?? [])
         };
       } else {
         textMsg = msg;
@@ -199,13 +201,24 @@ function AssistantTurn({
       />
       {hasAnswer ? (
         <>
+          {msg.metadata?.resolvedWorkflowName ? (
+            <div className="chat-route-tag">
+              工作流：{String(msg.metadata.resolvedWorkflowName)}
+              {msg.metadata.routeMatchReason ? (
+                <span className="chat-route-tag-reason">
+                  {' '}
+                  · {formatRouteMatchReason(String(msg.metadata.routeMatchReason))}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <MarkdownContent content={parts.answer} className="chat-assistant-content" />
           {msg.streaming ? <span className="chat-stream-cursor">▍</span> : null}
         </>
       ) : waitingForAnswer ? null : (
         <div className="chat-assistant-content chat-assistant-empty">暂无回复内容</div>
       )}
-      <CitationList citations={citations} />
+      {!msg.streaming && (hasAnswer || !waitingForAnswer) ? <CitationList citations={citations} /> : null}
     </div>
   );
 }

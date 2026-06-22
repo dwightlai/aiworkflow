@@ -2,9 +2,11 @@ import { BranchesOutlined, CommentOutlined, DeleteOutlined, PlusOutlined, RedoOu
 import type { WorkflowEdge, WorkflowNode } from '@aiworkflow/workflow-schema';
 import { Button, Empty, Form, Input, InputNumber, Radio, Select, Slider, Space, Switch, Typography } from 'antd';
 import type React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { KnowledgeBase } from '../../../api/knowledge';
 import type { ModelProvider } from '../../../api/models';
 import type { PromptTemplate } from '../../../api/prompts';
+import { listConnectorOperations, listConnectors } from '../../../api/connectors';
 
 export interface NodeConfigPanelProps {
   node: WorkflowNode | null;
@@ -696,6 +698,14 @@ function ContentTemplateConfig({ node, setConfig }: { node: WorkflowNode; setCon
 
 function HttpConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch: Record<string, unknown>) => void }) {
   const config = node.config ?? {};
+  const connectorMode = Boolean(stringValue(config.connectorCode, ''));
+  const connectorsQuery = useQuery({ queryKey: ['connectors'], queryFn: listConnectors });
+  const selectedConnector = (connectorsQuery.data?.items ?? []).find((item) => item.code === config.connectorCode);
+  const operationsQuery = useQuery({
+    queryKey: ['connector-operations', selectedConnector?.id],
+    queryFn: () => listConnectorOperations(selectedConnector!.id),
+    enabled: Boolean(selectedConnector?.id)
+  });
   const params = readKeyValues(config.params);
   const headers = readKeyValues(config.headers, [{ key: 'Content-Type', value: 'application/json' }]);
   const formData = readKeyValues(config.formData);
@@ -704,9 +714,83 @@ function HttpConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch
     { name: 'statusCode', type: 'Number' },
     { name: 'body', type: 'String' }
   ]);
+  const inputMappingText = JSON.stringify(config.inputMapping ?? {}, null, 2);
+
+  function switchMode(mode: 'inline' | 'connector') {
+    if (mode === 'connector') {
+      setConfig({
+        connectorCode: stringValue(config.connectorCode, 'demo_platform'),
+        operationCode: stringValue(config.operationCode, 'run_demo'),
+        inputMapping: config.inputMapping ?? { keyword: '{{message}}' },
+        outputKey: stringValue(config.outputKey, 'demoResult')
+      });
+      return;
+    }
+    setConfig({
+      connectorCode: undefined,
+      operationCode: undefined,
+      inputMapping: undefined,
+      method: stringValue(config.method, 'GET'),
+      url: stringValue(config.url, ''),
+      outputKey: stringValue(config.outputKey, 'httpResult')
+    });
+  }
 
   return (
     <>
+      <SectionTitle title="调用方式" />
+      <Form layout="vertical" size="small">
+        <Form.Item>
+          <Radio.Group value={connectorMode ? 'connector' : 'inline'} onChange={(event) => switchMode(event.target.value)}>
+            <Radio.Button value="inline">内联 URL</Radio.Button>
+            <Radio.Button value="connector">连接器</Radio.Button>
+          </Radio.Group>
+        </Form.Item>
+      </Form>
+      {connectorMode ? (
+        <Form layout="vertical" size="small">
+          <Form.Item label="连接器">
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={stringValue(config.connectorCode, undefined)}
+              placeholder="选择连接器"
+              options={(connectorsQuery.data?.items ?? []).map((item) => ({ value: item.code, label: `${item.name} (${item.code})` }))}
+              onChange={(connectorCode) => setConfig({ connectorCode, operationCode: undefined })}
+            />
+          </Form.Item>
+          <Form.Item label="接口 Operation">
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={stringValue(config.operationCode, undefined)}
+              placeholder="选择接口"
+              options={(operationsQuery.data?.items ?? []).map((item) => ({ value: item.code, label: `${item.name} (${item.code})` }))}
+              onChange={(operationCode) => setConfig({ operationCode })}
+            />
+          </Form.Item>
+          <Form.Item label="inputMapping (JSON)">
+            <Input.TextArea
+              autoSize={{ minRows: 4, maxRows: 10 }}
+              value={inputMappingText}
+              onChange={(event) => {
+                try {
+                  setConfig({ inputMapping: JSON.parse(event.target.value || '{}') });
+                } catch {
+                  setConfig({ inputMapping: event.target.value });
+                }
+              }}
+            />
+          </Form.Item>
+          <Form.Item label="输出变量">
+            <Input value={String(config.outputKey ?? 'demoResult')} onChange={(event) => setConfig({ outputKey: event.target.value })} />
+          </Form.Item>
+          <Typography.Text type="secondary">
+            连接器模式由平台拼接 baseUrl + path，并记录 CONNECTOR_CALL 审计。
+          </Typography.Text>
+        </Form>
+      ) : (
+        <>
       <SectionTitle title="请求设置" />
       <Form layout="vertical" size="small">
         <Form.Item label="请求方法">
@@ -747,6 +831,8 @@ function HttpConfig({ node, setConfig }: { node: WorkflowNode; setConfig: (patch
         onChange={(patch, index) => setConfig({ outputParams: outputParams.map((param, itemIndex) => itemIndex === index ? { ...param, ...patch } : param) })}
         onRemove={(index) => setConfig({ outputParams: outputParams.filter((_, itemIndex) => itemIndex !== index) })}
       />
+        </>
+      )}
     </>
   );
 }
@@ -1285,12 +1371,20 @@ function nodeOutputOptions(node: WorkflowNode): VariableOption[] {
     options.push(typedOption(`${nodeName}.reasoning_content`, 'String'));
   } else if (node.type === 'HTTP_TOOL') {
     const outputKey = stringValue(config.outputKey, 'toolResult') ?? 'toolResult';
-    options.push(typedOption(`${nodeName}.${outputKey}`, 'Object'));
-    options.push(typedOption(`${nodeName}.${outputKey}.body`, 'String'));
-    options.push(typedOption(`${nodeName}.${outputKey}.rawBody`, 'String'));
-    options.push(typedOption(`${nodeName}.${outputKey}.statusCode`, 'Number'));
-    options.push(typedOption(`${nodeName}.${outputKey}.headers`, 'Object'));
-    options.push(typedOption(`${nodeName}.${outputKey}.success`, 'Boolean'));
+    if (stringValue(config.connectorCode, '')) {
+      options.push(typedOption(`${nodeName}.${outputKey}`, 'Object'));
+      options.push(typedOption(`${nodeName}.${outputKey}.data`, 'Object'));
+      options.push(typedOption(`${nodeName}.${outputKey}.data.answer`, 'String'));
+      options.push(typedOption(`${nodeName}.${outputKey}.traceId`, 'String'));
+      options.push(typedOption(`${nodeName}.${outputKey}.success`, 'Boolean'));
+    } else {
+      options.push(typedOption(`${nodeName}.${outputKey}`, 'Object'));
+      options.push(typedOption(`${nodeName}.${outputKey}.body`, 'String'));
+      options.push(typedOption(`${nodeName}.${outputKey}.rawBody`, 'String'));
+      options.push(typedOption(`${nodeName}.${outputKey}.statusCode`, 'Number'));
+      options.push(typedOption(`${nodeName}.${outputKey}.headers`, 'Object'));
+      options.push(typedOption(`${nodeName}.${outputKey}.success`, 'Boolean'));
+    }
   } else if (node.type === 'QUESTION_CLASSIFIER') {
     options.push(typedOption(`${nodeName}.${stringValue(config.outputKey, 'index') ?? 'index'}`, 'String'));
   } else {

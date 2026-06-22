@@ -3,15 +3,41 @@ package com.mw.ai.agi.bot.service;
 import com.mw.ai.agi.bot.domain.AiBot;
 import com.mw.ai.agi.bot.domain.BotCapability;
 import com.mw.ai.agi.bot.domain.BotStatus;
+import com.mw.ai.agi.workflow.domain.Workflow;
+import com.mw.ai.agi.workflow.domain.WorkflowStatus;
+import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class BotWorkflowRouterTest {
-    private final BotWorkflowRouter router = new BotWorkflowRouter();
+    private final WorkflowApplicationService workflowService = mock(WorkflowApplicationService.class);
+    private BotWorkflowRouter router;
+
+    @BeforeEach
+    void setUp() {
+        router = new BotWorkflowRouter(workflowService);
+        when(workflowService.getWorkflow(anyString())).thenAnswer(invocation -> new Workflow(
+                invocation.getArgument(0),
+                "tenant_default",
+                null,
+                "Workflow " + invocation.getArgument(0),
+                null,
+                WorkflowStatus.PUBLISHED,
+                null,
+                null,
+                null,
+                Instant.now(),
+                Instant.now()
+        ));
+    }
 
     @Test
     void shouldUsePrimaryWorkflowWhenNoKeywordMatch() {

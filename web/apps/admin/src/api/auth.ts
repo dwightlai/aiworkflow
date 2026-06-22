@@ -22,10 +22,35 @@ export interface AuthSession {
   accessToken: string;
   refreshToken: string;
   expiresIn?: number;
+  expiresAt?: number;
   user: AuthUser;
 }
 
 const memoryStorage = new Map<string, string>();
+
+export const AUTH_UNAUTHORIZED_EVENT = 'agi:auth:unauthorized';
+
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
+export function notifyUnauthorized() {
+  clearAuthSession();
+  unauthorizedHandler?.();
+  window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+}
+
+function isUnauthorizedResponse(status: number, code?: string | null) {
+  if (status === 401 || status === 403) {
+    return true;
+  }
+  return code === 'API_AUTH_REQUIRED'
+    || code === 'CHAT_AUTH_REQUIRED'
+    || code === 'AUTH_TOKEN_INVALID'
+    || code === 'AUTH_TOKEN_EXPIRED';
+}
 
 export function isPlatformOperator(user?: AuthUser | null): boolean {
   return user?.tenantId === DEFAULT_TENANT_ID && (user.roleIds?.includes('platform_admin') ?? false);
@@ -49,6 +74,11 @@ export function getAuthSession(): AuthSession | null {
       clearAuthSession();
       return null;
     }
+    const expiresAt = resolveAccessTokenExpiry(parsed);
+    if (expiresAt != null && Date.now() >= expiresAt) {
+      clearAuthSession();
+      return null;
+    }
     return parsed as AuthSession;
   } catch {
     clearAuthSession();
@@ -57,7 +87,12 @@ export function getAuthSession(): AuthSession | null {
 }
 
 export function setAuthSession(session: AuthSession) {
-  setStorageItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  const expiresAt = session.expiresAt
+    ?? (session.expiresIn ? Date.now() + session.expiresIn * 1000 : resolveAccessTokenExpiry(session));
+  setStorageItem(AUTH_STORAGE_KEY, JSON.stringify({
+    ...session,
+    ...(expiresAt != null ? { expiresAt } : {})
+  }));
 }
 
 export function clearAuthSession() {
@@ -99,6 +134,10 @@ export async function requestJson<T>(
   const requestInit = withRequestHeaders(init, options);
   const response = requestInit ? await fetch(url, requestInit) : await fetch(url);
   const envelope = await response.json() as ApiEnvelope<T>;
+  if (!options.skipAuth && isUnauthorizedResponse(response.status, envelope.error?.code)) {
+    notifyUnauthorized();
+    throw new Error(envelope.error?.message ?? '登录已失效，请重新登录');
+  }
   if (!response.ok || !envelope.success) {
     throw new Error(envelope.error?.message ?? `Request failed: ${response.status}`);
   }
@@ -146,6 +185,32 @@ function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
 function hasHeader(headers: Record<string, string>, name: string) {
   const normalizedName = name.toLowerCase();
   return Object.keys(headers).some((key) => key.toLowerCase() === normalizedName);
+}
+
+function resolveAccessTokenExpiry(session: Partial<AuthSession>): number | null {
+  if (typeof session.expiresAt === 'number') {
+    return session.expiresAt;
+  }
+  if (typeof session.expiresIn === 'number' && session.expiresIn > 0) {
+    return Date.now() + session.expiresIn * 1000;
+  }
+  return readJwtExpiry(session.accessToken);
+}
+
+function readJwtExpiry(accessToken?: string): number | null {
+  if (!accessToken) {
+    return null;
+  }
+  const parts = accessToken.split('.');
+  if (parts.length < 2) {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
 }
 
 function getStorage(): Storage | null {

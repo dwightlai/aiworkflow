@@ -78,6 +78,9 @@ export interface TestConnectorOperationResponse {
   statusCode?: number;
   body?: string;
   errorMessage?: string;
+  traceId?: string | null;
+  requestUrl?: string | null;
+  durationMs?: number | null;
 }
 
 export async function listConnectors(): Promise<PageResponse<Connector>> {
@@ -143,4 +146,54 @@ export async function testConnectorOperation(
       body: JSON.stringify(payload ?? {})
     }
   );
+}
+
+export interface ConnectorExportBundle {
+  connector: {
+    name: string;
+    code: string;
+    type: string;
+    accessType: string;
+    baseUrl: string | null;
+    authMode: string | null;
+    authConfig: string | null;
+    enabled: boolean;
+    description: string | null;
+  };
+  operations: Array<{
+    name: string;
+    code: string;
+    method: string | null;
+    path: string | null;
+    operationType: string;
+    riskLevel: string;
+    needConfirm: boolean;
+    confirmSummaryTemplate: string | null;
+    requestTemplate: string | null;
+    enabled: boolean;
+    description: string | null;
+  }>;
+}
+
+export interface ConnectorCallStat {
+  connectorCode: string;
+  operationCode: string;
+  totalCalls: number;
+  successCalls: number;
+  failedCalls: number;
+}
+
+export async function exportConnector(connectorId: string): Promise<ConnectorExportBundle> {
+  return requestJson<ConnectorExportBundle>(`/api/connectors/${connectorId}/export`);
+}
+
+export async function importConnector(bundle: ConnectorExportBundle, overwrite = true): Promise<Connector> {
+  return requestJson<Connector>('/api/connectors/import', {
+    method: 'POST',
+    body: JSON.stringify({ bundle, overwrite })
+  });
+}
+
+export async function listConnectorStats(): Promise<PageResponse<ConnectorCallStat>> {
+  return requestJson<PageResponse<ConnectorCallStat>>('/api/connectors/stats');
 }

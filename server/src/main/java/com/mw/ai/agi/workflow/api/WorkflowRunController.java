@@ -44,8 +44,8 @@ public class WorkflowRunController {
 
     @GetMapping("/workflow-runs")
     public ApiResponse<PageResponse<WorkflowExecutionResponse>> list() {
-        List<WorkflowExecutionResponse> executions = executionService.listWorkflowExecutions().stream()
-                .map(WorkflowExecutionResponse::from)
+        List<WorkflowExecutionResponse> executions = executionService.listWorkflowExecutionHeaders().stream()
+                .map(WorkflowExecutionResponse::summaryFrom)
                 .toList();
         return ApiResponse.success(new PageResponse<>(executions, executions.size()));
     }

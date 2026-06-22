@@ -1,6 +1,7 @@
 import { Empty, Typography } from 'antd';
 import type { BotMessage } from '../../api/bots';
 import { groupBotMessages } from '../../utils/botMessageView';
+import { formatRouteMatchReason } from '../../utils/routeLabel';
 import { MarkdownContent } from '../MarkdownContent';
 import '../../styles/botRunChat.css';
 
@@ -35,6 +36,12 @@ export function BotRunMessageList({ messages, emptyText }: { messages: BotMessag
           </div>
         ) : (
           <div key={`assistant-${index}`} className="bot-run-assistant-block">
+            {item.routeName ? (
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                工作流：{item.routeName}
+                {item.routeReason ? ` · ${formatRouteMatchReason(item.routeReason)}` : ''}
+              </Typography.Text>
+            ) : null}
             {item.content ? (
               <MarkdownContent content={item.content} className="bot-run-assistant-content" />
             ) : null}

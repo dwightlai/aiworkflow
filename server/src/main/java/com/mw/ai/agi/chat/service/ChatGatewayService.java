@@ -9,6 +9,7 @@ import com.mw.ai.agi.bot.domain.BotSession;
 import com.mw.ai.agi.bot.domain.BotStatus;
 import com.mw.ai.agi.bot.service.BotService;
 import com.mw.ai.agi.chat.persistence.HumanConfirmTaskEntity;
+import com.mw.ai.agi.common.trace.TraceIdSupport;
 import com.mw.ai.agi.workflow.engine.ConfirmRequiredException;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionResult;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionStatus;
@@ -35,19 +36,22 @@ public class ChatGatewayService {
     private final AgentAuditService agentAuditService;
     private final HumanConfirmService humanConfirmService;
     private final ObjectMapper objectMapper;
+    private final AgentJobService agentJobService;
 
     public ChatGatewayService(
             BotService botService,
             RequestIdentitySupport identitySupport,
             AgentAuditService agentAuditService,
             HumanConfirmService humanConfirmService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AgentJobService agentJobService
     ) {
         this.botService = botService;
         this.identitySupport = identitySupport;
         this.agentAuditService = agentAuditService;
         this.humanConfirmService = humanConfirmService;
         this.objectMapper = objectMapper;
+        this.agentJobService = agentJobService;
     }
 
     public List<AiBot> listAccessibleBots(HttpServletRequest request) {
@@ -105,7 +109,7 @@ public class ChatGatewayService {
         if (sessionId != null && !sessionId.isBlank()) {
             botService.ensureSessionForUser(botId, sessionId, userId);
         }
-        String traceId = UUID.randomUUID().toString();
+        String traceId = TraceIdSupport.resolve(request);
         Map<String, Object> input = new LinkedHashMap<>(identitySupport.mergeGrantContext(request, Map.of()));
         input.put("__traceId", traceId);
         input.put("__conversationId", sessionId);
@@ -125,6 +129,14 @@ public class ChatGatewayService {
                 traceId
         );
         BotChatResult result = botService.chat(botId, sessionId, message, input);
+        logWorkflowRun(
+                identity == null ? null : identity.userId(),
+                botId,
+                result.session().id(),
+                result.reply().id(),
+                result.execution(),
+                traceId
+        );
         agentAuditService.log(
                 identity == null ? null : identity.userId(),
                 botId,
@@ -162,7 +174,7 @@ public class ChatGatewayService {
     }
 
     private Map<String, Object> buildStreamInput(HttpServletRequest request, String sessionId) {
-        String traceId = UUID.randomUUID().toString();
+        String traceId = TraceIdSupport.resolve(request);
         Map<String, Object> input = new LinkedHashMap<>(identitySupport.mergeGrantContext(request, Map.of()));
         input.put("__traceId", traceId);
         input.put("__conversationId", sessionId);
@@ -200,10 +212,24 @@ public class ChatGatewayService {
                     traceId
             );
 
+            var routePreview = botService.previewWorkflowRoute(botId, message);
+            if (routePreview.workflowId() != null && !routePreview.workflowId().isBlank()) {
+                Map<String, Object> routeData = new LinkedHashMap<>();
+                routeData.put("workflowId", routePreview.workflowId());
+                routeData.put("workflowName", routePreview.workflowName());
+                routeData.put("matchReason", routePreview.matchReason());
+                if (routePreview.capabilityCode() != null && !routePreview.capabilityCode().isBlank()) {
+                    routeData.put("capabilityCode", routePreview.capabilityCode());
+                }
+                emitter.send(SseEmitter.event().name("route.selected").data(routeData));
+            }
+
             SseWorkflowStreamSink sink = new SseWorkflowStreamSink(emitter);
             BotChatResult result = botService.streamChat(botId, sessionId, message, input, sink);
             WorkflowExecutionResult execution = result.execution();
-            ChatSseEventSupport.emitWorkflowEvents(emitter, execution, false);
+            ChatSseEventSupport.emitWorkflowEvents(emitter, execution, false, true);
+            logWorkflowRun(userId, botId, result.session().id(), result.reply().id(), execution, traceId);
+            agentJobService.upsertFromOutput(userId, botId, result.session().id(), execution.execution().output());
 
             String content = result.reply().content() == null ? "" : result.reply().content();
             emitter.send(SseEmitter.event().name("message.completed").data(Map.of(
@@ -249,13 +275,85 @@ public class ChatGatewayService {
                 emitter.completeWithError(ioEx);
             }
         } catch (Exception ex) {
+            String traceId = String.valueOf(input.getOrDefault("__traceId", ""));
+            agentAuditService.log(
+                    userId,
+                    botId,
+                    sessionId,
+                    null,
+                    null,
+                    null,
+                    "CHAT_STREAM_FAILED",
+                    truncate(message),
+                    null,
+                    "FAILED",
+                    ex.getMessage(),
+                    traceId.isBlank() ? null : traceId
+            );
             try {
-                emitter.send(SseEmitter.event().name("error").data(Map.of("message", ex.getMessage())));
+                String clientMessage = resolveStreamErrorMessage(ex);
+                emitter.send(SseEmitter.event().name("error").data(Map.of(
+                        "message", clientMessage,
+                        "code", resolveStreamErrorCode(ex)
+                )));
                 emitter.send(SseEmitter.event().name("done").data(Map.of()));
             } catch (IOException ignored) {
             }
             emitter.completeWithError(ex);
         }
+    }
+
+    private String resolveStreamErrorCode(Exception ex) {
+        if (ex instanceof IllegalArgumentException && ex.getMessage() != null && ex.getMessage().contains("Authentication")) {
+            return "CHAT_AUTH_REQUIRED";
+        }
+        if (ex instanceof IllegalArgumentException && ex.getMessage() != null && ex.getMessage().contains("accessible")) {
+            return "CHAT_FORBIDDEN";
+        }
+        return "CHAT_STREAM_ERROR";
+    }
+
+    private String resolveStreamErrorMessage(Exception ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            return "对话处理失败，请稍后重试";
+        }
+        if (message.contains("Authentication required")) {
+            return "登录已失效，请重新登录";
+        }
+        if (message.contains("timed out") || message.contains("Timeout")) {
+            return "请求超时，请稍后重试";
+        }
+        return message;
+    }
+
+    private void logWorkflowRun(
+            String userId,
+            String botId,
+            String conversationId,
+            String messageId,
+            WorkflowExecutionResult execution,
+            String traceId
+    ) {
+        if (execution == null || execution.execution() == null) {
+            return;
+        }
+        var run = execution.execution();
+        String status = run.status() == WorkflowExecutionStatus.FAILED ? "FAILED" : "SUCCESS";
+        agentAuditService.log(
+                userId,
+                botId,
+                conversationId,
+                messageId,
+                run.workflowId(),
+                null,
+                "WORKFLOW_RUN",
+                run.id(),
+                run.status().name(),
+                status,
+                run.errorMessage(),
+                traceId
+        );
     }
 
     private Map<String, Object> readConfirmPayload(String taskId) {

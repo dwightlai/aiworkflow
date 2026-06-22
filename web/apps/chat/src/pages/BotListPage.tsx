@@ -27,20 +27,20 @@ export function BotListPage({ onNavigate }: { onNavigate: (path: string) => void
       {bots.length === 0 ? (
         <Empty description="暂无可用智能体" />
       ) : (
-        <Row gutter={[16, 16]}>
+        <Row gutter={[16, 16]} align="stretch">
           {bots.map((bot) => (
-            <Col key={bot.id} xs={24} sm={12} md={8}>
+            <Col key={bot.id} xs={24} sm={12} md={8} style={{ display: 'flex' }}>
               <Card
                 hoverable
                 onClick={() => onNavigate(`/bots/${bot.id}`)}
-                style={{ border: '1px solid #e7ecf3' }}
+                style={{ border: '1px solid #e7ecf3', width: '100%' }}
               >
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <Avatar size={48} icon={<RobotOutlined />} style={{ background: '#1677ff' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <Typography.Text strong>{bot.name}</Typography.Text>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ marginBottom: 0 }}>
-                      {bot.description || bot.openingMessage || '开始对话'}
+                      {bot.capabilityHint || bot.description || bot.openingMessage || '开始对话'}
                     </Typography.Paragraph>
                   </div>
                 </div>

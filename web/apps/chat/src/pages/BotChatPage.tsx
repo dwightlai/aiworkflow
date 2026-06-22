@@ -1,6 +1,7 @@
-import { ArrowLeftOutlined, ArrowDownOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowDownOutlined, PlusOutlined } from '@ant-design/icons';
+import type { AuthSession } from '../api/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Layout, Spin, Typography, message } from 'antd';
+import { Button, Spin, Typography, message } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import {
   createChatSession,
@@ -16,22 +17,26 @@ import {
 import { ChatInputBar } from '../components/ChatInputBar';
 import { ChatMessageList } from '../components/ChatMessageList';
 import { buildSessionShareUrl, ChatSessionList } from '../components/ChatSessionList';
+import { useAgentJobPolling } from '../hooks/useAgentJobPolling';
+import { clearStreamSession, readStreamSession, saveStreamSession } from '../utils/streamSession';
 import { applySseEvent, toPlatformMessages, type PlatformMessage } from '../utils/sseAdapter';
-
-const { Sider, Content } = Layout;
 
 export function BotChatPage({
   botId,
   ticket,
   initialSessionId,
+  embedMode = false,
   onNavigate,
-  onTicketConsumed
+  onTicketConsumed,
+  onSessionReady
 }: {
   botId: string;
   ticket?: string | null;
   initialSessionId?: string | null;
+  embedMode?: boolean;
   onNavigate: (path: string) => void;
   onTicketConsumed: () => void;
+  onSessionReady?: (session: AuthSession) => void;
 }) {
   const queryClient = useQueryClient();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -41,6 +46,7 @@ export function BotChatPage({
   const [draftMessage, setDraftMessage] = useState('');
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const assistantIdRef = useRef(`assistant-${Date.now()}`);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
 
@@ -57,8 +63,10 @@ export function BotChatPage({
 
   const ticketMutation = useMutation({
     mutationFn: (t: string) => exchangeEmbedSession({ ticket: t, botId }),
-    onSuccess: (result) => {
-      setSelectedSessionId(result.sessionId);
+    onSuccess: async (session) => {
+      onSessionReady?.(session);
+      const created = await createChatSession(botId);
+      setSelectedSessionId(created.id);
       onTicketConsumed();
       message.success('嵌入会话已就绪');
       queryClient.invalidateQueries({ queryKey: ['chat-sessions', botId] });
@@ -116,6 +124,61 @@ export function BotChatPage({
     el.addEventListener('scroll', onScroll);
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!selectedSessionId || streaming) {
+      return;
+    }
+    const syncMessages = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      void listChatMessages(botId, selectedSessionId).then((data) => {
+        setMessages(toPlatformMessages(data.items));
+      });
+    };
+    window.addEventListener('online', syncMessages);
+    document.addEventListener('visibilitychange', syncMessages);
+    return () => {
+      window.removeEventListener('online', syncMessages);
+      document.removeEventListener('visibilitychange', syncMessages);
+    };
+  }, [botId, selectedSessionId, streaming]);
+
+  useAgentJobPolling(messages, setMessages, Boolean(selectedSessionId) && !streaming);
+
+  useEffect(() => {
+    if (!embedMode) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const primaryColor = params.get('primaryColor');
+    if (primaryColor) {
+      document.documentElement.style.setProperty('--agi-chat-primary', primaryColor);
+    }
+    window.parent.postMessage({ type: 'AGI_CHAT_READY', botId }, '*');
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'AGI_CHAT_WIDGET_PING') {
+        window.parent.postMessage({ type: 'AGI_CHAT_READY', botId }, '*');
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [embedMode, botId]);
+
+  useEffect(() => {
+    if (!selectedSessionId || streaming) {
+      return;
+    }
+    const pending = readStreamSession(botId, selectedSessionId);
+    if (!pending) {
+      return;
+    }
+    void listChatMessages(botId, selectedSessionId).then((data) => {
+      setMessages(toPlatformMessages(data.items));
+      clearStreamSession(botId, selectedSessionId);
+    });
+  }, [botId, selectedSessionId, streaming]);
 
   const sessions = sessionsQuery.data?.items ?? [];
   const bot = botQuery.data;
@@ -213,19 +276,38 @@ export function BotChatPage({
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMessage, pendingAssistant]);
     setStreaming(true);
+    saveStreamSession({
+      botId,
+      sessionId,
+      assistantId: assistantIdRef.current,
+      startedAt: Date.now()
+    });
+    const abortController = new AbortController();
+    streamAbortRef.current = abortController;
     try {
-      await streamChatMessage(botId, sessionId, { message: trimmed, input: {} }, (event) => {
-        setMessages((prev) => applySseEvent(prev, event, assistantIdRef.current));
-      });
+      await streamChatMessage(
+        botId,
+        sessionId,
+        { message: trimmed, input: {} },
+        (event) => {
+          setMessages((prev) => applySseEvent(prev, event, assistantIdRef.current));
+        },
+        { signal: abortController.signal }
+      );
+      clearStreamSession(botId, sessionId);
       await queryClient.invalidateQueries({ queryKey: ['chat-messages', botId, sessionId] });
       await queryClient.invalidateQueries({ queryKey: ['chat-sessions', botId] });
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       const errMsg = error instanceof Error ? error.message : '发送失败';
       setStreamError(errMsg);
       if (selectedSessionId) {
         try {
           const data = await listChatMessages(botId, selectedSessionId);
           setMessages(toPlatformMessages(data.items));
+          clearStreamSession(botId, selectedSessionId);
         } catch {
           setMessages((prev) => prev.filter((m) => m.id !== assistantIdRef.current || m.content));
         }
@@ -234,6 +316,7 @@ export function BotChatPage({
       }
       message.error(errMsg);
     } finally {
+      streamAbortRef.current = null;
       setStreaming(false);
     }
   }
@@ -264,20 +347,14 @@ export function BotChatPage({
   const isEmpty = messages.length === 0;
 
   return (
-    <Layout style={{ height: '100vh', overflow: 'hidden', background: '#fff' }}>
-      <Sider
-        width={280}
-        theme="light"
-        style={{ borderRight: '1px solid #e7ecf3', height: '100vh', overflow: 'hidden', padding: 12 }}
-      >
-        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => onNavigate('/')}>
+    <div className={`chat-run-shell${embedMode ? ' chat-run-shell-embed' : ''}`}>
+      {embedMode ? null : (
+      <aside className="chat-run-sidebar">
+        <Button type="link" style={{ padding: 0, marginBottom: 8 }} onClick={() => onNavigate('/')}>
           返回列表
         </Button>
-        <Typography.Title level={5} style={{ margin: '12px 0 8px' }}>
-          {bot?.name ?? '智能体'}
-        </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} block onClick={handleNewSession} style={{ marginBottom: 12 }}>
-          新对话
+          新会话
         </Button>
         <ChatSessionList
           sessions={sessions}
@@ -288,10 +365,18 @@ export function BotChatPage({
           onShare={handleShareSession}
           onDelete={handleDeleteSession}
         />
-      </Sider>
-      <Content className="chat-main">
-        <div ref={scrollRef} className="chat-scroll chat-content">
-          <div className="chat-content-inner">
+      </aside>
+      )}
+      <section className="chat-run-main">
+        {embedMode ? null : (
+        <div className="chat-run-header">
+          <Typography.Text strong style={{ fontSize: 16 }}>
+            多轮对话 - {bot?.name ?? '智能体'}
+          </Typography.Text>
+        </div>
+        )}
+        <div ref={scrollRef} className="chat-run-scroll">
+          <div className="chat-run-scroll-inner">
             {isEmpty ? (
               <div className="chat-empty">
                 <h2 className="chat-empty-title">{bot?.name ?? '智能体'}</h2>
@@ -334,14 +419,16 @@ export function BotChatPage({
             <ArrowDownOutlined />
           </button>
         ) : null}
-        <ChatInputBar
-          value={draftMessage}
-          loading={streaming}
-          placeholder={`给 ${bot?.name ?? '智能体'} 发送消息`}
-          onChange={setDraftMessage}
-          onSubmit={handleSend}
-        />
-      </Content>
-    </Layout>
+        <div className="chat-run-dock">
+          <ChatInputBar
+            value={draftMessage}
+            loading={streaming}
+            placeholder={`给 ${bot?.name ?? '智能体'} 发送消息`}
+            onChange={setDraftMessage}
+            onSubmit={handleSend}
+          />
+        </div>
+      </section>
+    </div>
   );
 }

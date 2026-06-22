@@ -2,10 +2,12 @@ package com.mw.ai.agi.generation.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mw.ai.agi.common.api.ApiResponse;
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.generation.domain.GenerationJob;
 import com.mw.ai.agi.generation.domain.GenerationOutput;
 import com.mw.ai.agi.generation.service.MockArchiveCorpusService;
 import com.mw.ai.agi.generation.service.ResearchGenerationService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.core.io.FileSystemResource;
@@ -67,29 +69,35 @@ public class ResearchController {
 
     @PostMapping("/compile/from-knowledge-dataset")
     public ApiResponse<ResearchApiMapper.ResearchJobView> compileFromKnowledgeDataset(
-            @Valid @RequestBody CompileFromKnowledgeDatasetRequest request
+            @Valid @RequestBody CompileFromKnowledgeDatasetRequest request,
+            HttpServletRequest httpRequest
     ) {
         GenerationJob job = researchGenerationService.runFromKnowledgeDataset(
                 request.templateId(),
                 request.knowledgeBaseId(),
                 request.datasetId(),
                 request.unitId(),
-                request.userId(),
-                request.variables()
+                resolveUserId(request.userId()),
+                request.variables(),
+                bearerToken(httpRequest)
         );
         return ApiResponse.success(ResearchApiMapper.toJobView(job, objectMapper));
     }
 
     @PostMapping("/jobs")
-    public ApiResponse<ResearchApiMapper.ResearchJobView> createJob(@Valid @RequestBody CreateResearchJobRequest request) {
+    public ApiResponse<ResearchApiMapper.ResearchJobView> createJob(
+            @Valid @RequestBody CreateResearchJobRequest request,
+            HttpServletRequest httpRequest
+    ) {
         GenerationJob job = researchGenerationService.run(
                 request.botId(),
                 request.templateId(),
                 request.unitId(),
-                request.userId(),
+                resolveUserId(request.userId()),
                 request.knowledgeBaseIds(),
                 resolveExternalCorpus(request),
-                request.variables()
+                request.variables(),
+                bearerToken(httpRequest)
         );
         return ApiResponse.success(ResearchApiMapper.toJobView(job, objectMapper));
     }
@@ -202,6 +210,25 @@ public class ResearchController {
         corpus.put("id", request.themeLibraryId());
         corpus.put("type", "ARCHIVE_THEME_LIBRARY");
         return corpus;
+    }
+
+    private static String bearerToken(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return authorization.substring("Bearer ".length()).trim();
+        }
+        return null;
+    }
+
+    private static String resolveUserId(String requestUserId) {
+        if (requestUserId != null && !requestUserId.isBlank()) {
+            return requestUserId;
+        }
+        String current = OperatorContext.currentUserId();
+        return "system".equals(current) ? null : current;
     }
 
     public record CompileFromKnowledgeDatasetRequest(

@@ -31,6 +31,8 @@ export const menuGroups: AppMenuGroup[] = [
       { key: 'dashboard', label: '工作台', path: '/' },
       { key: 'bots', label: '智能体', path: '/bots' },
       { key: 'connectors', label: '连接器', path: '/connectors' },
+      { key: 'connector-logs', label: '调用日志', path: '/connector-logs' },
+      { key: 'agent-jobs', label: '异步任务', path: '/agent-jobs' },
       { key: 'agent-audit', label: '智能体审计', path: '/agent-audit' },
       { key: 'workflows', label: '工作流', path: '/workflows' },
       { key: 'workflow-runs', label: '运行监控', path: '/workflow-runs' },

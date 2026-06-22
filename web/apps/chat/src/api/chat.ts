@@ -1,4 +1,5 @@
-import { getAuthSession, requestJson, withRequestHeaders, type ApiEnvelope } from './auth';
+import type { AuthSession } from './auth';
+import { getAuthSession, notifyUnauthorized, requestJson, withRequestHeaders, type ApiEnvelope } from './auth';
 
 export interface PageResponse<T> {
   items: T[];
@@ -48,10 +49,14 @@ export interface EmbedSessionExchangeRequest {
   botId?: string;
 }
 
-export interface EmbedSessionExchangeResponse {
-  sessionId: string;
-  botId: string;
-  embedSessionToken?: string;
+export async function exchangeEmbedSession(request: EmbedSessionExchangeRequest): Promise<AuthSession> {
+  const { setAuthSession } = await import('./auth');
+  const session = await requestJson<AuthSession>('/api/chat/embed-sessions/exchange', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  }, { skipAuth: true });
+  setAuthSession(session);
+  return session;
 }
 
 export type ChatSseEventType =
@@ -65,6 +70,7 @@ export type ChatSseEventType =
   | 'job.started'
   | 'job.progress'
   | 'job.completed'
+  | 'route.selected'
   | 'error'
   | 'done';
 
@@ -113,13 +119,6 @@ export async function listChatMessages(botId: string, sessionId: string): Promis
   return requestJson<PageResponse<ChatMessage>>(`/api/chat/bots/${botId}/sessions/${sessionId}/messages`);
 }
 
-export async function exchangeEmbedSession(request: EmbedSessionExchangeRequest): Promise<EmbedSessionExchangeResponse> {
-  return requestJson<EmbedSessionExchangeResponse>('/api/chat/embed-sessions/exchange', {
-    method: 'POST',
-    body: JSON.stringify(request)
-  });
-}
-
 export interface ConfirmTaskResponse {
   taskId: string;
   status: string;
@@ -147,27 +146,51 @@ export async function getConfirmTask(taskId: string): Promise<ConfirmTaskView> {
   return requestJson<ConfirmTaskView>(`/api/chat/confirm-tasks/${taskId}`);
 }
 
+export interface AgentJobView {
+  id: string;
+  status: string;
+  progress?: number | null;
+  currentStep?: string | null;
+  errorMessage?: string | null;
+  result?: string | null;
+  downloadUrl?: string | null;
+  resultUrl?: string | null;
+  title?: string | null;
+}
+
+export async function getAgentJob(jobId: string): Promise<AgentJobView> {
+  return requestJson<AgentJobView>(`/api/chat/agent-jobs/${jobId}`);
+}
+
 export async function streamChatMessage(
   botId: string,
   sessionId: string,
   request: StreamMessageRequest,
-  onEvent: (event: ChatSseEvent) => void
+  onEvent: (event: ChatSseEvent) => void,
+  options?: { signal?: AbortSignal }
 ): Promise<void> {
   const init = withRequestHeaders({
     method: 'POST',
     body: JSON.stringify(request),
     headers: {
       Accept: 'text/event-stream'
-    }
+    },
+    signal: options?.signal
   });
   const response = await fetch(`/api/chat/bots/${botId}/sessions/${sessionId}/messages/stream`, init);
   if (!response.ok) {
     let message = `Stream failed: ${response.status}`;
+    let code: string | undefined;
     try {
       const envelope = await response.json() as ApiEnvelope<unknown>;
       message = envelope.error?.message ?? message;
+      code = envelope.error?.code;
     } catch {
       // ignore
+    }
+    if (response.status === 401 || code === 'CHAT_AUTH_REQUIRED' || code === 'API_AUTH_REQUIRED') {
+      notifyUnauthorized();
+      throw new Error(message || '登录已失效，请重新登录');
     }
     throw new Error(message);
   }

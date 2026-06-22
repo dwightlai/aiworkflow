@@ -221,6 +221,11 @@ public class WorkflowExecutionService {
                 .toList();
     }
 
+    public List<WorkflowExecution> listWorkflowExecutionHeaders() {
+        String tenantId = tenantGuard == null ? TenantContext.requireTenantId() : tenantGuard.currentTenantId();
+        return executionStore.listWorkflowExecutions(tenantId);
+    }
+
     private NodeExecutionResult executeNode(
             String executionId,
             WorkflowNode node,
@@ -368,6 +373,11 @@ public class WorkflowExecutionService {
             return;
         }
         copyIfPresent(variables, context, "userId");
+        copyIfPresent(variables, context, "tenantId");
+        copyIfPresent(variables, context, "userToken");
+        copyIfPresent(variables, context, "botId");
+        copyIfPresent(variables, context, "__traceId");
+        copyIfPresent(variables, context, "__conversationId");
         copyIfPresent(variables, context, "activeUnitId");
         copyIfPresent(variables, context, "unitIds");
         copyIfPresent(variables, context, "departmentIds");

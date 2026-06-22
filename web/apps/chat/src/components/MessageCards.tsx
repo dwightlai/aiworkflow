@@ -177,13 +177,15 @@ export function ProgressCard({ msg }: { msg: PlatformMessage }) {
 
 export function JobCompletedCard({ msg }: { msg: PlatformMessage }) {
   const meta = msg.metadata ?? {};
-  const title = String(meta.title ?? '编研任务已完成');
+  const title = String(meta.title ?? '任务已完成');
   const downloadUrl = meta.downloadUrl ? String(meta.downloadUrl) : null;
+  const resultUrl = meta.resultUrl ? String(meta.resultUrl) : null;
+  const linkUrl = downloadUrl ?? resultUrl;
   return (
     <Card size="small" title={title} className="chat-card chat-job-card">
-      {downloadUrl ? (
-        <Button type="link" href={downloadUrl} target="_blank" rel="noreferrer">
-          下载报告
+      {linkUrl ? (
+        <Button type="link" href={linkUrl} target="_blank" rel="noreferrer">
+          下载结果
         </Button>
       ) : (
         <Typography.Text type="secondary">任务 ID：{String(meta.jobId ?? '')}</Typography.Text>

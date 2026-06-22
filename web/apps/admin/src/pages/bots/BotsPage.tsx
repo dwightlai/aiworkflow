@@ -31,6 +31,7 @@ import { listKnowledgeBases } from '../../api/knowledge';
 import { listModelProviders } from '../../api/models';
 import { listWorkflows } from '../../api/workflows';
 import { BotCapabilitiesPanel } from './BotCapabilitiesPanel';
+import { BotEmbedPanel } from './BotEmbedPanel';
 import { BotRunChatDrawer } from '../../components/bot/BotRunChatDrawer';
 import '../../styles/botRunChat.css';
 
@@ -313,10 +314,13 @@ export function BotsPage() {
             <Input />
           </Form.Item>
           {editingBot ? (
+            <>
             <BotCapabilitiesPanel
               botId={editingBot.id}
               workflowOptions={publishedWorkflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))}
             />
+            <BotEmbedPanel botId={editingBot.id} botName={editingBot.name} />
+            </>
           ) : null}
         </Form>
       </Drawer>

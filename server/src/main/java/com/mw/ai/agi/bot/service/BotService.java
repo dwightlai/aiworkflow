@@ -5,6 +5,8 @@ import com.mw.ai.agi.bot.domain.AiBot;
 import com.mw.ai.agi.bot.domain.BotChatResult;
 import com.mw.ai.agi.bot.domain.BotMessage;
 import com.mw.ai.agi.bot.domain.BotMessageRole;
+import com.mw.ai.agi.bot.domain.WorkflowRoutePreview;
+import com.mw.ai.agi.chat.service.AgentJobService;
 import com.mw.ai.agi.chat.service.ChatSseEventSupport;
 import com.mw.ai.agi.bot.domain.BotRunResult;
 import com.mw.ai.agi.bot.domain.BotSession;
@@ -50,6 +52,7 @@ public class BotService {
     private final TenantBusinessGuard tenantGuard;
     private final BotCapabilityService botCapabilityService;
     private final BotWorkflowRouter botWorkflowRouter;
+    private final AgentJobService agentJobService;
 
     public BotService(
             BotStore store,
@@ -61,7 +64,8 @@ public class BotService {
             AssetGrantService assetGrantService,
             TenantBusinessGuard tenantGuard,
             BotCapabilityService botCapabilityService,
-            BotWorkflowRouter botWorkflowRouter
+            BotWorkflowRouter botWorkflowRouter,
+            AgentJobService agentJobService
     ) {
         this.store = store;
         this.workflowService = workflowService;
@@ -73,6 +77,7 @@ public class BotService {
         this.tenantGuard = tenantGuard;
         this.botCapabilityService = botCapabilityService;
         this.botWorkflowRouter = botWorkflowRouter;
+        this.agentJobService = agentJobService;
     }
 
     public List<AiBot> list(Map<String, Object> context) {
@@ -340,6 +345,11 @@ public class BotService {
         return botCapabilityService.listByBot(botId);
     }
 
+    public WorkflowRoutePreview previewWorkflowRoute(String botId, String message) {
+        AiBot bot = get(botId);
+        return botWorkflowRouter.previewRoute(bot, botCapabilityService.listByBot(botId), message);
+    }
+
     public com.mw.ai.agi.bot.domain.BotCapability createCapability(
             String botId,
             String capabilityType,
@@ -408,16 +418,32 @@ public class BotService {
                 userMessageCreatedAt
         ));
         Map<String, Object> executionInput = executionInput(bot, userMessage.content(), input, history);
+        WorkflowRoutePreview routePreview = botWorkflowRouter.previewRoute(
+                bot,
+                botCapabilityService.listByBot(bot.id()),
+                userMessage.content()
+        );
         WorkflowExecutionResult execution = runBotLogic(bot, executionInput, userMessage.content(), history);
-        saveCitationMessages(session, bot, execution, userMessageCreatedAt);
-        saveGenerationJobMessage(session, bot, execution, userMessageCreatedAt);
-        Map<String, Object> assistantMetadata = Map.of();
+        Map<String, Object> assistantMetadata = new LinkedHashMap<>();
+        if (!isBlank(routePreview.workflowId())) {
+            assistantMetadata.put("resolvedWorkflowId", routePreview.workflowId());
+            assistantMetadata.put("resolvedWorkflowName", routePreview.workflowName());
+            assistantMetadata.put("routeMatchReason", routePreview.matchReason());
+            if (routePreview.capabilityCode() != null && !routePreview.capabilityCode().isBlank()) {
+                assistantMetadata.put("routeCapabilityCode", routePreview.capabilityCode());
+            }
+        }
+        assistantMetadata.put("workflowRunId", execution.execution().id());
         String messageType = "TEXT";
         String assistantContent = replyText(execution.execution().output());
         if (execution.execution().status() == WorkflowExecutionStatus.WAITING_CONFIRM) {
             messageType = "CONFIRM";
-            assistantMetadata = new LinkedHashMap<>(execution.execution().output());
+            assistantMetadata.putAll(execution.execution().output());
             assistantContent = String.valueOf(execution.execution().output().getOrDefault("confirmSummary", "需要确认"));
+        }
+        com.mw.ai.agi.chat.domain.AgentJob agentJob = null;
+        if (userId != null && !userId.isBlank()) {
+            agentJob = agentJobService.upsertFromOutput(userId, bot.id(), session.id(), execution.execution().output());
         }
         Instant assistantCreatedAt = userMessageCreatedAt.plusMillis(1000L);
         BotMessage assistantMessage = store.saveMessage(new BotMessage(
@@ -430,6 +456,8 @@ public class BotService {
                 assistantMetadata,
                 messageType
         ));
+        saveCitationMessages(session, bot, execution, assistantCreatedAt);
+        saveAgentJobMessage(session, bot, execution, assistantCreatedAt, agentJob);
         List<BotMessage> messages = store.listMessages(bot.id(), session.id());
         String sessionTitle = history.isEmpty() ? title(message) : session.title();
         BotSession updatedSession = store.saveSession(new BotSession(
@@ -689,25 +717,45 @@ public class BotService {
                 .orElse("");
     }
 
-    private void saveGenerationJobMessage(
+    private void saveAgentJobMessage(
             BotSession session,
             AiBot bot,
             WorkflowExecutionResult execution,
-            Instant userMessageCreatedAt
+            Instant userMessageCreatedAt,
+            com.mw.ai.agi.chat.domain.AgentJob agentJob
     ) {
         Map<String, Object> output = execution.execution().output();
-        String jobId = firstNonBlank(output.get("generationJobId"), output.get("jobId"));
+        String jobId = firstNonBlank(output.get("agentJobId"), output.get("jobId"));
+        if (jobId.isBlank() && agentJob != null) {
+            jobId = agentJob.id();
+        }
         if (jobId.isBlank()) {
             return;
         }
+        String status = String.valueOf(output.getOrDefault("jobStatus", ""));
+        boolean completed = "COMPLETED".equalsIgnoreCase(status) || "SUCCEEDED".equalsIgnoreCase(status);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("jobId", jobId);
-        String outputId = firstNonBlank(output.get("generationOutputId"), output.get("outputId"));
+        if (agentJob != null) {
+            metadata.put("agentJobId", agentJob.id());
+        }
+        if (!status.isBlank()) {
+            metadata.put("jobStatus", status);
+        }
+        String outputId = firstNonBlank(output.get("outputId"), output.get("resultId"));
         if (!outputId.isBlank()) {
             metadata.put("outputId", outputId);
-            metadata.put("downloadUrl", "/api/research/outputs/" + outputId + "/docx");
         }
-        metadata.put("title", String.valueOf(output.getOrDefault("title", "编研任务已完成")));
+        String downloadUrl = stringObject(output.get("downloadUrl"));
+        if (!downloadUrl.isBlank()) {
+            metadata.put("downloadUrl", downloadUrl);
+        }
+        String resultUrl = stringObject(output.get("resultUrl"));
+        if (!resultUrl.isBlank()) {
+            metadata.put("resultUrl", resultUrl);
+        }
+        String title = stringObject(output.get("title"));
+        metadata.put("title", title.isBlank() ? (completed ? "任务已完成" : "任务进行中") : title);
         Object progress = output.get("progress");
         if (progress != null) {
             metadata.put("progress", progress);
@@ -724,8 +772,12 @@ public class BotService {
                 String.valueOf(metadata.get("title")),
                 userMessageCreatedAt.plusMillis(500L),
                 metadata,
-                "JOB"
+                completed ? "JOB" : "PROGRESS"
         ));
+    }
+
+    private String stringObject(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private String firstNonBlank(Object left, Object right) {
@@ -739,7 +791,7 @@ public class BotService {
             BotSession session,
             AiBot bot,
             WorkflowExecutionResult execution,
-            Instant userMessageCreatedAt
+            Instant baseCreatedAt
     ) {
         List<Map<String, Object>> citations = ChatSseEventSupport.extractCitations(execution);
         for (int index = 0; index < citations.size(); index++) {
@@ -751,7 +803,7 @@ public class BotService {
                     bot.id(),
                     BotMessageRole.ASSISTANT,
                     title,
-                    userMessageCreatedAt.plusMillis(index + 1L),
+                    baseCreatedAt.plusMillis(index + 1L),
                     citation,
                     "CITATION"
             ));

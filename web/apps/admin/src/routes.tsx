@@ -26,6 +26,8 @@ import { WorkflowRunDetailPage } from './pages/workflows/WorkflowRunDetailPage';
 import { WorkflowRunsPage } from './pages/workflows/WorkflowRunsPage';
 import { ConnectorsPage } from './pages/connectors/ConnectorsPage';
 import { AgentAuditPage } from './pages/agent/AgentAuditPage';
+import { ConnectorCallLogsPage } from './pages/agent/ConnectorCallLogsPage';
+import { AgentJobsPage } from './pages/agent/AgentJobsPage';
 
 export interface ResolvedRoute {
   title: string;
@@ -71,6 +73,22 @@ export function resolveRoute(pathname: string): ResolvedRoute {
       title: '智能体审计',
       breadcrumb: ['首页', 'AI 功能', '智能体审计'],
       element: <AgentAuditPage />
+    };
+  }
+
+  if (pathname === '/connector-logs') {
+    return {
+      title: '调用日志',
+      breadcrumb: ['首页', 'AI 功能', '调用日志'],
+      element: <ConnectorCallLogsPage />
+    };
+  }
+
+  if (pathname === '/agent-jobs') {
+    return {
+      title: '异步任务',
+      breadcrumb: ['首页', 'AI 功能', '异步任务'],
+      element: <AgentJobsPage />
     };
   }
 

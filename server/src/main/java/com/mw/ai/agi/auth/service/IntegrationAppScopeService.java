@@ -103,6 +103,16 @@ public class IntegrationAppScopeService {
         }
     }
 
+    public void assertOrganizationAllowed(String appId, String tenantId, String organizationId) {
+        if (!hasOrganizationScope(appId, tenantId, organizationId)) {
+            throw new AuthException(
+                    "APP_ORGANIZATION_SCOPE_DENIED",
+                    HttpStatus.FORBIDDEN,
+                    "App cannot access organization: " + organizationId
+            );
+        }
+    }
+
     public List<IntegrationAppScopeEntity> listEnabledScopes(String appId) {
         return scopeMapper().selectList(new LambdaQueryWrapper<IntegrationAppScopeEntity>()
                 .eq(IntegrationAppScopeEntity::getAppId, appId)

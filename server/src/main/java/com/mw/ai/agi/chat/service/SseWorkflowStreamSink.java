@@ -36,4 +36,34 @@ public final class SseWorkflowStreamSink implements WorkflowStreamSink {
             throw new IllegalStateException("Unable to emit citation", exception);
         }
     }
+
+    @Override
+    public void emitToolStarted(String connectorCode, String operationCode) {
+        emitToolEvent("tool.started", connectorCode, operationCode, null);
+    }
+
+    @Override
+    public void emitToolCompleted(String connectorCode, String operationCode) {
+        emitToolEvent("tool.completed", connectorCode, operationCode, null);
+    }
+
+    @Override
+    public void emitToolFailed(String connectorCode, String operationCode, String message) {
+        emitToolEvent("tool.failed", connectorCode, operationCode, message);
+    }
+
+    private void emitToolEvent(String eventName, String connectorCode, String operationCode, String message) {
+        try {
+            Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("connectorCode", connectorCode);
+            data.put("operationCode", operationCode);
+            data.put("name", operationCode == null || operationCode.isBlank() ? connectorCode : operationCode);
+            if (message != null && !message.isBlank()) {
+                data.put("message", message);
+            }
+            emitter.send(SseEmitter.event().name(eventName).data(data));
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to emit " + eventName, exception);
+        }
+    }
 }

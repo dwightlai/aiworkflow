@@ -30,7 +30,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import com.mw.ai.agi.common.trace.TraceIdSupport;
 
 @RestController
 @RequestMapping("/api/open/bots")
@@ -190,7 +190,7 @@ public class OpenBotController {
         requireEnabledBot(id, identity);
         OpenBotStreamRequest safe = body == null ? new OpenBotStreamRequest("", null, null, null, null, Map.of()) : body;
         Map<String, Object> input = executionInput(identity, safe.input());
-        input.put("__traceId", UUID.randomUUID().toString());
+        input.put("__traceId", TraceIdSupport.resolve(request));
         input.put("__conversationId", sessionId);
         return chatGatewayService.streamChat(
                 id,

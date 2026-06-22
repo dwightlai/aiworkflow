@@ -1,0 +1,31 @@
+.research-output-preview {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-height: 640px;
+  overflow: auto;
+  padding: 20px 24px;
+}
+
+.research-output-html-frame {
+  width: 100%;
+  min-height: 480px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.research-output-docx-preview {
+  background: #f5f6f8;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-height: 640px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.research-output-docx-preview .docx-wrapper {
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  margin: 0 auto;
+}

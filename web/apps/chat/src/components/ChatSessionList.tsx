@@ -100,30 +100,35 @@ export function ChatSessionList({
 
   return (
     <>
-      <div style={listStyle}>
+      <div className="chat-run-session-list">
         {sessions.map((session) => {
           const active = session.id === activeSessionId;
           return (
             <div
               key={session.id}
-              style={{ ...itemStyle, background: active ? '#eef6ff' : 'transparent' }}
+              className={`chat-run-session-item${active ? ' active' : ''}`}
               onClick={() => onSelect(session)}
             >
-              {session.pinned ? (
-                <PushpinFilled style={{ color: '#1677ff', flexShrink: 0, fontSize: 12 }} />
-              ) : null}
-              <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-                {session.title || '对话'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                {session.pinned ? (
+                  <PushpinFilled style={{ color: '#1677ff', flexShrink: 0, fontSize: 12 }} />
+                ) : null}
+                <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
+                  {session.title || '对话'}
+                </Typography.Text>
+                <Dropdown menu={buildMenu(session)} trigger={['click']} placement="bottomRight">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EllipsisOutlined />}
+                    aria-label="更多操作"
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                </Dropdown>
+              </div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {session.messageCount} 条消息
               </Typography.Text>
-              <Dropdown menu={buildMenu(session)} trigger={['click']} placement="bottomRight">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EllipsisOutlined />}
-                  aria-label="更多操作"
-                  onClick={(event) => event.stopPropagation()}
-                />
-              </Dropdown>
             </div>
           );
         })}
@@ -149,26 +154,9 @@ export function ChatSessionList({
   );
 }
 
-const listStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  height: 'calc(100vh - 160px)',
-  overflowY: 'auto'
-};
-
-const itemStyle: React.CSSProperties = {
-  alignItems: 'center',
-  borderRadius: 8,
-  cursor: 'pointer',
-  display: 'flex',
-  gap: 6,
-  padding: '8px 6px 8px 10px'
-};
-
 export function buildSessionShareUrl(botId: string, sessionId: string) {
   const url = new URL(window.location.href);
-  url.pathname = `/bots/${botId}`;
+  url.pathname = `/chat/bots/${botId}`;
   url.search = `?session=${encodeURIComponent(sessionId)}`;
   return url.toString();
 }

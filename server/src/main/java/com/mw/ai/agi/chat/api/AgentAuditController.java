@@ -25,9 +25,20 @@ public class AgentAuditController {
             @RequestParam(required = false) String traceId,
             @RequestParam(required = false) String botId,
             @RequestParam(required = false) String eventType,
+            @RequestParam(required = false) String connectorCode,
+            @RequestParam(required = false) String operationCode,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "50") int limit
     ) {
-        List<AgentAuditLogView> items = agentAuditService.list(traceId, botId, eventType, limit).stream()
+        List<AgentAuditLogView> items = agentAuditService.list(
+                traceId,
+                botId,
+                eventType,
+                connectorCode,
+                operationCode,
+                status,
+                limit
+        ).stream()
                 .map(AgentAuditLogView::from)
                 .toList();
         return ApiResponse.success(new PageResponse<>(items, items.size()));

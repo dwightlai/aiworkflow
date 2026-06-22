@@ -48,6 +48,9 @@ public class ApiAuthFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/chat/")) {
             return true;
         }
+        if (path.startsWith("/api/demo/")) {
+            return true;
+        }
         if (path.equals("/api/auth/login") || path.equals("/api/auth/refresh")) {
             return true;
         }

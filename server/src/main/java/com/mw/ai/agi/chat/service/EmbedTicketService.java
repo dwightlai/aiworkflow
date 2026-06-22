@@ -66,27 +66,33 @@ public class EmbedTicketService {
     }
 
     public AuthTokenResponse exchange(String ticket, String botId) {
-        EmbedTicketEntity entity = findByTicket(ticket);
-        if (!"PENDING".equals(entity.getStatus())) {
-            throw new IllegalStateException("Ticket is not available");
-        }
-        if (Instant.now().isAfter(entity.getExpireAt())) {
-            entity.setStatus("EXPIRED");
+        try {
+            EmbedTicketEntity entity = findByTicket(ticket);
+            if (!"PENDING".equals(entity.getStatus())) {
+                throw new IllegalStateException("Ticket is not available");
+            }
+            if (Instant.now().isAfter(entity.getExpireAt())) {
+                entity.setStatus("EXPIRED");
+                save(entity);
+                throw new IllegalStateException("Ticket expired");
+            }
+            if (!entity.getBotId().equals(botId)) {
+                throw new IllegalArgumentException("Ticket bot mismatch");
+            }
+            entity.setStatus("USED");
+            entity.setUsedAt(Instant.now());
+            entity.setUpdatedAt(Instant.now());
             save(entity);
-            throw new IllegalStateException("Ticket expired");
+            TenantContext.set(entity.getTenantId());
+            AuthTokenResponse token = authService.issueTokenForUser(entity.getUserId());
+            agentAuditService.log(entity.getUserId(), botId, null, null, null, null, "EMBED_TICKET_USED",
+                    "botId=" + botId, null, "SUCCESS", null, ticket);
+            return token;
+        } catch (RuntimeException ex) {
+            agentAuditService.log(null, botId, null, null, null, null, "EMBED_TICKET_FAILED",
+                    "ticket=" + ticket, null, "FAILED", ex.getMessage(), ticket);
+            throw ex;
         }
-        if (!entity.getBotId().equals(botId)) {
-            throw new IllegalArgumentException("Ticket bot mismatch");
-        }
-        entity.setStatus("USED");
-        entity.setUsedAt(Instant.now());
-        entity.setUpdatedAt(Instant.now());
-        save(entity);
-        TenantContext.set(entity.getTenantId());
-        AuthTokenResponse token = authService.issueTokenForUser(entity.getUserId());
-        agentAuditService.log(entity.getUserId(), botId, null, null, null, null, "EMBED_TICKET_USED",
-                "botId=" + botId, null, "SUCCESS", null, ticket);
-        return token;
     }
 
     private EmbedTicketEntity findByTicket(String ticket) {

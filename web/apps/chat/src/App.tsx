@@ -2,25 +2,29 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider, Layout, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { useEffect, useMemo, useState } from 'react';
-import { getAuthSession, logout, type AuthSession } from './api/auth';
+import { getAuthSession, logout, setUnauthorizedHandler, type AuthSession } from './api/auth';
 import { LoginPage } from './pages/LoginPage';
 import { BotChatPage } from './pages/BotChatPage';
 import { BotListPage } from './pages/BotListPage';
 
 const queryClient = new QueryClient();
 
+const BASE = '/chat';
+
 function parseRoute(pathname: string, search: string) {
   const params = new URLSearchParams(search);
   const ticket = params.get('ticket');
   const sessionId = params.get('session');
-  const botMatch = pathname.match(/^\/bots\/([^/]+)$/);
+  const embed = params.get('embed') === '1';
+  const normalized = pathname.replace(new RegExp(`^${BASE}`), '') || '/';
+  const botMatch = normalized.match(/^\/bots\/([^/]+)$/);
   if (botMatch) {
-    return { kind: 'chat' as const, botId: botMatch[1], ticket, sessionId };
+    return { kind: 'chat' as const, botId: botMatch[1], ticket, sessionId, embed };
   }
-  if (pathname === '/' || pathname === '') {
+  if (normalized === '/' || normalized === '') {
     return { kind: 'list' as const };
   }
-  if (pathname === '/login') {
+  if (normalized === '/login') {
     return { kind: 'login' as const };
   }
   return { kind: 'list' as const };
@@ -41,9 +45,36 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      queryClient.clear();
+      setSession(null);
+      const loginPath = `${BASE}/login`;
+      if (window.location.pathname !== loginPath) {
+        window.history.replaceState(null, '', loginPath);
+        setPathname(loginPath);
+        setSearch('');
+      }
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  useEffect(() => {
+    const hasTicketEntry = route.kind === 'chat' && Boolean(route.ticket);
+    if (!session && route.kind !== 'login' && !hasTicketEntry) {
+      const loginPath = `${BASE}/login`;
+      if (window.location.pathname !== loginPath) {
+        window.history.replaceState(null, '', loginPath);
+        setPathname(loginPath);
+        setSearch('');
+      }
+    }
+  }, [session, route.kind, route.ticket]);
+
   function navigateTo(path: string) {
-    window.history.pushState(null, '', path);
-    const url = new URL(path, window.location.origin);
+    const fullPath = path.startsWith(BASE) ? path : `${BASE}${path}`;
+    window.history.pushState(null, '', fullPath);
+    const url = new URL(fullPath, window.location.origin);
     setPathname(url.pathname);
     setSearch(url.search);
   }
@@ -67,7 +98,13 @@ export function App() {
     navigateTo('/login');
   }
 
-  const needsAuth = !session && route.kind !== 'login';
+  function handleSessionReady(nextSession: AuthSession) {
+    setSession(nextSession);
+  }
+
+  const needsAuth = !session && route.kind !== 'login' && !(route.kind === 'chat' && route.ticket);
+
+  const embedMode = route.kind === 'chat' && route.embed;
 
   return (
     <ConfigProvider locale={zhCN}>
@@ -77,7 +114,7 @@ export function App() {
         ) : route.kind === 'login' && !session ? (
           <LoginPage onLogin={handleLogin} />
         ) : (
-          <Layout style={{ minHeight: '100vh' }}>
+          <Layout style={{ minHeight: embedMode ? '100%' : '100vh', height: embedMode ? '100%' : undefined }}>
             {route.kind !== 'chat' ? (
               <Layout.Header
                 style={{
@@ -97,7 +134,7 @@ export function App() {
                 ) : null}
               </Layout.Header>
             ) : null}
-            <Layout.Content style={route.kind === 'chat' ? { height: '100vh', overflow: 'hidden' } : undefined}>
+            <Layout.Content style={route.kind === 'chat' ? { height: embedMode ? '100%' : '100vh', overflow: 'hidden' } : undefined}>
               {route.kind === 'list' ? (
                 <BotListPage onNavigate={navigateTo} />
               ) : route.kind === 'chat' ? (
@@ -105,8 +142,10 @@ export function App() {
                   botId={route.botId}
                   ticket={route.ticket}
                   initialSessionId={route.sessionId}
+                  embedMode={embedMode}
                   onNavigate={navigateTo}
                   onTicketConsumed={clearTicketFromUrl}
+                  onSessionReady={handleSessionReady}
                 />
               ) : (
                 <BotListPage onNavigate={navigateTo} />

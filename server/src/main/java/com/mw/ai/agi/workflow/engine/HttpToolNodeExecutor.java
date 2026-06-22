@@ -1,6 +1,7 @@
 package com.mw.ai.agi.workflow.engine;
 
 import com.mw.ai.agi.connector.service.ConnectorRuntimeService;
+import com.mw.ai.agi.chat.service.AgentAuditService;
 import com.mw.ai.agi.workflow.domain.WorkflowNode;
 import com.mw.ai.agi.workflow.domain.WorkflowNodeType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,16 +31,22 @@ public class HttpToolNodeExecutor implements WorkflowNodeExecutor {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final ConnectorRuntimeService connectorRuntimeService;
+    private final AgentAuditService agentAuditService;
 
     public HttpToolNodeExecutor(ObjectMapper objectMapper) {
-        this(objectMapper, null);
+        this(objectMapper, null, null);
     }
 
     @Autowired
-    public HttpToolNodeExecutor(ObjectMapper objectMapper, ConnectorRuntimeService connectorRuntimeService) {
+    public HttpToolNodeExecutor(
+            ObjectMapper objectMapper,
+            ConnectorRuntimeService connectorRuntimeService,
+            AgentAuditService agentAuditService
+    ) {
         this.httpClient = HttpClient.newHttpClient();
         this.objectMapper = objectMapper;
         this.connectorRuntimeService = connectorRuntimeService;
+        this.agentAuditService = agentAuditService;
     }
 
     @Override
@@ -53,20 +60,42 @@ public class HttpToolNodeExecutor implements WorkflowNodeExecutor {
         String connectorCode = stringValue(config.get("connectorCode"), "");
         String operationCode = stringValue(config.get("operationCode"), "");
         String outputKey = optionalStringConfig(node, "outputKey", "toolResult");
+        WorkflowStreamContext.current().ifPresent(sink -> {
+            if (!connectorCode.isBlank() || !operationCode.isBlank()) {
+                sink.emitToolStarted(connectorCode, operationCode);
+            }
+        });
         if (!connectorCode.isBlank() && !operationCode.isBlank()) {
             if (connectorRuntimeService == null) {
                 throw new IllegalStateException("Connector runtime is unavailable");
             }
-            Map<String, Object> result = connectorRuntimeService.execute(
-                    connectorCode,
-                    operationCode,
-                    config,
-                    context.context(),
-                    node.id()
-            );
-            return NodeExecutionResult.output(Map.of(outputKey, result));
+            try {
+                Map<String, Object> result = connectorRuntimeService.execute(
+                        connectorCode,
+                        operationCode,
+                        config,
+                        context.context(),
+                        node.id()
+                );
+                WorkflowStreamContext.current().ifPresent(sink ->
+                        sink.emitToolCompleted(connectorCode, operationCode));
+                return NodeExecutionResult.output(Map.of(outputKey, result));
+            } catch (RuntimeException ex) {
+                WorkflowStreamContext.current().ifPresent(sink ->
+                        sink.emitToolFailed(connectorCode, operationCode, ex.getMessage()));
+                throw ex;
+            }
         }
-        return NodeExecutionResult.output(Map.of(outputKey, executeRequest(config, context.context())));
+        try {
+            Map<String, Object> result = executeRequest(config, context.context());
+            WorkflowStreamContext.current().ifPresent(sink ->
+                    sink.emitToolCompleted(connectorCode, operationCode));
+            return NodeExecutionResult.output(Map.of(outputKey, result));
+        } catch (RuntimeException ex) {
+            WorkflowStreamContext.current().ifPresent(sink ->
+                    sink.emitToolFailed(connectorCode, operationCode, ex.getMessage()));
+            throw ex;
+        }
     }
 
     Map<String, Object> executeInline(Map<String, Object> config, Map<String, Object> context) {
@@ -93,25 +122,92 @@ public class HttpToolNodeExecutor implements WorkflowNodeExecutor {
         }
 
         try {
+            long startedAt = System.currentTimeMillis();
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            long durationMs = System.currentTimeMillis() - startedAt;
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("headers", responseHeaders(response));
             result.put("statusCode", response.statusCode());
             result.put("body", parseBody(response.body(), stringValue(config.get("responseBodyType"), "TEXT")));
             result.put("rawBody", response.body());
             result.put("success", response.statusCode() >= 200 && response.statusCode() < 300);
+            result.put("traceId", stringValue(context.get("__traceId"), ""));
+            result.put("requestUrl", uri.toString());
+            result.put("durationMs", durationMs);
+            String status = Boolean.TRUE.equals(result.get("success")) ? "SUCCESS" : "FAILED";
+            auditInlineHttp(config, context, truncate(body), truncate(response.body()), status);
             return result;
         } catch (IOException ex) {
+            auditInlineHttp(config, context, truncate(body), null, "FAILED");
             throw new IllegalArgumentException("HTTP tool request failed: " + ex.getMessage(), ex);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            auditInlineHttp(config, context, truncate(body), null, "FAILED");
             throw new IllegalArgumentException("HTTP tool request interrupted", ex);
         }
     }
 
+    private void auditInlineHttp(
+            Map<String, Object> config,
+            Map<String, Object> context,
+            String requestSummary,
+            String responseSummary,
+            String status
+    ) {
+        if (agentAuditService == null) {
+            return;
+        }
+        String url = config.containsKey("url") ? TemplateRenderer.render(String.valueOf(config.get("url")), context) : "";
+        String operationCode = shortenUrlForAudit(url);
+        String summary = requestSummary;
+        if (url != null && !url.isBlank()) {
+            summary = "URL: " + url + (summary == null || summary.isBlank() ? "" : "\n" + summary);
+        }
+        agentAuditService.log(
+                stringValue(context.get("userId"), null),
+                stringValue(context.get("botId"), null),
+                stringValue(context.get("__conversationId"), null),
+                null,
+                "HTTP_INLINE",
+                operationCode,
+                "HTTP_TOOL_CALL",
+                summary,
+                responseSummary,
+                status,
+                "FAILED".equals(status) ? responseSummary : null,
+                stringValue(context.get("__traceId"), null)
+        );
+    }
+
+    private String truncate(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() > 500 ? value.substring(0, 500) : value;
+    }
+
+    private String shortenUrlForAudit(String url) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        try {
+            String path = URI.create(url).getPath();
+            if (path != null && !path.isBlank()) {
+                return path.length() > 64 ? path.substring(0, 64) : path;
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+        return url.length() > 64 ? url.substring(0, 64) : url;
+    }
+
     private Map<String, String> headers(Map<String, Object> config, Map<String, Object> context) {
         Map<String, String> headers = new LinkedHashMap<>();
+        String traceId = stringValue(context.get("__traceId"), "");
+        if (!traceId.isBlank()) {
+            headers.put("X-Trace-Id", traceId);
+        }
         headers.putAll(rowMap(config.get("headers"), context));
+        applyIdentityHeaders(headers, context);
         String headersJson = stringValue(config.get("headersJson"), "");
         if (!headersJson.isBlank()) {
             try {
@@ -122,6 +218,24 @@ public class HttpToolNodeExecutor implements WorkflowNodeExecutor {
             }
         }
         return headers;
+    }
+
+    private void applyIdentityHeaders(Map<String, String> headers, Map<String, Object> context) {
+        if (!headers.containsKey("Authorization") && !headers.containsKey("authorization")) {
+            Object token = context.get("userToken");
+            if (token != null && !String.valueOf(token).isBlank()) {
+                headers.put("Authorization", "Bearer " + token);
+            }
+        }
+        putHeaderIfPresent(headers, "X-User-Id", context.get("userId"));
+        putHeaderIfPresent(headers, "X-Unit-Id", context.get("unitId"));
+        putHeaderIfPresent(headers, "X-Tenant-Id", context.get("tenantId"));
+    }
+
+    private void putHeaderIfPresent(Map<String, String> headers, String name, Object value) {
+        if (value != null && !String.valueOf(value).isBlank()) {
+            headers.put(name, String.valueOf(value));
+        }
     }
 
     private String body(Map<String, Object> config, Map<String, Object> context, String bodyType) {

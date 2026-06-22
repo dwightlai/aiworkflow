@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
@@ -31,14 +32,18 @@ public class OpenChatEmbedController {
     @PostMapping("/embed-tickets")
     public ApiResponse<EmbedTicketResponse> issue(@Valid @RequestBody IssueEmbedTicketRequest request, HttpServletRequest servletRequest) {
         RuntimeIdentityContext identity = OpenApiRequestContext.require(servletRequest);
+        String tenantId = request.tenantId() == null || request.tenantId().isBlank() ? identity.tenantId() : request.tenantId();
         scopeService.assertAssetAllowed(identity.appId(), IntegrationAppScopeService.SCOPE_BOT, request.botId());
+        if (request.unitId() != null && !request.unitId().isBlank()) {
+            scopeService.assertOrganizationAllowed(identity.appId(), tenantId, request.unitId());
+        }
         EmbedTicketService.EmbedTicketResult result = embedTicketService.issue(
                 identity,
-                request.tenantId() == null || request.tenantId().isBlank() ? identity.tenantId() : request.tenantId(),
+                tenantId,
                 request.userId(),
                 request.botId(),
                 request.expireSeconds() == null ? 300 : request.expireSeconds(),
-                request.businessContext()
+                mergeBusinessContext(request.businessContext(), request.unitId())
         );
         return ApiResponse.success(new EmbedTicketResponse(result.ticket(), result.expireAt()));
     }
@@ -47,9 +52,21 @@ public class OpenChatEmbedController {
             String tenantId,
             @NotBlank String userId,
             @NotBlank String botId,
+            String unitId,
             Integer expireSeconds,
             Map<String, Object> businessContext
     ) {
+    }
+
+    private Map<String, Object> mergeBusinessContext(Map<String, Object> businessContext, String unitId) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (businessContext != null) {
+            merged.putAll(businessContext);
+        }
+        if (unitId != null && !unitId.isBlank()) {
+            merged.putIfAbsent("unitId", unitId);
+        }
+        return merged;
     }
 
     public record EmbedTicketResponse(String ticket, java.time.Instant expireAt) {

@@ -62,13 +62,15 @@ function renderAssistantTurn(turnMsgs: PlatformMessage[]) {
   }
   return {
     text: textMsg?.content ?? '',
-    citations: citationsFromMessages(citationMsgs)
+    citations: citationsFromMessages(citationMsgs),
+    routeName: textMsg?.metadata?.resolvedWorkflowName ? String(textMsg.metadata.resolvedWorkflowName) : undefined,
+    routeReason: textMsg?.metadata?.routeMatchReason ? String(textMsg.metadata.routeMatchReason) : undefined
   };
 }
 
 export type RenderItem =
   | { kind: 'user'; content: string }
-  | { kind: 'assistant'; content: string; citations: CitationItem[] };
+  | { kind: 'assistant'; content: string; citations: CitationItem[]; routeName?: string; routeReason?: string };
 
 export function groupBotMessages(messages: BotMessage[]): RenderItem[] {
   const platform = messages.map((m) => ({
@@ -93,7 +95,13 @@ export function groupBotMessages(messages: BotMessage[]): RenderItem[] {
       }
       const turn = renderAssistantTurn(turnMsgs);
       if (turn.text || turn.citations.length > 0) {
-        items.push({ kind: 'assistant', content: turn.text, citations: turn.citations });
+        items.push({
+          kind: 'assistant',
+          content: turn.text,
+          citations: turn.citations,
+          routeName: turn.routeName,
+          routeReason: turn.routeReason
+        });
       }
       continue;
     }
@@ -104,7 +112,13 @@ export function groupBotMessages(messages: BotMessage[]): RenderItem[] {
     }
     const turn = renderAssistantTurn(turnMsgs);
     if (turn.text || turn.citations.length > 0) {
-      items.push({ kind: 'assistant', content: turn.text, citations: turn.citations });
+      items.push({
+        kind: 'assistant',
+        content: turn.text,
+        citations: turn.citations,
+        routeName: turn.routeName,
+        routeReason: turn.routeReason
+      });
     }
   }
   return items;

@@ -188,6 +188,150 @@ public class ConnectorService {
         operationMapper().deleteById(operationId);
     }
 
+    public ConnectorExportBundle exportBundle(String connectorId) {
+        Connector connector = getConnector(connectorId);
+        List<ConnectorOperationExport> operations = listOperations(connectorId).stream()
+                .map(op -> new ConnectorOperationExport(
+                        op.name(),
+                        op.code(),
+                        op.method(),
+                        op.path(),
+                        op.operationType(),
+                        op.riskLevel(),
+                        op.needConfirm(),
+                        op.confirmSummaryTemplate(),
+                        op.requestTemplate(),
+                        op.enabled(),
+                        op.description()
+                ))
+                .toList();
+        return new ConnectorExportBundle(
+                new ConnectorExport(
+                        connector.name(),
+                        connector.code(),
+                        connector.type(),
+                        connector.accessType(),
+                        connector.baseUrl(),
+                        connector.authMode(),
+                        connector.authConfig(),
+                        connector.enabled(),
+                        connector.description()
+                ),
+                operations
+        );
+    }
+
+    public Connector importBundle(ConnectorExportBundle bundle, boolean overwrite) {
+        if (bundle == null || bundle.connector() == null) {
+            throw new IllegalArgumentException("Import bundle is empty");
+        }
+        ConnectorExport source = bundle.connector();
+        ConnectorEntity existing = connectorMapper().selectOne(new LambdaQueryWrapper<ConnectorEntity>()
+                .eq(ConnectorEntity::getTenantId, currentTenantId())
+                .eq(ConnectorEntity::getCode, source.code()));
+        Connector connector;
+        if (existing == null) {
+            connector = createConnector(
+                    source.name(),
+                    source.code(),
+                    source.type(),
+                    source.accessType(),
+                    source.baseUrl(),
+                    source.authMode(),
+                    source.authConfig(),
+                    source.enabled() == null || source.enabled(),
+                    source.description()
+            );
+        } else if (overwrite) {
+            connector = updateConnector(
+                    existing.getId(),
+                    source.name(),
+                    source.code(),
+                    source.type(),
+                    source.accessType(),
+                    source.baseUrl(),
+                    source.authMode(),
+                    source.authConfig(),
+                    source.enabled() == null || source.enabled(),
+                    source.description()
+            );
+        } else {
+            throw new IllegalArgumentException("Connector code already exists: " + source.code());
+        }
+        if (bundle.operations() != null) {
+            for (ConnectorOperationExport operation : bundle.operations()) {
+                ConnectorOperationEntity opExisting = operationMapper().selectOne(new LambdaQueryWrapper<ConnectorOperationEntity>()
+                        .eq(ConnectorOperationEntity::getTenantId, currentTenantId())
+                        .eq(ConnectorOperationEntity::getConnectorId, connector.id())
+                        .eq(ConnectorOperationEntity::getCode, operation.code()));
+                if (opExisting == null) {
+                    createOperation(
+                            connector.id(),
+                            operation.name(),
+                            operation.code(),
+                            operation.method(),
+                            operation.path(),
+                            operation.operationType(),
+                            operation.riskLevel(),
+                            operation.needConfirm() != null && operation.needConfirm(),
+                            operation.confirmSummaryTemplate(),
+                            operation.requestTemplate(),
+                            operation.enabled() == null || operation.enabled(),
+                            operation.description()
+                    );
+                } else if (overwrite) {
+                    updateOperation(
+                            connector.id(),
+                            opExisting.getId(),
+                            operation.name(),
+                            operation.code(),
+                            operation.method(),
+                            operation.path(),
+                            operation.operationType(),
+                            operation.riskLevel(),
+                            operation.needConfirm() != null && operation.needConfirm(),
+                            operation.confirmSummaryTemplate(),
+                            operation.requestTemplate(),
+                            operation.enabled() == null || operation.enabled(),
+                            operation.description()
+                    );
+                }
+            }
+        }
+        return connector;
+    }
+
+    public record ConnectorExport(
+            String name,
+            String code,
+            String type,
+            String accessType,
+            String baseUrl,
+            String authMode,
+            String authConfig,
+            Boolean enabled,
+            String description
+    ) {
+    }
+
+    public record ConnectorOperationExport(
+            String name,
+            String code,
+            String method,
+            String path,
+            String operationType,
+            String riskLevel,
+            Boolean needConfirm,
+            String confirmSummaryTemplate,
+            String requestTemplate,
+            Boolean enabled,
+            String description
+    ) {
+    }
+
+    public record ConnectorExportBundle(ConnectorExport connector, List<ConnectorOperationExport> operations) {
+    }
+
     private ConnectorEntity requireConnectorEntity(String id) {
         ConnectorEntity entity = connectorMapper().selectById(id);
         if (entity == null || !currentTenantId().equals(entity.getTenantId())) {

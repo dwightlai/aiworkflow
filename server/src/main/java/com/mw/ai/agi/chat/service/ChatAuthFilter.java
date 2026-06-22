@@ -22,9 +22,11 @@ public class ChatAuthFilter extends OncePerRequestFilter {
     private static final String CHAT_PREFIX = "/api/chat/";
 
     private final RequestIdentitySupport identitySupport;
+    private final AgentAuditService agentAuditService;
 
-    public ChatAuthFilter(RequestIdentitySupport identitySupport) {
+    public ChatAuthFilter(RequestIdentitySupport identitySupport, AgentAuditService agentAuditService) {
         this.identitySupport = identitySupport;
+        this.agentAuditService = agentAuditService;
     }
 
     @Override
@@ -45,6 +47,8 @@ public class ChatAuthFilter extends OncePerRequestFilter {
             }
             filterChain.doFilter(request, response);
         } catch (AuthException exception) {
+            agentAuditService.log(null, null, null, null, null, null, "CHAT_AUTH_DENIED",
+                    request.getRequestURI(), null, "FAILED", exception.getMessage(), null);
             response.setStatus(exception.getStatus().value());
             response.setCharacterEncoding("UTF-8");
             response.setContentType("application/json");

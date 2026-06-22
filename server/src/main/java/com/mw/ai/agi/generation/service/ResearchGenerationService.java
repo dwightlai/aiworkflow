@@ -2,8 +2,10 @@ package com.mw.ai.agi.generation.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mw.ai.agi.auth.service.AuthService;
 import com.mw.ai.agi.auth.service.TenantBusinessGuard;
 import com.mw.ai.agi.auth.service.TenantContext;
+import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.config.AgiStorageProperties;
 import com.mw.ai.agi.config.AgiStorageSettingsService;
 import com.mw.ai.agi.generation.domain.GenerationJob;
@@ -42,6 +44,7 @@ public class ResearchGenerationService {
     private final ResearchOutputTemplateRegistry outputTemplateRegistry;
     private final ResearchHtmlPreviewRenderer htmlPreviewRenderer;
     private KnowledgeDatasetService knowledgeDatasetService;
+    private AuthService authService;
 
     public ResearchGenerationService() {
         this(
@@ -91,6 +94,11 @@ public class ResearchGenerationService {
         this.knowledgeDatasetService = knowledgeDatasetService;
     }
 
+    @Autowired(required = false)
+    public void setAuthService(AuthService authService) {
+        this.authService = authService;
+    }
+
     public GenerationJob runFromKnowledgeDataset(
             String templateId,
             String knowledgeBaseId,
@@ -98,6 +106,18 @@ public class ResearchGenerationService {
             String unitId,
             String userId,
             Map<String, Object> variables
+    ) {
+        return runFromKnowledgeDataset(templateId, knowledgeBaseId, datasetId, unitId, userId, variables, null);
+    }
+
+    public GenerationJob runFromKnowledgeDataset(
+            String templateId,
+            String knowledgeBaseId,
+            String datasetId,
+            String unitId,
+            String userId,
+            Map<String, Object> variables,
+            String userAccessToken
     ) {
         if (knowledgeDatasetService == null) {
             throw new IllegalStateException("数据集服务不可用");
@@ -118,7 +138,7 @@ public class ResearchGenerationService {
             externalCorpus.put("type", "ARCHIVE_THEME_LIBRARY");
         }
         externalCorpus.put("datasetId", datasetId);
-        return run(null, templateId, unitId, userId, List.of(knowledgeBaseId), externalCorpus, runtimeVariables);
+        return run(null, templateId, unitId, userId, List.of(knowledgeBaseId), externalCorpus, runtimeVariables, userAccessToken);
     }
 
     public GenerationJob run(
@@ -129,6 +149,19 @@ public class ResearchGenerationService {
             List<String> knowledgeBaseIds,
             Map<String, Object> externalCorpus,
             Map<String, Object> variables
+    ) {
+        return run(botId, templateId, unitId, userId, knowledgeBaseIds, externalCorpus, variables, null);
+    }
+
+    public GenerationJob run(
+            String botId,
+            String templateId,
+            String unitId,
+            String userId,
+            List<String> knowledgeBaseIds,
+            Map<String, Object> externalCorpus,
+            Map<String, Object> variables,
+            String userAccessToken
     ) {
         Instant startedAt = Instant.now();
         String tenantId = currentTenantId();
@@ -153,7 +186,8 @@ public class ResearchGenerationService {
                 audience,
                 themeLibraryId,
                 startedAt,
-                tenantId
+                tenantId,
+                userAccessToken
         );
     }
 
@@ -178,7 +212,8 @@ public class ResearchGenerationService {
             String audience,
             String themeLibraryId,
             Instant startedAt,
-            String tenantId
+            String tenantId,
+            String userAccessToken
     ) {
         Map<String, Object> workflowInput = buildWorkflowInput(
                 template.id(),
@@ -189,13 +224,18 @@ public class ResearchGenerationService {
                 externalCorpus,
                 variables
         );
+        Map<String, Object> systemVariables = new LinkedHashMap<>();
+        systemVariables.put("userId", userId == null ? "" : userId);
+        systemVariables.put("unitId", unitId == null ? "" : unitId);
+        systemVariables.put("tenantId", tenantId);
+        String token = resolveUserAccessToken(userAccessToken, userId);
+        if (token != null) {
+            systemVariables.put("userToken", token);
+        }
         WorkflowExecutionResult executionResult = workflowExecutionService.runWorkflow(new WorkflowExecutionRequest(
                 template.workflowId(),
                 workflowInput,
-                Map.of(
-                        "userId", userId == null ? "" : userId,
-                        "unitId", unitId == null ? "" : unitId
-                )
+                systemVariables
         ));
         if (executionResult.execution().status() != WorkflowExecutionStatus.SUCCEEDED) {
             throw new IllegalStateException(executionResult.execution().errorMessage());
@@ -321,6 +361,27 @@ public class ResearchGenerationService {
             input.putAll(variables);
         }
         return input;
+    }
+
+    private String resolveUserAccessToken(String userAccessToken, String userId) {
+        if (userAccessToken != null && !userAccessToken.isBlank()) {
+            return userAccessToken.trim();
+        }
+        String effectiveUserId = userId;
+        if (effectiveUserId == null || effectiveUserId.isBlank()) {
+            String current = OperatorContext.currentUserId();
+            if (!"system".equals(current)) {
+                effectiveUserId = current;
+            }
+        }
+        if (authService == null || effectiveUserId == null || effectiveUserId.isBlank()) {
+            return null;
+        }
+        try {
+            return authService.issueTokenForUser(effectiveUserId).accessToken();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")

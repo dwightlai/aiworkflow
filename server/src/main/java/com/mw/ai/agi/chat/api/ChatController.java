@@ -8,7 +8,9 @@ import com.mw.ai.agi.bot.domain.BotSession;
 import com.mw.ai.agi.bot.service.BotService;
 import com.mw.ai.agi.workflow.engine.WorkflowExecutionResult;
 import com.mw.ai.agi.chat.persistence.HumanConfirmTaskEntity;
+import com.mw.ai.agi.chat.domain.AgentJob;
 import com.mw.ai.agi.chat.service.AgentAuditService;
+import com.mw.ai.agi.chat.service.AgentJobService;
 import com.mw.ai.agi.chat.service.ChatGatewayService;
 import com.mw.ai.agi.chat.service.EmbedTicketService;
 import com.mw.ai.agi.chat.service.HumanConfirmService;
@@ -46,6 +48,7 @@ public class ChatController {
     private final BotService botService;
     private final RequestIdentitySupport identitySupport;
     private final AgentAuditService agentAuditService;
+    private final AgentJobService agentJobService;
     private final ResearchGenerationService researchGenerationService;
     private final ObjectMapper objectMapper;
 
@@ -57,6 +60,7 @@ public class ChatController {
             BotService botService,
             RequestIdentitySupport identitySupport,
             AgentAuditService agentAuditService,
+            AgentJobService agentJobService,
             ResearchGenerationService researchGenerationService,
             ObjectMapper objectMapper
     ) {
@@ -67,6 +71,7 @@ public class ChatController {
         this.botService = botService;
         this.identitySupport = identitySupport;
         this.agentAuditService = agentAuditService;
+        this.agentJobService = agentJobService;
         this.researchGenerationService = researchGenerationService;
         this.objectMapper = objectMapper;
     }
@@ -151,6 +156,13 @@ public class ChatController {
         return ApiResponse.success(embedTicketService.exchange(body.ticket(), body.botId()));
     }
 
+    @GetMapping("/agent-jobs/{jobId}")
+    public ApiResponse<AgentJobView> getAgentJob(@PathVariable String jobId, HttpServletRequest request) {
+        String userId = requireUserId(request);
+        AgentJob job = agentJobService.getForUser(jobId, userId);
+        return ApiResponse.success(toAgentJobView(job));
+    }
+
     @GetMapping("/generation-jobs/{jobId}")
     public ApiResponse<ResearchApiMapper.ResearchJobView> getGenerationJob(
             @PathVariable String jobId,
@@ -177,7 +189,7 @@ public class ChatController {
         WorkflowExecutionResult execution = workflowExecutionService.resumeAfterConfirm(task.getWorkflowRunId(), taskId);
         BotMessage reply = botService.saveWorkflowReply(task.getBotId(), task.getConversationId(), execution);
         agentAuditService.log(userId, task.getBotId(), task.getConversationId(), reply.id(), task.getConnectorCode(),
-                task.getOperationCode(), "HITL_CONFIRM", task.getSummary(), truncate(reply.content()), "CONFIRMED", null, taskId);
+                task.getOperationCode(), "HITL_CONFIRM", task.getSummary(), truncate(reply.content()), "CONFIRMED", null, resolveTraceId(task));
         return ApiResponse.success(new ConfirmTaskResponse(task.getId(), "CONFIRMED", reply));
     }
 
@@ -188,7 +200,7 @@ public class ChatController {
         WorkflowExecutionResult execution = workflowExecutionService.rejectAfterConfirm(task.getWorkflowRunId(), taskId);
         BotMessage reply = botService.saveWorkflowReply(task.getBotId(), task.getConversationId(), execution);
         agentAuditService.log(userId, task.getBotId(), task.getConversationId(), reply.id(), task.getConnectorCode(),
-                task.getOperationCode(), "HITL_REJECT", task.getSummary(), truncate(reply.content()), "REJECTED", null, taskId);
+                task.getOperationCode(), "HITL_REJECT", task.getSummary(), truncate(reply.content()), "REJECTED", null, resolveTraceId(task));
         return ApiResponse.success(new ConfirmTaskResponse(task.getId(), "REJECTED", reply));
     }
 
@@ -220,11 +232,64 @@ public class ChatController {
         }
     }
 
+    private String resolveTraceId(HumanConfirmTaskEntity task) {
+        if (task.getWorkflowRunId() == null || task.getWorkflowRunId().isBlank()) {
+            return null;
+        }
+        try {
+            WorkflowExecutionResult execution = workflowExecutionService.getWorkflowExecution(task.getWorkflowRunId());
+            Object traceId = execution.execution().context().get("__traceId");
+            if (traceId == null) {
+                traceId = execution.execution().input().get("__traceId");
+            }
+            if (traceId != null && !String.valueOf(traceId).isBlank()) {
+                return String.valueOf(traceId);
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return null;
+    }
+
     private String truncate(String value) {
         if (value == null) {
             return null;
         }
         return value.length() > 500 ? value.substring(0, 500) : value;
+    }
+
+    private AgentJobView toAgentJobView(AgentJob job) {
+        String downloadUrl = null;
+        String resultUrl = null;
+        String title = null;
+        if (job.result() != null && !job.result().isBlank()) {
+            try {
+                Map<String, Object> parsed = objectMapper.readValue(job.result(), new TypeReference<>() {
+                });
+                downloadUrl = stringOrNull(parsed.get("downloadUrl"));
+                resultUrl = stringOrNull(parsed.get("resultUrl"));
+                title = stringOrNull(parsed.get("title"));
+            } catch (IOException ignored) {
+            }
+        }
+        return new AgentJobView(
+                job.id(),
+                job.status(),
+                job.progress(),
+                job.currentStep(),
+                job.errorMessage(),
+                job.result(),
+                downloadUrl,
+                resultUrl,
+                title
+        );
+    }
+
+    private String stringOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value);
+        return text.isBlank() ? null : text;
     }
 
     public record PageResponse<T>(List<T> items, long total) {
@@ -252,6 +317,19 @@ public class ChatController {
             Map<String, Object> payloadSnapshot,
             String connectorCode,
             String operationCode
+    ) {
+    }
+
+    public record AgentJobView(
+            String id,
+            String status,
+            Integer progress,
+            String currentStep,
+            String errorMessage,
+            String result,
+            String downloadUrl,
+            String resultUrl,
+            String title
     ) {
     }
 }

@@ -1,4 +1,4 @@
-import { ApiOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
+import { ApiOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SettingOutlined, UploadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -7,6 +7,7 @@ import {
   Drawer,
   Form,
   Input,
+  Modal,
   Select,
   Space,
   Statistic,
@@ -24,7 +25,10 @@ import {
   createConnectorOperation,
   deleteConnector,
   deleteConnectorOperation,
+  exportConnector,
+  importConnector,
   listConnectorOperations,
+  listConnectorStats,
   listConnectors,
   testConnectorOperation,
   updateConnector,
@@ -71,9 +75,14 @@ export function ConnectorsPage() {
   const [operationDrawerOpen, setOperationDrawerOpen] = useState(false);
   const [editingOperation, setEditingOperation] = useState<ConnectorOperation | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [testingOperation, setTestingOperation] = useState<ConnectorOperation | null>(null);
+  const [testPayloadJson, setTestPayloadJson] = useState('{}');
 
   const connectorsQuery = useQuery({ queryKey: ['connectors'], queryFn: listConnectors });
+  const statsQuery = useQuery({ queryKey: ['connector-stats'], queryFn: listConnectorStats });
   const connectors = connectorsQuery.data?.items ?? [];
+  const stats = statsQuery.data?.items ?? [];
 
   const operationsQuery = useQuery({
     queryKey: ['connector-operations', opsConnector?.id],
@@ -134,19 +143,72 @@ export function ConnectorsPage() {
   });
 
   const testMutation = useMutation({
-    mutationFn: (operationId: string) => {
+    mutationFn: ({ operationId, payload }: { operationId: string; payload?: Record<string, unknown> }) => {
       if (!opsConnector) {
         throw new Error('未选择连接器');
       }
-      return testConnectorOperation(opsConnector.id, operationId);
+      return testConnectorOperation(opsConnector.id, operationId, payload);
     },
     onSuccess: (result) => {
-      setTestResult(JSON.stringify(result, null, 2));
+      const lines = [
+        `success: ${result.success}`,
+        result.statusCode != null ? `statusCode: ${result.statusCode}` : null,
+        result.durationMs != null ? `durationMs: ${result.durationMs}` : null,
+        result.traceId ? `traceId: ${result.traceId}` : null,
+        result.requestUrl ? `requestUrl: ${result.requestUrl}` : null,
+        result.body ? `body:\n${result.body}` : null,
+        result.errorMessage ? `error: ${result.errorMessage}` : null
+      ].filter(Boolean);
+      setTestResult(lines.join('\n'));
+      setTestModalOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ['connector-stats'] });
     },
     onError: (error) => {
       setTestResult(error instanceof Error ? error.message : '测试失败');
     }
   });
+
+  function openTestOperation(operation: ConnectorOperation) {
+    setTestingOperation(operation);
+    setTestPayloadJson(operation.requestTemplate?.trim() ? operation.requestTemplate : '{}');
+    setTestModalOpen(true);
+  }
+
+  function runTestOperation() {
+    if (!testingOperation) {
+      return;
+    }
+    let payload: Record<string, unknown> | undefined;
+    const trimmed = testPayloadJson.trim();
+    if (trimmed) {
+      try {
+        payload = JSON.parse(trimmed) as Record<string, unknown>;
+      } catch {
+        message.error('请求参数 JSON 格式错误');
+        return;
+      }
+    }
+    testMutation.mutate({ operationId: testingOperation.id, payload });
+  }
+
+  async function handleExportConnector(connector: Connector) {
+    const bundle = await exportConnector(connector.id);
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${connector.code}-connector.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportConnector(file: File) {
+    const text = await file.text();
+    const bundle = JSON.parse(text);
+    await importConnector(bundle, true);
+    message.success('连接器已导入');
+    await queryClient.invalidateQueries({ queryKey: ['connectors'] });
+  }
 
   const connectorColumns: ColumnsType<Connector> = [
     { title: '名称', dataIndex: 'name', key: 'name' },
@@ -164,6 +226,7 @@ export function ConnectorsPage() {
       render: (_, record) => (
         <Space>
           <Button size="small" icon={<SettingOutlined />} onClick={() => setOpsConnector(record)}>接口</Button>
+          <Button size="small" icon={<DownloadOutlined />} onClick={() => void handleExportConnector(record)}>导出</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEditConnector(record)}>编辑</Button>
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteConnectorMutation.mutate(record.id)} />
         </Space>
@@ -193,7 +256,9 @@ export function ConnectorsPage() {
       key: 'actions',
       render: (_, record) => (
         <Space>
-          <Button size="small" onClick={() => testMutation.mutate(record.id)} loading={testMutation.isPending}>测试</Button>
+          <Button size="small" onClick={() => openTestOperation(record)} loading={testMutation.isPending && testingOperation?.id === record.id}>
+            测试
+          </Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEditOperation(record)}>编辑</Button>
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteOperationMutation.mutate(record.id)} />
         </Space>
@@ -260,7 +325,11 @@ export function ConnectorsPage() {
       </div>
 
       <Card variant="borderless" style={{ marginBottom: 16, border: '1px solid #e7ecf3' }}>
-        <Statistic title="连接器数量" value={connectors.length} prefix={<ApiOutlined />} />
+        <Space size={48} wrap>
+          <Statistic title="连接器数量" value={connectors.length} prefix={<ApiOutlined />} />
+          <Statistic title="调用记录" value={stats.reduce((sum, item) => sum + item.totalCalls, 0)} />
+          <Statistic title="成功调用" value={stats.reduce((sum, item) => sum + item.successCalls, 0)} />
+        </Space>
       </Card>
 
       {connectorsQuery.isError ? (
@@ -268,11 +337,45 @@ export function ConnectorsPage() {
       ) : null}
 
       <Card variant="borderless" style={{ border: '1px solid #e7ecf3' }}>
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 12, display: 'flex', gap: 8 }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreateConnector}>新增连接器</Button>
+          <Button icon={<UploadOutlined />} onClick={() => document.getElementById('connector-import-input')?.click()}>
+            导入 JSON
+          </Button>
+          <input
+            id="connector-import-input"
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                void handleImportConnector(file);
+              }
+              e.currentTarget.value = '';
+            }}
+          />
         </div>
         <Table rowKey="id" columns={connectorColumns} dataSource={connectors} loading={connectorsQuery.isLoading} />
       </Card>
+
+      {stats.length > 0 ? (
+        <Card variant="borderless" title="调用统计" style={{ marginTop: 16, border: '1px solid #e7ecf3' }}>
+          <Table
+            size="small"
+            rowKey={(row) => `${row.connectorCode}:${row.operationCode}`}
+            pagination={false}
+            dataSource={stats.slice(0, 10)}
+            columns={[
+              { title: '连接器', dataIndex: 'connectorCode' },
+              { title: '接口', dataIndex: 'operationCode' },
+              { title: '总次数', dataIndex: 'totalCalls', width: 90 },
+              { title: '成功', dataIndex: 'successCalls', width: 80 },
+              { title: '失败', dataIndex: 'failedCalls', width: 80 }
+            ]}
+          />
+        </Card>
+      ) : null}
 
       <Drawer
         title={editingConnector ? '编辑连接器' : '新增连接器'}
@@ -344,6 +447,23 @@ export function ConnectorsPage() {
           <Alert type="info" message="测试结果" description={<pre style={{ whiteSpace: 'pre-wrap' }}>{testResult}</pre>} style={{ marginTop: 12 }} />
         ) : null}
       </Drawer>
+
+      <Modal
+        title={testingOperation ? `测试 · ${testingOperation.name}` : '测试接口'}
+        open={testModalOpen}
+        onCancel={() => setTestModalOpen(false)}
+        onOk={runTestOperation}
+        confirmLoading={testMutation.isPending}
+        okText="执行测试"
+      >
+        <Typography.Text type="secondary">请求参数 JSON（留空则使用接口模板渲染）</Typography.Text>
+        <Input.TextArea
+          value={testPayloadJson}
+          onChange={(e) => setTestPayloadJson(e.target.value)}
+          autoSize={{ minRows: 6, maxRows: 16 }}
+          style={{ marginTop: 8, fontFamily: 'monospace' }}
+        />
+      </Modal>
 
       <Drawer
         title={editingOperation ? '编辑接口' : '新增接口'}

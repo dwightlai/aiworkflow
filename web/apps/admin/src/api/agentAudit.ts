@@ -26,12 +26,18 @@ export async function listAgentAuditLogs(params: {
   traceId?: string;
   botId?: string;
   eventType?: string;
+  connectorCode?: string;
+  operationCode?: string;
+  status?: string;
   limit?: number;
 }): Promise<PageResponse<AgentAuditLog>> {
   const query = new URLSearchParams();
   if (params.traceId) query.set('traceId', params.traceId);
   if (params.botId) query.set('botId', params.botId);
   if (params.eventType) query.set('eventType', params.eventType);
+  if (params.connectorCode) query.set('connectorCode', params.connectorCode);
+  if (params.operationCode) query.set('operationCode', params.operationCode);
+  if (params.status) query.set('status', params.status);
   if (params.limit) query.set('limit', String(params.limit));
   const suffix = query.toString() ? `?${query.toString()}` : '';
   return requestJson<PageResponse<AgentAuditLog>>(`/api/agent-audit/logs${suffix}`);

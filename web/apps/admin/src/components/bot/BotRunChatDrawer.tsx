@@ -42,7 +42,7 @@ export function BotRunChatDrawer({
       open={open}
       width={960}
       onClose={onClose}
-      styles={{ body: { padding: 0, overflow: 'hidden', height: 'calc(100vh - 55px)' } }}
+      styles={{ body: { padding: 0, overflow: 'hidden', height: 'calc(100vh - 55px)', display: 'flex', flexDirection: 'column' } }}
       footer={null}
     >
       <div className="bot-run-shell">

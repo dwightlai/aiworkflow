@@ -1,4 +1,4 @@
-import { requestJson } from './auth';
+import { getAuthSession, requestJson } from './auth';
 import type { WorkflowSnapshot } from './generationTemplates';
 
 export interface ThemeLibrary {
@@ -119,6 +119,29 @@ export function getResearchOutputDocxUrl(outputId: string): string {
 
 export function getResearchOutputHtmlPreviewUrl(outputId: string): string {
   return `/api/research/outputs/${outputId}/html-preview`;
+}
+
+async function authorizedFetch(url: string): Promise<Response> {
+  const session = getAuthSession();
+  const headers: Record<string, string> = {};
+  if (session?.accessToken) {
+    headers.Authorization = `Bearer ${session.accessToken}`;
+  }
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return response;
+}
+
+export async function fetchResearchOutputHtmlPreview(outputId: string): Promise<string> {
+  const response = await authorizedFetch(getResearchOutputHtmlPreviewUrl(outputId));
+  return response.text();
+}
+
+export async function fetchResearchOutputDocx(outputId: string): Promise<Blob> {
+  const response = await authorizedFetch(getResearchOutputDocxUrl(outputId));
+  return response.blob();
 }
 
 export async function listResearchOutputTemplates(

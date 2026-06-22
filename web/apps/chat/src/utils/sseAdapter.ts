@@ -70,6 +70,21 @@ function mergeCitationList(existing: CitationItem[], incoming: CitationItem): Ci
 
 export function applySseEvent(messages: PlatformMessage[], event: ChatSseEvent, assistantId: string): PlatformMessage[] {
   switch (event.type) {
+    case 'route.selected':
+      return messages.map((m) =>
+        m.id === assistantId
+          ? {
+              ...m,
+              metadata: {
+                ...(m.metadata ?? {}),
+                resolvedWorkflowId: event.data.workflowId,
+                resolvedWorkflowName: event.data.workflowName,
+                routeMatchReason: event.data.matchReason,
+                routeCapabilityCode: event.data.capabilityCode
+              }
+            }
+          : m
+      );
     case 'message.delta': {
       const delta = String(event.data.content ?? '');
       const existing = messages.find((m) => m.id === assistantId);

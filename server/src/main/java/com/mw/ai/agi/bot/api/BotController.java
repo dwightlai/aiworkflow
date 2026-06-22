@@ -3,6 +3,7 @@ package com.mw.ai.agi.bot.api;
 import com.mw.ai.agi.bot.domain.AiBot;
 import com.mw.ai.agi.bot.domain.BotChatResult;
 import com.mw.ai.agi.bot.domain.BotCapability;
+import com.mw.ai.agi.bot.domain.WorkflowRoutePreview;
 import com.mw.ai.agi.bot.domain.BotMessage;
 import com.mw.ai.agi.bot.domain.BotRunResult;
 import com.mw.ai.agi.bot.domain.BotSession;
@@ -177,6 +178,14 @@ public class BotController {
         return ApiResponse.success(null);
     }
 
+    @PostMapping("/{id}/capabilities/route-preview")
+    public ApiResponse<WorkflowRoutePreview> previewCapabilityRoute(
+            @PathVariable String id,
+            @RequestBody RoutePreviewRequest body
+    ) {
+        return ApiResponse.success(botService.previewWorkflowRoute(id, body.message()));
+    }
+
     private Map<String, Object> safeInput(Map<String, Object> input) {
         return input == null ? Map.of() : input;
     }
@@ -225,6 +234,9 @@ public class BotController {
             Boolean primaryCapability,
             Boolean enabled
     ) {
+    }
+
+    public record RoutePreviewRequest(String message) {
     }
 }
 

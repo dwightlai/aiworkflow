@@ -41,7 +41,6 @@ import {
   compileFromKnowledgeDataset,
   getResearchJobOutput,
   getResearchOutputDocxUrl,
-  getResearchOutputHtmlPreviewUrl,
   listResearchOutputTemplates,
   renderResearchOutputDocx,
   listThemeLibraries,
@@ -49,6 +48,11 @@ import {
   type ResearchJob
 } from '../../api/research';
 import { resolveWorkflowDisplay } from './workflowDisplay';
+import {
+  DocxPreviewPanel,
+  HtmlPreviewPanel,
+  MarkdownPreviewPanel
+} from '../../components/research/ResearchOutputPreview';
 
 interface WizardFormValues {
   topic: string;
@@ -405,7 +409,11 @@ export function ResearchCompilationPage() {
                                 ))}
                               </Space>
                               {jobResult.output.hasDocx ? (
-                                <Alert type="success" showIcon message="DOCX 已生成，可点击右上角下载。" />
+                                <DocxPreviewPanel
+                                  outputId={jobResult.output.id}
+                                  enabled
+                                  versionKey={jobResult.output.outputTemplateId}
+                                />
                               ) : (
                                 <Alert type="info" showIcon message="尚未生成 DOCX，请选择版式后重新渲染。" />
                               )}
@@ -416,20 +424,14 @@ export function ResearchCompilationPage() {
                           key: 'markdown',
                           label: 'Markdown',
                           children: (
-                            <Typography.Paragraph copyable style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-                              {jobResult.output.contentMarkdown}
-                            </Typography.Paragraph>
+                            <MarkdownPreviewPanel content={jobResult.output.contentMarkdown} />
                           )
                         },
                         {
                           key: 'html',
                           label: 'HTML 预览',
                           children: (
-                            <iframe
-                              title="html-preview"
-                              src={getResearchOutputHtmlPreviewUrl(jobResult.output.id)}
-                              style={{ width: '100%', minHeight: 480, border: '1px solid #e5e7eb', borderRadius: 8 }}
-                            />
+                            <HtmlPreviewPanel outputId={jobResult.output.id} />
                           )
                         },
                         {

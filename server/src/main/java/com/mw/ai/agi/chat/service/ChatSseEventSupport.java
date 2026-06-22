@@ -37,7 +37,7 @@ public final class ChatSseEventSupport {
     }
 
     public static void emitWorkflowEvents(SseEmitter emitter, WorkflowExecutionResult execution) throws IOException {
-        emitWorkflowEvents(emitter, execution, true);
+        emitWorkflowEvents(emitter, execution, true, false);
     }
 
     public static void emitWorkflowEvents(
@@ -45,9 +45,86 @@ public final class ChatSseEventSupport {
             WorkflowExecutionResult execution,
             boolean includeCitations
     ) throws IOException {
+        emitWorkflowEvents(emitter, execution, includeCitations, false);
+    }
+
+    public static void emitWorkflowEvents(
+            SseEmitter emitter,
+            WorkflowExecutionResult execution,
+            boolean includeCitations,
+            boolean skipToolEvents
+    ) throws IOException {
         if (execution == null) {
             return;
         }
+        if (!skipToolEvents) {
+            emitToolEvents(emitter, execution);
+        }
+        if (includeCitations) {
+            for (Map<String, Object> citation : extractCitations(execution)) {
+                emitter.send(SseEmitter.event().name("citation.added").data(citation));
+            }
+        }
+        emitAgentJobEvents(emitter, execution.execution().output());
+    }
+
+    private static void emitAgentJobEvents(SseEmitter emitter, Map<String, Object> output) throws IOException {
+        if (output == null || output.isEmpty()) {
+            return;
+        }
+        String jobId = firstNonBlank(
+                stringValue(output.get("agentJobId")),
+                stringValue(output.get("jobId"))
+        );
+        if (jobId.isBlank()) {
+            return;
+        }
+        emitter.send(SseEmitter.event().name("job.started").data(Map.of("jobId", jobId)));
+        String status = stringValue(output.get("jobStatus"));
+        int progress = parseProgress(output.get("progress"));
+        String currentStep = stringValue(output.get("currentStep"));
+        if ("RUNNING".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
+                || (progress > 0 && progress < 100)) {
+            Map<String, Object> progressData = new LinkedHashMap<>();
+            progressData.put("jobId", jobId);
+            progressData.put("progress", progress);
+            if (!currentStep.isBlank()) {
+                progressData.put("currentStep", currentStep);
+            }
+            emitter.send(SseEmitter.event().name("job.progress").data(progressData));
+            return;
+        }
+        if ("FAILED".equalsIgnoreCase(status)) {
+            emitter.send(SseEmitter.event().name("error").data(Map.of(
+                    "message", stringValue(output.get("errorMessage")).isBlank() ? "任务执行失败" : stringValue(output.get("errorMessage"))
+            )));
+            return;
+        }
+        if (!"COMPLETED".equalsIgnoreCase(status) && !"SUCCEEDED".equalsIgnoreCase(status) && progress < 100) {
+            return;
+        }
+        Map<String, Object> completed = new LinkedHashMap<>();
+        completed.put("jobId", jobId);
+        String title = stringValue(output.get("title"));
+        if (!title.isBlank()) {
+            completed.put("title", title);
+        }
+        String outputId = firstNonBlank(stringValue(output.get("outputId")), stringValue(output.get("resultId")));
+        if (!outputId.isBlank()) {
+            completed.put("outputId", outputId);
+        }
+        String downloadUrl = stringValue(output.get("downloadUrl"));
+        if (!downloadUrl.isBlank()) {
+            completed.put("downloadUrl", downloadUrl);
+        }
+        String resultUrl = stringValue(output.get("resultUrl"));
+        if (!resultUrl.isBlank()) {
+            completed.put("resultUrl", resultUrl);
+        }
+        emitter.send(SseEmitter.event().name("job.completed").data(completed));
+    }
+
+    private static void emitToolEvents(SseEmitter emitter, WorkflowExecutionResult execution) throws IOException {
         for (NodeExecution nodeExecution : execution.nodeExecutions()) {
             if (nodeExecution.nodeType() != WorkflowNodeType.HTTP_TOOL) {
                 continue;
@@ -59,18 +136,17 @@ public final class ChatSseEventSupport {
                 continue;
             }
             String eventName = nodeExecution.status() == NodeExecutionStatus.FAILED ? "tool.failed" : "tool.completed";
+            emitter.send(SseEmitter.event().name("tool.started").data(Map.of(
+                    "connectorCode", connectorCode,
+                    "operationCode", operationCode,
+                    "name", operationCode.isBlank() ? connectorCode : operationCode
+            )));
             emitter.send(SseEmitter.event().name(eventName).data(Map.of(
                     "connectorCode", connectorCode,
                     "operationCode", operationCode,
                     "name", operationCode.isBlank() ? connectorCode : operationCode
             )));
         }
-        if (includeCitations) {
-            for (Map<String, Object> citation : extractCitations(execution)) {
-                emitter.send(SseEmitter.event().name("citation.added").data(citation));
-            }
-        }
-        emitGenerationJobEvents(emitter, execution.execution().output());
     }
 
     public static void emitConfirmRequired(
@@ -86,40 +162,6 @@ public final class ChatSseEventSupport {
             data.put("payloadSnapshot", payloadSnapshot);
         }
         emitter.send(SseEmitter.event().name("confirm.required").data(data));
-    }
-
-    private static void emitGenerationJobEvents(SseEmitter emitter, Map<String, Object> output) throws IOException {
-        if (output == null || output.isEmpty()) {
-            return;
-        }
-        String jobId = firstNonBlank(
-                stringValue(output.get("generationJobId")),
-                stringValue(output.get("jobId"))
-        );
-        if (jobId.isBlank()) {
-            return;
-        }
-        String outputId = stringValue(output.get("generationOutputId"));
-        if (outputId.isBlank()) {
-            outputId = stringValue(output.get("outputId"));
-        }
-        String status = stringValue(output.get("jobStatus"));
-        int progress = parseProgress(output.get("progress"));
-        if ("RUNNING".equalsIgnoreCase(status) || progress > 0 && progress < 100) {
-            emitter.send(SseEmitter.event().name("job.progress").data(Map.of(
-                    "jobId", jobId,
-                    "progress", progress,
-                    "currentStep", stringValue(output.get("currentStep"))
-            )));
-        }
-        Map<String, Object> completed = new LinkedHashMap<>();
-        completed.put("jobId", jobId);
-        if (!outputId.isBlank()) {
-            completed.put("outputId", outputId);
-            completed.put("downloadUrl", "/api/research/outputs/" + outputId + "/docx");
-        }
-        completed.put("title", stringValue(output.get("title")));
-        emitter.send(SseEmitter.event().name("job.completed").data(completed));
     }
 
     private static void appendCitationMaps(List<Map<String, Object>> citations, Set<String> seen, Object value) {
