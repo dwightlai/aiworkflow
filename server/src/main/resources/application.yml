@@ -55,6 +55,22 @@ third-party:
     base-url: ${AUTH_SERVICE_BASE_URL:}
 
 agi:
+  auth:
+    default-tenant-id: tenant_default
+    access-token-seconds: ${AGI_ACCESS_TOKEN_SECONDS:3600}
+    refresh-token-seconds: ${AGI_REFRESH_TOKEN_SECONDS:1209600}
+    jwt-secret: ${AGI_JWT_SECRET:change-me-agi-development-secret}
+  identity:
+    mode: ${AGI_IDENTITY_MODE:local}
+    fixed-tenant-id: tenant_default
+    auto-provision-shadow-user: false
+    role-mapping: {}
+    remote:
+      allow-break-glass-login: true
+      disable-local-org-admin: true
+    adapter:
+      auth: unconfigured
+      organization: unconfigured
   storage:
     knowledge-document-dir: ${AGI_STORAGE_KNOWLEDGE_DOCUMENT_DIR:./data/knowledge-documents}
     knowledge-document-save-original: ${AGI_STORAGE_KNOWLEDGE_DOCUMENT_SAVE_ORIGINAL:true}

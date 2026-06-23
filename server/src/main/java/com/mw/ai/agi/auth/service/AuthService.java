@@ -44,6 +44,8 @@ public class AuthService {
     private final JwtTokenService jwtTokenService;
     private final String defaultTenantId;
     private final long refreshTokenSeconds;
+    private final com.mw.ai.agi.auth.identity.RemoteIdentityGuard remoteIdentityGuard;
+    private final com.mw.ai.agi.auth.identity.IdentityProperties identityProperties;
 
     public AuthService(
             ObjectProvider<UserMapper> userMapperProvider,
@@ -56,6 +58,8 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             SecretHasher secretHasher,
             JwtTokenService jwtTokenService,
+            com.mw.ai.agi.auth.identity.RemoteIdentityGuard remoteIdentityGuard,
+            com.mw.ai.agi.auth.identity.IdentityProperties identityProperties,
             @Value("${agi.auth.default-tenant-id:tenant_default}") String defaultTenantId,
             @Value("${agi.auth.refresh-token-seconds:1209600}") long refreshTokenSeconds
     ) {
@@ -69,11 +73,14 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.secretHasher = secretHasher;
         this.jwtTokenService = jwtTokenService;
+        this.remoteIdentityGuard = remoteIdentityGuard;
+        this.identityProperties = identityProperties;
         this.defaultTenantId = defaultTenantId;
         this.refreshTokenSeconds = refreshTokenSeconds;
     }
 
     public AuthTokenResponse login(String username, String password, String tenantCode, RequestAuditContext auditContext) {
+        remoteIdentityGuard.assertBreakGlassLoginAllowed();
         String tenantId = resolveLoginTenantId(tenantCode);
         Optional<UserEntity> user = findUserByUsername(tenantId, username);
         if (user.isEmpty() || user.get().getPasswordHash() == null
@@ -88,6 +95,10 @@ public class AuthService {
         if (!"ACTIVE".equals(user.get().getStatus())) {
             auditLogin(user.get().getTenantId(), user.get().getId(), auditContext, "FAILED", "AUTH_USER_DISABLED");
             throw new AuthException("AUTH_USER_DISABLED", HttpStatus.FORBIDDEN, "User is disabled.");
+        }
+        if (identityProperties.isRemote() && !"LOCAL".equals(user.get().getUserType())) {
+            auditLogin(user.get().getTenantId(), user.get().getId(), auditContext, "FAILED", "AUTH_LOGIN_FAILED");
+            throw new AuthException("AUTH_LOGIN_FAILED", HttpStatus.UNAUTHORIZED, "Only local users can login with password.");
         }
 
         AuthUserPrincipal principal = loadPrincipal(user.get());
@@ -162,9 +173,30 @@ public class AuthService {
         if (!"ACTIVE".equals(user.getStatus())) {
             throw new AuthException("AUTH_USER_DISABLED", HttpStatus.FORBIDDEN, "User is disabled.");
         }
-        AuthUserPrincipal principal = loadPrincipal(user);
+        return issueTokenForPrincipal(loadPrincipal(user), new RequestAuditContext(null, null), "TOKEN_ISSUE");
+    }
+
+    public AuthTokenResponse issueTokenForPrincipal(
+            AuthUserPrincipal principal,
+            RequestAuditContext auditContext,
+            String auditEvent
+    ) {
+        String sessionId = "session_" + UUID.randomUUID().toString().replace("-", "");
         String accessToken = jwtTokenService.issueAccessToken(principal);
-        String refreshToken = jwtTokenService.issueRefreshToken(principal, "embed_" + UUID.randomUUID().toString().replace("-", ""));
+        String refreshToken = jwtTokenService.issueRefreshToken(principal, sessionId);
+        Instant now = Instant.now();
+        LoginSessionEntity session = new LoginSessionEntity();
+        session.setId(sessionId);
+        session.setTenantId(principal.tenantId());
+        session.setUserId(principal.id());
+        session.setRefreshTokenHash(secretHasher.hash(refreshToken));
+        session.setUserAgent(auditContext == null ? null : auditContext.userAgent());
+        session.setClientIp(auditContext == null ? null : auditContext.clientIp());
+        session.setExpiresAt(now.plusSeconds(refreshTokenSeconds));
+        session.setCreatedAt(now);
+        loginSessionMapper().insert(session);
+        audit(auditEvent, principal.tenantId(), principal.id(), null, principal.activeUnitId(),
+                principal.departmentIds(), principal.roleIds(), auditContext, "SUCCESS", null);
         return new AuthTokenResponse(accessToken, refreshToken, jwtTokenService.accessTokenSeconds(), principal);
     }
 

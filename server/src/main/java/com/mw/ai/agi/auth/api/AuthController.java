@@ -4,6 +4,7 @@ import com.mw.ai.agi.auth.service.AuthService;
 import com.mw.ai.agi.auth.service.AuthTokenResponse;
 import com.mw.ai.agi.auth.service.AuthUserPrincipal;
 import com.mw.ai.agi.auth.service.RequestAuditContext;
+import com.mw.ai.agi.auth.identity.SsoAuthService;
 import com.mw.ai.agi.common.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -19,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/auth")
 public class AuthController {
     private final AuthService authService;
+    private final SsoAuthService ssoAuthService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, SsoAuthService ssoAuthService) {
         this.authService = authService;
+        this.ssoAuthService = ssoAuthService;
     }
 
     @PostMapping("/login")
@@ -59,6 +62,19 @@ public class AuthController {
         return ApiResponse.success(authService.currentUser(bearerToken(request)));
     }
 
+    @PostMapping("/sso/exchange")
+    public ApiResponse<AuthTokenResponse> ssoExchange(
+            @Valid @RequestBody SsoExchangeRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        return ApiResponse.success(ssoAuthService.exchange(request.externalToken(), auditContext(servletRequest)));
+    }
+
+    @GetMapping("/identity/mode")
+    public ApiResponse<SsoAuthService.IdentityModeView> identityMode() {
+        return ApiResponse.success(ssoAuthService.currentMode());
+    }
+
     private String bearerToken(HttpServletRequest request) {
         String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authorization == null || !authorization.startsWith("Bearer ")) {
@@ -84,6 +100,11 @@ public class AuthController {
 
     public record RefreshRequest(
             @NotBlank String refreshToken
+    ) {
+    }
+
+    public record SsoExchangeRequest(
+            @NotBlank String externalToken
     ) {
     }
 }
