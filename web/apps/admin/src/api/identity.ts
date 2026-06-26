@@ -30,6 +30,7 @@ export interface Organization {
   level: number;
   sortOrder?: number;
   status: string;
+  hasChildren?: boolean;
 }
 
 export interface Role {
@@ -209,16 +210,53 @@ export async function getTenant(tenantId: string): Promise<Tenant> {
   return requestJson<Tenant>(`/api/auth/admin/tenants/${tenantId}`);
 }
 
-export async function listOrganizations(tenantId?: string): Promise<PageResponse<Organization>> {
-  return requestJson<PageResponse<Organization>>(`${tenantAdminBase(tenantId)}/organizations`);
+export interface ListOrganizationsOptions {
+  parentId?: string | null;
+  childrenOnly?: boolean;
+  countOnly?: boolean;
+}
+
+function buildIdentityQuery(params: Record<string, string | boolean | null | undefined>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '' || value === false) return;
+    search.set(key, String(value));
+  });
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
+export async function listOrganizations(tenantId?: string, options?: ListOrganizationsOptions): Promise<PageResponse<Organization>> {
+  return requestJson<PageResponse<Organization>>(`${tenantAdminBase(tenantId)}/organizations${buildIdentityQuery({
+    parentId: options?.parentId ?? undefined,
+    childrenOnly: options?.childrenOnly,
+    countOnly: options?.countOnly
+  })}`);
+}
+
+export async function listOrganizationChildren(tenantId?: string, parentId?: string | null): Promise<PageResponse<Organization>> {
+  return listOrganizations(tenantId, { parentId, childrenOnly: true });
+}
+
+export async function countOrganizations(tenantId?: string): Promise<number> {
+  const response = await listOrganizations(tenantId, { countOnly: true });
+  return response.total;
 }
 
 export async function listRoles(tenantId?: string): Promise<PageResponse<Role>> {
   return requestJson<PageResponse<Role>>(`${tenantAdminBase(tenantId)}/roles`);
 }
 
-export async function listUsers(tenantId?: string): Promise<PageResponse<IdentityUser>> {
-  return requestJson<PageResponse<IdentityUser>>(`${tenantAdminBase(tenantId)}/users`);
+export async function listUsers(tenantId?: string, organizationId?: string): Promise<PageResponse<IdentityUser>> {
+  return requestJson<PageResponse<IdentityUser>>(`${tenantAdminBase(tenantId)}/users${buildIdentityQuery({
+    organizationId,
+    countOnly: false
+  })}`);
+}
+
+export async function countUsers(tenantId?: string): Promise<number> {
+  const response = await requestJson<PageResponse<IdentityUser>>(`${tenantAdminBase(tenantId)}/users?countOnly=true`);
+  return response.total;
 }
 
 export async function createOrganization(request: SaveOrganizationRequest, tenantId?: string): Promise<Organization> {

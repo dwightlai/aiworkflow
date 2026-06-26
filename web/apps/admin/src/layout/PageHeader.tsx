@@ -17,6 +17,7 @@ export function PageHeader({ breadcrumb, currentUser, onLogout, onToggleSidebar 
         borderBottom: '1px solid #edf0f5',
         display: 'flex',
         gap: 14,
+        flexShrink: 0,
         height: 50,
         justifyContent: 'space-between',
         paddingInline: 24

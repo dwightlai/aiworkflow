@@ -1,35 +1,49 @@
-# 档案专题库纳入知识库方案
+# 档案专题资料接入 AGI 方案
 
 | 项目 | 说明 |
 |------|------|
 | 文档版本 | v1.0 |
 | 日期 | 2026-06-15 |
-| 适用场景 | 数字档案馆专题库（案卷、条目、附件）接入 AGI 知识库 |
+| 适用场景 | 数字档案馆专题资料（案卷、条目、附件）接入 AGI 问答/编研流程 |
 | 关联文档 | [多租户与外部资料源设计](../superpowers/specs/2026-06-05-agent-knowledge-multi-tenant-generation-design.md)、[数字档案馆集成设计](./digital-archive-integration-design.md) |
 
 ---
 
+## 术语约定
+
+| 术语 | 含义 |
+|------|------|
+| **专题** | 数字档案馆中的一个编研/汇编主题对象，对应 `theme` |
+| **专题资料** | 专题下的一条资料，对应 `theme_material` |
+| **挂接档案** | 被专题资料引用的案卷/条目/附件 |
+| **专题问答入口** | AGI 侧的 Bot / 工作流 / Open API 调用入口 |
+| **入口授权** | AGI 侧对专题问答入口的可用性控制，如 `agi_asset_grant`、Bot / 应用授权 |
+| **档案馆检索 API** | 数字档案馆提供的已授权检索接口 |
+| **HTTP 连接器委托检索** | AGI 通过 `HTTP_TOOL` + 连接器调用档案馆检索 API |
+
 ## 1. 背景与问题
 
-数字档案馆专题库的数据来源主要是档案业务数据，包括：
+数字档案馆专题资料的数据来源主要是档案业务数据，包括：
 
 - **案卷**、**条目**（目录/卡片信息）
 - **附件**（原文 PDF、Word 等）
 - 每条档案带有**记录级权限**：开放程度、开放范围、密级、全宗、归档部门、单位等
 - 外部还有**动态权限规则**（如某角色可查看全部档案），由档案馆规则引擎计算
 
-AGI 平台现有知识库模型以**附件上传 → 切分 → 向量化**为主，权限仅到**知识库级**（单位/部门 `asset_grant`），无法表达「库内某条档案谁能看」。
+AGI 平台现有资料接入模型以**附件上传 → 切分 → 向量化**为主，权限仅到**入口/资产级**，无法表达「专题里某条档案谁能看」。
 
 本方案回答两个核心问题：
 
-1. **数据存储结构**怎样设计？
+1. **专题资料结构**怎样设计？
 2. **权限**怎样规划、检索时怎样过滤？
+
+> **档案条级权限**的完整设计见专篇：[档案条级权限设计方案](./archive-record-level-permission-design.md)
 
 ---
 
 ## 2. 现状分析
 
-### 2.1 当前知识库模型
+### 2.1 当前平台资料模型
 
 ```
 知识库 (agi_knowledge_base)
@@ -49,20 +63,20 @@ AGI 平台现有知识库模型以**附件上传 → 切分 → 向量化**为�
 
 | 层级 | 机制 | 范围 |
 |------|------|------|
-| 平台资产授权 | `agi_asset_grant` | 知识库/智能体 **能不能用** |
+| 平台入口授权 | `agi_asset_grant` / Bot / 应用授权 | 问答入口 **能不能用** |
 | 集成应用白名单 | `agi_integration_app_scope` | 第三方应用可调哪些资产 |
 | 记录级档案权限 | **未实现** | — |
 
-检索入口 `KnowledgeBaseService.search(kbId, query, topK, context)` 仅调用 `assertKnowledgeBaseUseAllowed()`，不做条级过滤。
+当前平台内置检索能力不负责档案条级过滤。
 
 ---
 
 ## 3. 设计原则
 
 1. **档案条目 ≠ 附件文件**：一条档案是结构化业务对象，附件只是其子资源。
-2. **权限分两层**：平台管「库级」，档案馆管「条级」。
+2. **权限分两层**：平台管“入口级”，档案馆管“条级”。
 3. **复杂规则不复制**：「某角色看全部档案」等规则留在档案馆 `AuthorityRuleManageService`，AGI 不重写。
-4. **专题库优先运行时接入**：动态、权限细的数据默认走外部资料源；仅明确需要离线检索时才同步入库。
+4. **专题资料优先通过 HTTP 连接器委托检索接入**：动态、权限细的数据默认留在档案馆；仅明确需要离线检索时才同步入库。
 5. **权限快照可索引**：若同步入库，入库时固化权限字段快照，检索时在 ES `filter` 中叠加。
 
 ---
@@ -72,10 +86,10 @@ AGI 平台现有知识库模型以**附件上传 → 切分 → 向量化**为�
 ### 4.1 总体模型
 
 ```
-知识库
+专题资料来源
   sourceType: INTERNAL | ARCHIVE_THEME | ARCHIVE_SYNC
-  externalSourceId: 档案馆专题库 ID（可选）
-  syncMode: RUNTIME | INCREMENTAL | FULL
+  externalSourceId: 档案馆专题 ID（可选）
+  syncMode: HTTP_CONNECTOR | INCREMENTAL | FULL
 
   └── 文档（一条档案业务对象 = 一个 document）
         sourceType: ARCHIVE_VOLUME | ARCHIVE_ITEM | ARCHIVE_ATTACHMENT
@@ -123,8 +137,8 @@ AGI 平台现有知识库模型以**附件上传 → 切分 → 向量化**为�
 
 ```text
 source_type          VARCHAR   INTERNAL / ARCHIVE_THEME / ARCHIVE_SYNC
-external_source_id   VARCHAR   档案馆专题库 ID
-sync_mode            VARCHAR   RUNTIME / INCREMENTAL / FULL
+external_source_id   VARCHAR   档案馆专题 ID
+sync_mode            VARCHAR   HTTP_CONNECTOR / INCREMENTAL / FULL
 sync_config          JSONB     同步策略、连接器编码等
 ```
 
@@ -154,10 +168,10 @@ kfcd, kffw, mj, zxfw, unitId, deptId, archiveDeptId, libcode, status, attr, file
 
 ### 4.5 与普通附件库对比
 
-| 维度 | 普通附件知识库 | 档案专题库 |
+| 维度 | 普通附件资料 | 档案专题资料 |
 |------|----------------|------------|
 | document 含义 | 一个上传文件 | 一条案卷/条目/附件 |
-| 权限粒度 | 知识库级 | 知识库级 + 记录级 |
+| 权限粒度 | 入口级 | 入口级 + 记录级 |
 | 数据来源 | 用户上传 | 档案馆 API 同步或运行时拉取 |
 | metadata | tags/category 可选 | 档号、密级、全宗等必填 |
 | 更新方式 | 手动增删 | 增量同步 / 运行时查询 |
@@ -172,7 +186,7 @@ kfcd, kffw, mj, zxfw, unitId, deptId, archiveDeptId, libcode, status, attr, file
 ┌─────────────────────────────────────────────────────────┐
 │ 第一层：平台资产授权（已有）                              │
 │ agi_asset_grant + integration_app_scope                 │
-│ 问题：用户能不能使用这个知识库/智能体？                    │
+│ 问题：用户能不能使用这个问答入口/智能体？                  │
 └──────────────────────────┬──────────────────────────────┘
                            │ 通过
 ┌──────────────────────────▼──────────────────────────────┐
@@ -186,7 +200,7 @@ kfcd, kffw, mj, zxfw, unitId, deptId, archiveDeptId, libcode, status, attr, file
 
 | 检查点 | 实现 |
 |--------|------|
-| 用户能否检索知识库 | `AssetGrantService.isAllowed(KNOWLEDGE_BASE, …)` |
+| 用户能否使用问答入口 | 现有资产 / Bot / 应用授权能力 |
 | 第三方应用能否调用 | `IntegrationAppScopeService` 白名单 |
 | 上下文来源 | `X-AGI-User-Id`、`X-AGI-Unit-Id`、`X-AGI-Department-Ids`、`X-AGI-Role-Ids` |
 
@@ -209,7 +223,7 @@ AGI 侧**不复制完整规则引擎**，采用以下策略之一（见第 6 章
 | 系统 | 职责 |
 |------|------|
 | 数字档案馆 | 档案数据主库、记录级权限、规则引擎、已授权检索 API |
-| AGI 平台 | 知识库/智能体资产授权、向量检索、智能体编排、引用展示 |
+| AGI 平台 | 入口授权、工作流编排、连接器调用、引用展示 |
 | 档案馆 BFF | 透传用户身份、合并两侧权限判断、API Key 保管 |
 
 ---
@@ -220,13 +234,13 @@ AGI 侧**不复制完整规则引擎**，采用以下策略之一（见第 6 章
 
 | 方案 | 数据存放 | 权限执行方 | 适用场景 |
 |------|----------|------------|----------|
-| **A. 运行时委托检索（推荐）** | 专题库留在档案馆 | 档案馆规则引擎 | 权限复杂、数据动态、规模大 |
+| **A. HTTP 连接器委托检索（推荐）** | 专题资料留在档案馆 | 档案馆规则引擎 | 权限复杂、数据动态、规模大 |
 | **B. 同步入库 + ES 过滤** | 同步到 AGI ES | AGI 按 metadata filter | 规模可控、规则以字段过滤为主 |
-| **C. 混合模式（推荐落地）** | 规范库在 AGI，专题库运行时 | 分层 | 生产环境默认 |
+| **C. 混合模式（推荐落地）** | 规范资料在 AGI，专题资料留在档案馆 | 分层 | 生产环境默认 |
 
-### 6.2 方案 A：运行时委托档案馆检索（推荐）
+### 6.2 方案 A：HTTP 连接器委托档案馆检索（推荐）
 
-专题库**不整库同步**（或仅同步无敏感权限的规范文档）。
+专题资料**不整批同步**（或仅同步无敏感权限的规范资料）。
 
 ```
 用户提问
@@ -273,11 +287,11 @@ X-AGI-Unit-Id: ...
 **优点：** 与档案馆权限 100% 一致；角色「看全部」等复杂规则无需在 AGI 重写。  
 **缺点：** 依赖档案馆在线；向量检索在档案馆 ES 完成。
 
-对应平台设计文档中的 **「外部资料源」** 模式。
+对应通过连接器调用档案馆检索 API 的接入模式。
 
 ### 6.3 方案 B：同步入库 + ES ACL 过滤
 
-适合：专题库规模可控、需 AGI 侧高性能向量检索、权限规则以字段过滤为主。
+适合：专题资料规模可控、需 AGI 侧高性能向量检索、权限规则以字段过滤为主。
 
 **入库流程：**
 
@@ -333,8 +347,8 @@ ES 查询示例：
 
 | 资料类型 | 存储 | 权限 |
 |----------|------|------|
-| 规范、制度、编研背景知识 | AGI 内部知识库 | 平台 `asset_grant` |
-| 档案专题库（动态、细粒度权限） | 外部资料源 / 档案馆 ES | 档案馆规则引擎 |
+| 规范、制度、编研背景知识 | AGI 内部资料库 | 平台入口授权 |
+| 档案专题资料（动态、细粒度权限） | 档案馆 ES / 检索 API | 档案馆规则引擎 |
 | 用户选定若干条档案编研 | 运行时按 ID 拉取 + 临时切片 | 档案馆按 ID 鉴权 |
 | 高频稳定专题（可选） | 增量同步到 AGI + ACL 快照 | 平台 grant + ES filter |
 
@@ -349,22 +363,22 @@ sequenceDiagram
   participant U as 用户
   participant Chat as AGI Chat/开放API
   participant Bot as BotService
-  participant KB as KnowledgeBaseService
+  participant WF as AGI Workflow
   participant Archive as 档案馆检索API
 
   U->>Chat: 提问
   Chat->>Bot: streamChat(botId, message, context)
-  Bot->>KB: 第一层 asset_grant 校验
-  alt 内部知识库
-    KB->>KB: ES/PG 向量检索
-  else 档案专题库 RUNTIME
-    KB->>Archive: POST /archive/search + 用户上下文
+  Bot->>WF: 执行工作流
+  alt 内部资料库
+    WF->>WF: ES/PG 向量检索
+  else 档案专题资料
+    WF->>Archive: POST /archive/search + 用户上下文
     Archive->>Archive: 规则引擎过滤
-    Archive-->>KB: 已授权条目列表
-  else 档案专题库 SYNC
-    KB->>KB: resolveAclFilter + ES 检索
+    Archive-->>WF: 已授权条目列表
+  else 同步资料
+    WF->>WF: ACL filter + ES 检索
   end
-  KB-->>Bot: KnowledgeSearchResult[]
+  WF-->>Bot: 检索结果[]
   Bot-->>U: 回答 + 引用（档号/题名）
 ```
 
@@ -392,11 +406,11 @@ POST /api/open/knowledge-bases/{id}/search
 
 ## 8. 同步策略（方案 B 补充）
 
-| syncMode | 说明 |
+| 同步方式 | 说明 |
 |----------|------|
-| `RUNTIME` | 不同步入库，每次检索调档案馆 API |
+| `HTTP_CONNECTOR` | 不同步入库，每次通过连接器调档案馆 API |
 | `INCREMENTAL` | 按 `lastModified` 增量同步条目与权限快照 |
-| `FULL` | 全量重建（专题库初始化或权限模型变更） |
+| `FULL` | 全量重建（专题资料初始化或权限模型变更） |
 
 同步时需处理：
 
@@ -410,11 +424,10 @@ POST /api/open/knowledge-bases/{id}/search
 
 | 模块 | 关系 |
 |------|------|
-| `agi_asset_grant` | 继续管知识库级 USE 权限，不变 |
-| `KnowledgeRetrievalNodeExecutor` | 扩展：按知识库 `sourceType` 分支 RUNTIME / SYNC 检索 |
+| 入口授权能力 | 继续管 Bot / 应用可用范围，不变 |
+| `HTTP_TOOL` + 连接器 | 方案 A 实现载体 |
 | `ElasticsearchVectorStoreClient` | 扩展：search 支持 `aclFilters` 参数 |
-| 外部资料源连接器 | 方案 A 的实现载体 |
-| 智能编研 | 主题库作 `EXTERNAL_CORPUS`，规范库作 `INTERNAL_KNOWLEDGE_BASE` |
+| 智能编研 | 专题资料作外部语料，规范资料作内部资料库 |
 
 ---
 
@@ -424,20 +437,20 @@ POST /api/open/knowledge-bases/{id}/search
 
 | 阶段 | 内容 | 优先级 |
 |------|------|--------|
-| P0 | 档案馆提供「已授权检索 API」；AGI 知识库检索节点支持 RUNTIME 模式 | 高 |
-| P1 | 知识库/文档表扩展 `sourceType`、`metadata`、`externalId` | 高 |
+| P0 | 档案馆提供「已授权检索 API」；AGI 工作流接入 `HTTP_TOOL` | 高 |
+| P1 | Bot / 工作流参数、专题关联字段、返回结果映射 | 高 |
 | P2 | ES 索引扩展 ACL 字段 + `resolveAclFilter` | 中 |
 | P3 | 增量同步任务、权限变更重索引 | 中 |
-| P4 | Admin 专题库绑定、同步状态展示 | 低 |
+| P4 | Admin 专题绑定、同步状态展示 | 低 |
 
 ### 10.2 决策建议
 
 | 问题 | 建议 |
 |------|------|
-| 专题库要不要整库同步进 AGI？ | **默认不要**；优先方案 A/C |
+| 专题资料要不要整批同步进 AGI？ | **默认不要**；优先方案 A/C |
 | 记录级权限谁算？ | **档案馆规则引擎**；AGI 只做 filter 或委托检索 |
-| 平台 asset_grant 还要吗？ | **要**；管「能不能用这个库」 |
-| 规范类文档放哪？ | AGI 内部知识库，无条级档案权限 |
+| 入口授权还要吗？ | **要**；管「能不能用这个 Bot / 应用入口」 |
+| 规范类文档放哪？ | AGI 内部资料库，无条级档案权限 |
 
 ---
 
@@ -454,4 +467,6 @@ POST /api/open/knowledge-bases/{id}/search
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
-| 2026-06-15 | v1.0 | 首版：档案专题库存储结构与两层权限方案 |
+| 2026-06-25 | v1.2 | 新增术语约定，统一“专题 / 专题资料 / 入口授权 / 档案馆检索 API”等表述 |
+| 2026-06-25 | v1.1 | 收敛为 `HTTP_TOOL` + 连接器接入表述，弱化知识库内核化描述 |
+| 2026-06-15 | v1.0 | 首版：档案专题资料存储结构与两层权限方案 |

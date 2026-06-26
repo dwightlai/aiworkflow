@@ -171,6 +171,10 @@ public class AuthAdminService {
         return listOrganizationsForTenant(tenantAdminGuard.currentTenantId());
     }
 
+    public String currentTenantId() {
+        return tenantAdminGuard.currentTenantId();
+    }
+
     public List<OrganizationEntity> listOrganizationsForTenant(String tenantId) {
         ensureTenantAccess(tenantId);
         findTenantOrThrow(tenantId);
@@ -180,6 +184,44 @@ public class AuthAdminService {
                 .orderByAsc(OrganizationEntity::getPath)
                 .orderByAsc(OrganizationEntity::getSortOrder)
                 .orderByAsc(OrganizationEntity::getCode));
+    }
+
+    public long countOrganizationsForTenant(String tenantId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
+        return organizationMapper.selectCount(new LambdaQueryWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getTenantId, tenantId)
+                .ne(OrganizationEntity::getStatus, "DELETED"));
+    }
+
+    public List<OrganizationEntity> listOrganizationChildrenForTenant(String tenantId, String parentId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
+        LambdaQueryWrapper<OrganizationEntity> wrapper = new LambdaQueryWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getTenantId, tenantId)
+                .ne(OrganizationEntity::getStatus, "DELETED");
+        if (parentId == null || parentId.isBlank()) {
+            wrapper.and(query -> query.isNull(OrganizationEntity::getParentId)
+                    .or()
+                    .eq(OrganizationEntity::getParentId, ""));
+        } else {
+            wrapper.eq(OrganizationEntity::getParentId, parentId);
+        }
+        List<OrganizationEntity> organizations = organizationMapper.selectList(wrapper
+                .orderByAsc(OrganizationEntity::getSortOrder)
+                .orderByAsc(OrganizationEntity::getCode)
+                .orderByAsc(OrganizationEntity::getName));
+        for (OrganizationEntity organization : organizations) {
+            organization.setHasChildren(hasOrganizationChildrenForTenant(tenantId, organization.getId()));
+        }
+        return organizations;
+    }
+
+    private boolean hasOrganizationChildrenForTenant(String tenantId, String organizationId) {
+        return organizationMapper.selectCount(new LambdaQueryWrapper<OrganizationEntity>()
+                .eq(OrganizationEntity::getTenantId, tenantId)
+                .eq(OrganizationEntity::getParentId, organizationId)
+                .ne(OrganizationEntity::getStatus, "DELETED")) > 0;
     }
 
     public List<RoleEntity> listRoles() {
@@ -200,9 +242,42 @@ public class AuthAdminService {
     }
 
     public List<AuthUserPrincipal> listUsersForTenant(String tenantId) {
+        return listUsersForTenant(tenantId, null);
+    }
+
+    public long countUsersForTenant(String tenantId) {
         ensureTenantAccess(tenantId);
         findTenantOrThrow(tenantId);
+        return userMapper.selectCount(new LambdaQueryWrapper<UserEntity>()
+                .eq(UserEntity::getTenantId, tenantId)
+                .ne(UserEntity::getStatus, "DELETED"));
+    }
+
+    public List<AuthUserPrincipal> listUsersForTenant(String tenantId, String organizationId) {
+        ensureTenantAccess(tenantId);
+        findTenantOrThrow(tenantId);
+        if (organizationId == null || organizationId.isBlank()) {
+            return userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                            .eq(UserEntity::getTenantId, tenantId)
+                            .ne(UserEntity::getStatus, "DELETED")
+                            .orderByAsc(UserEntity::getSortOrder)
+                            .orderByAsc(UserEntity::getUsername))
+                    .stream()
+                    .map(this::toPrincipal)
+                    .toList();
+        }
+        requireOrganizationForTenant(tenantId, organizationId);
+        List<String> userIds = userOrganizationMapper.selectList(new LambdaQueryWrapper<UserOrganizationEntity>()
+                        .eq(UserOrganizationEntity::getOrganizationId, organizationId))
+                .stream()
+                .map(UserOrganizationEntity::getUserId)
+                .distinct()
+                .toList();
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
         return userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .in(UserEntity::getId, userIds)
                         .eq(UserEntity::getTenantId, tenantId)
                         .ne(UserEntity::getStatus, "DELETED")
                         .orderByAsc(UserEntity::getSortOrder)

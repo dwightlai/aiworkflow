@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -37,8 +38,19 @@ public class TenantScopedAdminController {
     }
 
     @GetMapping("/organizations")
-    public ApiResponse<AuthAdminController.PageResponse<OrganizationEntity>> listOrganizations(@PathVariable String tenantId) {
-        List<OrganizationEntity> organizations = authAdminService.listOrganizationsForTenant(tenantId);
+    public ApiResponse<AuthAdminController.PageResponse<OrganizationEntity>> listOrganizations(
+            @PathVariable String tenantId,
+            @RequestParam(required = false) String parentId,
+            @RequestParam(defaultValue = "false") boolean childrenOnly,
+            @RequestParam(defaultValue = "false") boolean countOnly
+    ) {
+        if (countOnly) {
+            long total = authAdminService.countOrganizationsForTenant(tenantId);
+            return ApiResponse.success(new AuthAdminController.PageResponse<>(List.of(), total));
+        }
+        List<OrganizationEntity> organizations = childrenOnly
+                ? authAdminService.listOrganizationChildrenForTenant(tenantId, parentId)
+                : authAdminService.listOrganizationsForTenant(tenantId);
         return ApiResponse.success(new AuthAdminController.PageResponse<>(organizations, organizations.size()));
     }
 
@@ -129,8 +141,16 @@ public class TenantScopedAdminController {
     }
 
     @GetMapping("/users")
-    public ApiResponse<AuthAdminController.PageResponse<AuthUserPrincipal>> listUsers(@PathVariable String tenantId) {
-        List<AuthUserPrincipal> users = authAdminService.listUsersForTenant(tenantId);
+    public ApiResponse<AuthAdminController.PageResponse<AuthUserPrincipal>> listUsers(
+            @PathVariable String tenantId,
+            @RequestParam(required = false) String organizationId,
+            @RequestParam(defaultValue = "false") boolean countOnly
+    ) {
+        if (countOnly) {
+            long total = authAdminService.countUsersForTenant(tenantId);
+            return ApiResponse.success(new AuthAdminController.PageResponse<>(List.of(), total));
+        }
+        List<AuthUserPrincipal> users = authAdminService.listUsersForTenant(tenantId, organizationId);
         return ApiResponse.success(new AuthAdminController.PageResponse<>(users, users.size()));
     }
 

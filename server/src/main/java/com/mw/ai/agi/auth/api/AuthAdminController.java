@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -56,8 +57,19 @@ public class AuthAdminController {
     }
 
     @GetMapping("/organizations")
-    public ApiResponse<PageResponse<OrganizationEntity>> listOrganizations() {
-        List<OrganizationEntity> organizations = authAdminService.listOrganizations();
+    public ApiResponse<PageResponse<OrganizationEntity>> listOrganizations(
+            @RequestParam(required = false) String parentId,
+            @RequestParam(defaultValue = "false") boolean childrenOnly,
+            @RequestParam(defaultValue = "false") boolean countOnly
+    ) {
+        String tenantId = authAdminService.currentTenantId();
+        if (countOnly) {
+            long total = authAdminService.countOrganizationsForTenant(tenantId);
+            return ApiResponse.success(new PageResponse<>(List.of(), total));
+        }
+        List<OrganizationEntity> organizations = childrenOnly
+                ? authAdminService.listOrganizationChildrenForTenant(tenantId, parentId)
+                : authAdminService.listOrganizations();
         return ApiResponse.success(new PageResponse<>(organizations, organizations.size()));
     }
 
@@ -130,8 +142,16 @@ public class AuthAdminController {
     }
 
     @GetMapping("/users")
-    public ApiResponse<PageResponse<AuthUserPrincipal>> listUsers() {
-        List<AuthUserPrincipal> users = authAdminService.listUsers();
+    public ApiResponse<PageResponse<AuthUserPrincipal>> listUsers(
+            @RequestParam(required = false) String organizationId,
+            @RequestParam(defaultValue = "false") boolean countOnly
+    ) {
+        String tenantId = authAdminService.currentTenantId();
+        if (countOnly) {
+            long total = authAdminService.countUsersForTenant(tenantId);
+            return ApiResponse.success(new PageResponse<>(List.of(), total));
+        }
+        List<AuthUserPrincipal> users = authAdminService.listUsersForTenant(tenantId, organizationId);
         return ApiResponse.success(new PageResponse<>(users, users.size()));
     }
 

@@ -1,5 +1,6 @@
 package com.mw.ai.agi.auth.persistence;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -21,6 +22,8 @@ public class OrganizationEntity {
     private String status;
     private Instant createdAt;
     private Instant updatedAt;
+    @TableField(exist = false)
+    private Boolean hasChildren;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -48,4 +51,6 @@ public class OrganizationEntity {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public Boolean getHasChildren() { return hasChildren; }
+    public void setHasChildren(Boolean hasChildren) { this.hasChildren = hasChildren; }
 }

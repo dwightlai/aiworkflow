@@ -14,15 +14,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Drawer, Form, Input, InputNumber, Modal, Select, Space, Statistic, Table, Tabs, Tag, Tree, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import type { DataNode, EventDataNode } from 'antd/es/tree';
+import { useMemo, useState } from 'react';
 import { resolveIdentityTenantId } from '../../api/auth';
 import {
+  countOrganizations,
+  countUsers,
   createOrganization,
   createRole,
   createUser,
   deleteOrganization,
   deleteRole,
   deleteUser,
+  listOrganizationChildren,
   listOrganizations,
   listRoles,
   listUsers,
@@ -73,29 +77,28 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
   const [roleDrawer, setRoleDrawer] = useState<RoleDrawerState | null>(null);
   const [passwordUser, setPasswordUser] = useState<IdentityUser | null>(null);
   const [selectedUserOrganizationId, setSelectedUserOrganizationId] = useState<string>('ALL');
-  const [expandedUserOrganizationIds, setExpandedUserOrganizationIds] = useState<React.Key[]>(['ALL']);
-  const [userOrganizationTreeTouched, setUserOrganizationTreeTouched] = useState(false);
+  const [expandedUserOrganizationIds, setExpandedUserOrganizationIds] = useState<React.Key[]>([]);
   const [batchSortOpen, setBatchSortOpen] = useState(false);
   const [batchSortItems, setBatchSortItems] = useState<BatchSortItem[]>([]);
 
-  const organizationsQuery = useQuery({ queryKey: ['identity', scopeKey, 'organizations'], queryFn: () => listOrganizations(effectiveTenantId) });
+  const organizationCountQuery = useQuery({ queryKey: ['identity', scopeKey, 'organizations', 'count'], queryFn: () => countOrganizations(effectiveTenantId) });
+  const userCountQuery = useQuery({ queryKey: ['identity', scopeKey, 'users', 'count'], queryFn: () => countUsers(effectiveTenantId) });
+  const organizationOptionsQuery = useQuery({
+    queryKey: ['identity', scopeKey, 'organizations', 'options'],
+    enabled: Boolean(orgDrawer || userDrawer || roleDrawer),
+    queryFn: () => listOrganizations(effectiveTenantId)
+  });
   const rolesQuery = useQuery({ queryKey: ['identity', scopeKey, 'roles'], queryFn: () => listRoles(effectiveTenantId) });
-  const usersQuery = useQuery({ queryKey: ['identity', scopeKey, 'users'], queryFn: () => listUsers(effectiveTenantId) });
+  const usersQuery = useQuery({
+    queryKey: ['identity', scopeKey, 'users', selectedUserOrganizationId],
+    enabled: activeTab === 'users' && selectedUserOrganizationId !== 'ALL',
+    queryFn: () => listUsers(effectiveTenantId, selectedUserOrganizationId)
+  });
 
-  const organizations = organizationsQuery.data?.items ?? [];
+  const organizationOptions = (organizationOptionsQuery.data?.items ?? []).map((org) => ({ value: org.id, label: `${org.name} / ${org.code}` }));
   const roles = rolesQuery.data?.items ?? [];
-  const users = usersQuery.data?.items ?? [];
-  const organizationOptions = organizations.map((org) => ({ value: org.id, label: `${org.name} / ${org.code}` }));
   const roleOptions = roles.map((role) => ({ value: role.code, label: `${role.name} / ${role.code}` }));
-  const visibleUsers = sortUsers(selectedUserOrganizationId === 'ALL'
-    ? users
-    : users.filter((user) => (user.organizationIds ?? user.unitIds ?? []).includes(selectedUserOrganizationId)));
-
-  useEffect(() => {
-    if (!userOrganizationTreeTouched && organizations.length > 0) {
-      setExpandedUserOrganizationIds(['ALL', ...organizations.map((org) => org.id)]);
-    }
-  }, [organizations, userOrganizationTreeTouched]);
+  const visibleUsers = selectedUserOrganizationId === 'ALL' ? [] : sortUsers(usersQuery.data?.items ?? []);
 
   const invalidateIdentity = async () => queryClient.invalidateQueries({ queryKey: ['identity'] });
 
@@ -247,12 +250,12 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
       </div>
 
       <div style={metricRowStyle}>
-        <Metric title="组织" value={organizations.length} icon={<ApartmentOutlined />} />
-        <Metric title="用户" value={users.length} icon={<UserOutlined />} />
+        <Metric title="组织" value={organizationCountQuery.data ?? 0} icon={<ApartmentOutlined />} />
+        <Metric title="用户" value={userCountQuery.data ?? 0} icon={<UserOutlined />} />
         <Metric title="角色" value={roles.length} icon={<SafetyCertificateOutlined />} />
       </div>
 
-      {hasError([organizationsQuery, rolesQuery, usersQuery]) ? (
+      {hasError([organizationCountQuery, userCountQuery, rolesQuery, usersQuery]) ? (
         <Alert type="error" showIcon message="组织用户数据加载失败" style={{ marginBottom: 12 }} />
       ) : null}
 
@@ -267,7 +270,7 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
               children: (
                 <>
                   <Toolbar><Button type="primary" icon={<PlusOutlined />} onClick={openCreateOrg}>新增组织</Button></Toolbar>
-                  <OrganizationTable organizations={organizations} loading={organizationsQuery.isLoading} onEdit={openEditOrg} onToggleStatus={(org) => saveOrgMutation.mutate({ ...org, status: org.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' })} onDelete={(org) => deleteOrgMutation.mutate(org.id)} />
+                  <OrganizationTable tenantId={effectiveTenantId} onEdit={openEditOrg} onToggleStatus={(org) => saveOrgMutation.mutate({ ...org, status: org.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' })} onDelete={(org) => deleteOrgMutation.mutate(org.id)} />
                 </>
               )
             },
@@ -276,7 +279,7 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
               label: '用户',
               children: (
                 <>
-                  <UserManagementPanel organizations={organizations} expandedOrganizationIds={expandedUserOrganizationIds} selectedOrganizationId={selectedUserOrganizationId} users={visibleUsers} loading={usersQuery.isLoading} onExpandOrganizations={(keys) => { setUserOrganizationTreeTouched(true); setExpandedUserOrganizationIds(keys); }} onSelectOrganization={setSelectedUserOrganizationId} onCreate={openCreateUser} onBatchSort={openBatchSort} onEdit={openEditUser} onStatus={(user, status) => updateUserStatusMutation.mutate({ userId: user.id, status })} onResetPassword={setPasswordUser} onDelete={(user) => deleteUserMutation.mutate(user.id)} />
+                  <UserManagementPanel tenantId={effectiveTenantId} expandedOrganizationIds={expandedUserOrganizationIds} selectedOrganizationId={selectedUserOrganizationId} users={visibleUsers} loading={usersQuery.isLoading} onExpandOrganizations={setExpandedUserOrganizationIds} onSelectOrganization={setSelectedUserOrganizationId} onCreate={openCreateUser} onBatchSort={openBatchSort} onEdit={openEditUser} onStatus={(user, status) => updateUserStatusMutation.mutate({ userId: user.id, status })} onResetPassword={setPasswordUser} onDelete={(user) => deleteUserMutation.mutate(user.id)} />
                 </>
               )
             },
@@ -379,8 +382,22 @@ export function IdentityOrganizationPage({ defaultTab = 'organizations', tenantI
   );
 }
 
-function OrganizationTable({ organizations, loading, onEdit, onToggleStatus, onDelete }: { organizations: Organization[]; loading: boolean; onEdit: (org: Organization) => void; onToggleStatus: (org: Organization) => void; onDelete: (org: Organization) => void }) {
-  const columns: ColumnsType<Organization> = [
+function OrganizationTable({ tenantId, onEdit, onToggleStatus, onDelete }: { tenantId: string; onEdit: (org: Organization) => void; onToggleStatus: (org: Organization) => void; onDelete: (org: Organization) => void }) {
+  const rootsQuery = useQuery({ queryKey: ['identity', tenantId, 'organizations', 'children', 'ROOT'], queryFn: () => listOrganizationChildren(tenantId) });
+  const [loadedChildren, setLoadedChildren] = useState<Record<string, Organization[]>>({});
+
+  const tableData = useMemo(
+    () => (rootsQuery.data?.items ?? []).map((org) => toOrganizationTableRow(org, loadedChildren)),
+    [loadedChildren, rootsQuery.data?.items]
+  );
+
+  const loadChildren = async (organizationId: string) => {
+    if (loadedChildren[organizationId]) return;
+    const response = await listOrganizationChildren(tenantId, organizationId);
+    setLoadedChildren((current) => ({ ...current, [organizationId]: response.items }));
+  };
+
+  const columns: ColumnsType<Organization & { children?: Organization[] }> = [
     { title: '组织名称', dataIndex: 'name' },
     { title: '编码', dataIndex: 'code' },
     { title: '类型', dataIndex: 'orgType', render: tag },
@@ -388,19 +405,46 @@ function OrganizationTable({ organizations, loading, onEdit, onToggleStatus, onD
     { title: '状态', dataIndex: 'status', render: statusTag },
     { title: '操作', width: 250, render: (_, org) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => onEdit(org)}>编辑</Button><Button size="small" onClick={() => onToggleStatus(org)}>{org.status === 'ACTIVE' ? '停用' : '启用'}</Button><ConfirmDelete onConfirm={() => onDelete(org)} /></Space> }
   ];
-  return <Table rowKey="id" columns={columns} dataSource={buildOrganizationTree(organizations)} loading={loading} pagination={false} size="middle" />;
+
+  return (
+    <Table
+      rowKey="id"
+      columns={columns}
+      dataSource={tableData}
+      loading={rootsQuery.isLoading}
+      pagination={false}
+      size="middle"
+      expandable={{
+        onExpand: (expanded, record) => {
+          if (expanded) void loadChildren(record.id);
+        }
+      }}
+    />
+  );
 }
 
-function UserManagementPanel({ organizations, expandedOrganizationIds, selectedOrganizationId, users, loading, onExpandOrganizations, onSelectOrganization, onCreate, onBatchSort, onEdit, onStatus, onResetPassword, onDelete }: { organizations: Organization[]; expandedOrganizationIds: React.Key[]; selectedOrganizationId: string; users: IdentityUser[]; loading: boolean; onExpandOrganizations: (keys: React.Key[]) => void; onSelectOrganization: (organizationId: string) => void; onCreate: () => void; onBatchSort: () => void; onEdit: (user: IdentityUser) => void; onStatus: (user: IdentityUser, status: string) => void; onResetPassword: (user: IdentityUser) => void; onDelete: (user: IdentityUser) => void }) {
+function UserManagementPanel({ tenantId, expandedOrganizationIds, selectedOrganizationId, users, loading, onExpandOrganizations, onSelectOrganization, onCreate, onBatchSort, onEdit, onStatus, onResetPassword, onDelete }: { tenantId: string; expandedOrganizationIds: React.Key[]; selectedOrganizationId: string; users: IdentityUser[]; loading: boolean; onExpandOrganizations: (keys: React.Key[]) => void; onSelectOrganization: (organizationId: string) => void; onCreate: () => void; onBatchSort: () => void; onEdit: (user: IdentityUser) => void; onStatus: (user: IdentityUser, status: string) => void; onResetPassword: (user: IdentityUser) => void; onDelete: (user: IdentityUser) => void }) {
+  const [treeData, setTreeData] = useState<DataNode[]>([{ key: 'ALL', title: '全部组织', isLeaf: false }]);
+
+  const onLoadData = (node: EventDataNode<DataNode>) => {
+    const { key, children } = node;
+    if (children && children.length > 0) return Promise.resolve();
+    const parentId = key === 'ALL' ? undefined : String(key);
+    return listOrganizationChildren(tenantId, parentId).then((response) => {
+      setTreeData((origin) => updateOrganizationTreeData(origin, key, response.items.map(toOrganizationTreeNode)));
+    });
+  };
+
   return (
     <div style={userManagementStyle}>
-      <aside style={userTreeStyle}>
+      <aside style={userTreeStyle} data-testid="user-organization-tree">
         <Typography.Text strong>单位部门</Typography.Text>
         <Tree
           blockNode
+          loadData={onLoadData}
           expandedKeys={expandedOrganizationIds}
           selectedKeys={[selectedOrganizationId]}
-          treeData={buildUserOrganizationTree(organizations)}
+          treeData={treeData}
           onExpand={(keys) => onExpandOrganizations(keys)}
           onSelect={(keys) => onSelectOrganization(String(keys[0] ?? 'ALL'))}
           style={{ marginTop: 12 }}
@@ -413,7 +457,11 @@ function UserManagementPanel({ organizations, expandedOrganizationIds, selectedO
             <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>新增用户</Button>
           </Space>
         </Toolbar>
-        <UserTable users={users} loading={loading} onEdit={onEdit} onStatus={onStatus} onResetPassword={onResetPassword} onDelete={onDelete} />
+        {selectedOrganizationId === 'ALL' ? (
+          <Typography.Text type="secondary">请选择单位或部门查看用户</Typography.Text>
+        ) : (
+          <UserTable users={users} loading={loading} onEdit={onEdit} onStatus={onStatus} onResetPassword={onResetPassword} onDelete={onDelete} />
+        )}
       </div>
     </div>
   );
@@ -460,43 +508,31 @@ function ConfirmDelete({ onConfirm }: { onConfirm: () => void }) {
   return <Button danger size="small" icon={<DeleteOutlined />} onClick={onConfirm}>删除</Button>;
 }
 
-function buildOrganizationTree(organizations: Organization[]): Organization[] {
-  const byId = new Map<string, Organization & { children?: Organization[] }>();
-  organizations.forEach((org) => byId.set(org.id, { ...org, children: [] }));
-  const roots: Array<Organization & { children?: Organization[] }> = [];
-  byId.forEach((org) => {
-    if (org.parentId && byId.has(org.parentId)) byId.get(org.parentId)?.children?.push(org);
-    else roots.push(org);
-  });
-  byId.forEach((org) => {
-    if (org.children?.length === 0) delete org.children;
-    else org.children?.sort(compareOrganizations);
-  });
-  return roots.sort(compareOrganizations);
+function toOrganizationTableRow(org: Organization, loadedChildren: Record<string, Organization[]>): Organization & { children?: Organization[] } {
+  const children = loadedChildren[org.id];
+  if (children) {
+    return { ...org, children: children.map((child) => toOrganizationTableRow(child, loadedChildren)) };
+  }
+  if (org.hasChildren) {
+    return { ...org, children: [] };
+  }
+  return org;
 }
 
-function buildUserOrganizationTree(organizations: Organization[]) {
-  return [
-    {
-      key: 'ALL',
-      title: '全部组织',
-      children: buildOrganizationTree(organizations).map(toTreeNode)
-    }
-  ];
-}
-
-function toTreeNode(org: Organization & { children?: Organization[] }): { key: string; title: string; children?: ReturnType<typeof toTreeNode>[] } {
+function toOrganizationTreeNode(org: Organization): DataNode {
   return {
     key: org.id,
     title: org.name,
-    children: org.children?.map(toTreeNode)
+    isLeaf: !org.hasChildren
   };
 }
 
-function compareOrganizations(left: Organization, right: Organization) {
-  return (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
-    || left.code.localeCompare(right.code)
-    || left.name.localeCompare(right.name);
+function updateOrganizationTreeData(list: DataNode[], key: React.Key, children: DataNode[]): DataNode[] {
+  return list.map((node) => {
+    if (node.key === key) return { ...node, children };
+    if (node.children) return { ...node, children: updateOrganizationTreeData(node.children, key, children) };
+    return node;
+  });
 }
 
 function sortUsers(users: IdentityUser[]) {

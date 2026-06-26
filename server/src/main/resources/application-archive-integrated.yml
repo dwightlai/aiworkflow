@@ -1,0 +1,25 @@
+spring:
+  config:
+    activate:
+      on-profile: archive-integrated
+
+agi:
+  identity:
+    mode: remote
+    fixed-tenant-id: tenant_default
+    role-mapping:
+      archive_admin: asset_manager
+      archive_config: asset_manager
+      archive_user: app_user
+    remote:
+      allow-break-glass-login: true
+      disable-local-org-admin: true
+    adapter:
+      auth: unconfigured
+      organization: unconfigured
+
+third-party:
+  auth:
+    base-url: ${AUTH_SERVICE_BASE_URL:}
+  organization:
+    base-url: ${ORGANIZATION_SERVICE_BASE_URL:}

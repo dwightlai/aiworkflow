@@ -39,13 +39,17 @@ export function AdminShell({
         background: '#f5f6f8',
         display: 'grid',
         gridTemplateColumns: collapsed ? '72px 1fr' : '216px 1fr',
-        minHeight: '100vh'
+        height: '100vh',
+        overflow: 'hidden'
       }}
     >
       <aside
         style={{
           background: '#fff',
           borderRight: '1px solid #e8edf4',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
           overflow: 'hidden',
           padding: collapsed ? '16px 8px' : '18px 12px'
         }}
@@ -53,6 +57,7 @@ export function AdminShell({
         <div
           style={{
             color: '#1f2a44',
+            flexShrink: 0,
             fontSize: collapsed ? 18 : 26,
             fontWeight: 800,
             letterSpacing: 0.2,
@@ -63,55 +68,57 @@ export function AdminShell({
           <span style={{ color: '#1062ff' }}>AI</span>{collapsed ? '' : 'Flow'}
         </div>
 
-        {visibleMenuGroups.map((group) => (
-          <div key={group.title}>
-            {!collapsed ? (
-              <div style={{ color: '#b7bfcc', fontSize: 13, margin: '18px 10px 10px' }}>
-                {group.title}
-              </div>
-            ) : null}
-            {group.items.map((item) => {
-              const active = item.path === currentPath;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onNavigate?.(item.path)}
-                  style={{
-                    background: active ? '#eef5ff' : 'transparent',
-                    border: 0,
-                    borderRadius: 8,
-                    color: active ? '#0066ff' : '#3b4658',
-                    cursor: 'pointer',
-                    display: 'block',
-                    font: 'inherit',
-                    fontWeight: active ? 650 : 400,
-                    margin: '4px 6px',
-                    overflow: 'hidden',
-                    padding: collapsed ? '11px 6px' : '11px 12px',
-                    textAlign: 'left',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    width: collapsed ? 44 : 180
-                  }}
-                  title={item.label}
-                >
-                  {collapsed ? item.label.slice(0, 1) : item.label}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {visibleMenuGroups.map((group) => (
+            <div key={group.title}>
+              {!collapsed ? (
+                <div style={{ color: '#b7bfcc', fontSize: 13, margin: '18px 10px 10px' }}>
+                  {group.title}
+                </div>
+              ) : null}
+              {group.items.map((item) => {
+                const active = item.path === currentPath;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => onNavigate?.(item.path)}
+                    style={{
+                      background: active ? '#eef5ff' : 'transparent',
+                      border: 0,
+                      borderRadius: 8,
+                      color: active ? '#0066ff' : '#3b4658',
+                      cursor: 'pointer',
+                      display: 'block',
+                      font: 'inherit',
+                      fontWeight: active ? 650 : 400,
+                      margin: '4px 6px',
+                      overflow: 'hidden',
+                      padding: collapsed ? '11px 6px' : '11px 12px',
+                      textAlign: 'left',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      width: collapsed ? 44 : 180
+                    }}
+                    title={item.label}
+                  >
+                    {collapsed ? item.label.slice(0, 1) : item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </aside>
 
-      <main style={{ minWidth: 0 }}>
+      <main style={{ display: 'flex', flexDirection: 'column', height: '100vh', minWidth: 0, overflow: 'hidden' }}>
         <PageHeader
           breadcrumb={breadcrumb}
           currentUser={currentUser}
           onLogout={onLogout}
           onToggleSidebar={() => setCollapsed((value) => !value)}
         />
-        <div style={{ padding: 24 }}>{children}</div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24 }}>{children}</div>
       </main>
     </div>
   );
