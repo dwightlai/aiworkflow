@@ -35,6 +35,20 @@ public class KnowledgeDocumentFileStorage {
         return Paths.get(storagePath);
     }
 
+    public Optional<Path> resolveExisting(String storagePath) {
+        if (storagePath == null || storagePath.isBlank()) {
+            return Optional.empty();
+        }
+        Path root = Paths.get(storageSettingsService.getEffective().knowledgeDocumentDir())
+                .toAbsolutePath()
+                .normalize();
+        Path candidate = Paths.get(storagePath).toAbsolutePath().normalize();
+        if (!candidate.startsWith(root) || !Files.isRegularFile(candidate)) {
+            return Optional.empty();
+        }
+        return Optional.of(candidate);
+    }
+
     private String sanitizeFileName(String fileName) {
         String normalized = fileName == null || fileName.isBlank() ? "uploaded-document.docx" : fileName.trim();
         return normalized.replaceAll("[\\\\/:*?\"<>|]", "_");

@@ -21,6 +21,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import java.io.IOException;
 import java.util.List;
@@ -57,7 +63,8 @@ public class KnowledgeBaseController {
                 body.retrievalMode(),
                 body.topK(),
                 body.kbType(),
-                body.datasetMode()
+                body.datasetMode(),
+                body.semanticSimilarityThreshold()
         ));
     }
 
@@ -79,7 +86,8 @@ public class KnowledgeBaseController {
                 body.chunkSize(),
                 body.chunkOverlap(),
                 body.retrievalMode(),
-                body.topK()
+                body.topK(),
+                body.semanticSimilarityThreshold()
         ));
     }
 
@@ -102,7 +110,8 @@ public class KnowledgeBaseController {
                 request.content(),
                 request.splitterType(),
                 request.chunkSize(),
-                request.chunkOverlap()
+                request.chunkOverlap(),
+                request.semanticSimilarityThreshold()
         ));
     }
 
@@ -111,7 +120,9 @@ public class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) String splitterType,
             @RequestParam(defaultValue = "0") int chunkSize,
-            @RequestParam(defaultValue = "-1") int chunkOverlap
+            @RequestParam(defaultValue = "-1") int chunkOverlap,
+            @RequestParam(required = false) Double semanticSimilarityThreshold,
+            @RequestParam(required = false) String knowledgeBaseId
     ) throws IOException {
         String fileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
                 ? "uploaded-document"
@@ -122,7 +133,9 @@ public class KnowledgeBaseController {
                 file.getInputStream(),
                 splitterType,
                 chunkSize,
-                chunkOverlap
+                chunkOverlap,
+                semanticSimilarityThreshold,
+                knowledgeBaseId
         ));
     }
 
@@ -131,13 +144,19 @@ public class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "FIXED_LENGTH") String splitterType,
             @RequestParam(defaultValue = "200") int chunkSize,
-            @RequestParam(required = false) String separator
+            @RequestParam(required = false) String separator,
+            @RequestParam(required = false) Double semanticSimilarityThreshold,
+            @RequestParam(required = false) String knowledgeBaseId
     ) throws IOException {
         return ApiResponse.success(knowledgeBaseService.previewTextDocumentFile(
                 fileName(file),
                 file.getContentType(),
                 file.getInputStream(),
-                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(splitterType, chunkSize, separator)
+                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(
+                        splitterType, chunkSize, 0, separator, null,
+                        semanticSimilarityThreshold
+                ),
+                knowledgeBaseId
         ));
     }
 
@@ -163,6 +182,25 @@ public class KnowledgeBaseController {
         return ApiResponse.success(new PageResponse<>(documents, documents.size()));
     }
 
+    @GetMapping("/{id}/documents/{documentId}/original")
+    public ResponseEntity<Resource> downloadOriginalDocument(
+            @PathVariable String id,
+            @PathVariable String documentId,
+            HttpServletRequest request
+    ) {
+        KnowledgeBaseService.OriginalDocumentFile original = knowledgeBaseService.originalDocumentFile(
+                id, documentId, identitySupport.grantContext(request)
+        );
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(original.fileName(), java.nio.charset.StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(original.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentLength(original.path().toFile().length())
+                .body(new FileSystemResource(original.path()));
+    }
+
     @PostMapping("/{id}/documents")
     public ApiResponse<KnowledgeDocument> addDocument(
             @PathVariable String id,
@@ -175,7 +213,8 @@ public class KnowledgeBaseController {
                 request.splitterType(),
                 request.chunkSize(),
                 request.chunkOverlap(),
-                request.datasetId()
+                request.datasetId(),
+                request.semanticSimilarityThreshold()
         ));
     }
 
@@ -206,7 +245,8 @@ public class KnowledgeBaseController {
             @RequestParam(required = false) String splitterType,
             @RequestParam(defaultValue = "0") int chunkSize,
             @RequestParam(defaultValue = "-1") int chunkOverlap,
-            @RequestParam(required = false) String datasetId
+            @RequestParam(required = false) String datasetId,
+            @RequestParam(required = false) Double semanticSimilarityThreshold
     ) throws IOException {
         String fileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
                 ? "uploaded-document"
@@ -219,7 +259,10 @@ public class KnowledgeBaseController {
                 new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(
                         splitterType == null || splitterType.isBlank() ? "FIXED_LENGTH" : splitterType,
                         chunkSize <= 0 ? 200 : chunkSize,
-                        null
+                        Math.max(0, chunkOverlap),
+                        null,
+                        null,
+                        semanticSimilarityThreshold
                 ),
                 datasetId
         ));
@@ -232,14 +275,18 @@ public class KnowledgeBaseController {
             @RequestParam(defaultValue = "FIXED_LENGTH") String splitterType,
             @RequestParam(defaultValue = "200") int chunkSize,
             @RequestParam(required = false) String separator,
-            @RequestParam(required = false) String datasetId
+            @RequestParam(required = false) String datasetId,
+            @RequestParam(required = false) Double semanticSimilarityThreshold
     ) throws IOException {
         return ApiResponse.success(knowledgeBaseService.addTextDocumentFile(
                 id,
                 fileName(file),
                 file.getContentType(),
                 file.getInputStream(),
-                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(splitterType, chunkSize, separator),
+                new com.mw.ai.agi.knowledge.service.KnowledgeSplitRequest(
+                        splitterType, chunkSize, 0, separator, null,
+                        semanticSimilarityThreshold
+                ),
                 datasetId
         ));
     }
@@ -339,7 +386,8 @@ public class KnowledgeBaseController {
             String retrievalMode,
             int topK,
             String kbType,
-            String datasetMode
+            String datasetMode,
+            Double semanticSimilarityThreshold
     ) {
     }
 
@@ -349,7 +397,8 @@ public class KnowledgeBaseController {
             String splitterType,
             int chunkSize,
             int chunkOverlap,
-            String datasetId
+            String datasetId,
+            Double semanticSimilarityThreshold
     ) {
     }
 
@@ -369,7 +418,8 @@ public class KnowledgeBaseController {
             @NotBlank String content,
             String splitterType,
             int chunkSize,
-            int chunkOverlap
+            int chunkOverlap,
+            Double semanticSimilarityThreshold
     ) {
     }
 

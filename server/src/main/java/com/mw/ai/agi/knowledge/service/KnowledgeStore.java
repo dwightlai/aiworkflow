@@ -35,6 +35,8 @@ public interface KnowledgeStore {
 
     void deleteChunks(String knowledgeBaseId, String documentId);
 
+    void deleteChunk(String chunkId);
+
     KnowledgeChunkVector saveChunkVector(KnowledgeChunkVector vector);
 
     List<KnowledgeChunkVector> listChunkVectors(String knowledgeBaseId);

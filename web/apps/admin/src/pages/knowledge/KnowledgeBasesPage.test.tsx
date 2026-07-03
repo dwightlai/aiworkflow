@@ -110,6 +110,19 @@ const knowledgeApiMock = vi.hoisted(() => ({
     enabled: false
   })),
   deleteVectorStoreConfig: vi.fn(async () => undefined),
+  testVectorStoreConnection: vi.fn(async () => ({
+    success: true,
+    storeType: 'MILVUS',
+    serverVersion: '2.6.0',
+    latencyMs: 12,
+    message: 'Connection successful'
+  })),
+  testSavedVectorStoreConnection: vi.fn(async () => ({
+    success: true,
+    storeType: 'MEMORY',
+    latencyMs: 0,
+    message: 'Local memory store'
+  })),
   listKnowledgeDocuments: vi.fn(async () => ({
     items: [
       {
@@ -484,6 +497,23 @@ describe('KnowledgeBasesPage', () => {
     await waitFor(() => {
       expect(knowledgeApiMock.deleteVectorStoreConfig).toHaveBeenCalledWith('vector_1');
     });
+  }, 10000);
+
+  it('shows Milvus and Pgvector provider-specific connection fields', async () => {
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /向量库配置/ }));
+    await userEvent.click(screen.getByRole('button', { name: /新增向量库/ }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '向量库类型' }));
+    await userEvent.click(await screen.findByText('Milvus'));
+
+    expect(await screen.findByLabelText('数据库名')).toHaveValue('default');
+    expect(screen.getByLabelText('集合名')).toHaveValue('agi_knowledge_vectors');
+    expect(screen.getByLabelText('向量维度')).toHaveValue('1536');
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '向量库类型' }));
+    await userEvent.click(await screen.findByText('Pgvector'));
+    expect(await screen.findByLabelText('向量表名')).toHaveValue('agi_knowledge_vectors');
   }, 10000);
 
   it('lists documents, reparses, toggles chunks and deletes documents', async () => {

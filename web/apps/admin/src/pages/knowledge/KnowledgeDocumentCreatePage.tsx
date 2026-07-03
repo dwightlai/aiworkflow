@@ -137,7 +137,12 @@ export function KnowledgeDocumentCreatePage({ knowledgeBaseId }: KnowledgeDocume
       ) : null}
 
       {mode === 'text' ? (
-        <KnowledgeFileUploadWizard knowledgeBaseId={knowledgeBaseId} datasetId={datasetId} mode="text" />
+        <KnowledgeFileUploadWizard
+          knowledgeBaseId={knowledgeBaseId}
+          datasetId={datasetId}
+          mode="text"
+          defaultSemanticSimilarityThreshold={knowledgeBase?.semanticSimilarityThreshold ?? 0.78}
+        />
       ) : null}
 
       {mode === 'table' ? (

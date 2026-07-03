@@ -24,7 +24,12 @@ public record KnowledgeChunk(
         String sourcePosition,
         String citationText,
         String metadataJson,
-        String securityLevel
+        String securityLevel,
+        String logicalChunkId,
+        String parentChunkId,
+        String groupId,
+        String chunkLevel,
+        String sectionPath
 ) {
     public KnowledgeChunk(
             String id,
@@ -38,7 +43,8 @@ public record KnowledgeChunk(
     ) {
         this(
                 id, knowledgeBaseId, documentId, documentName, content, index, enabled, tokenEstimate,
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                id, null, null, "CHILD", null
         );
     }
 
@@ -55,7 +61,34 @@ public record KnowledgeChunk(
                 id, knowledgeBaseId, documentId, documentName, content, index, enabled, tokenEstimate,
                 datasetId, sourceIndexId, topicId, chunkTitle, chunkType, sourceSystem, sourceType, sourceRefId,
                 materialSourceType, materialType, sourceArchiveFileId, sourcePage, sourcePosition, citationText,
-                metadataJson, securityLevel
+                metadataJson, securityLevel, logicalChunkId, parentChunkId, groupId, chunkLevel, sectionPath
+        );
+    }
+
+    public KnowledgeChunk withStructure(
+            String logicalChunkId,
+            String parentChunkId,
+            String groupId,
+            String chunkLevel,
+            String sectionPath,
+            String chunkTitle,
+            String chunkType,
+            String metadataJson
+    ) {
+        return new KnowledgeChunk(
+                id, knowledgeBaseId, documentId, documentName, content, index, enabled, tokenEstimate,
+                datasetId, sourceIndexId, topicId, chunkTitle, chunkType, sourceSystem, sourceType, sourceRefId,
+                materialSourceType, materialType, sourceArchiveFileId, sourcePage, sourcePosition, citationText,
+                metadataJson, securityLevel, logicalChunkId, parentChunkId, groupId, chunkLevel, sectionPath
+        );
+    }
+
+    public KnowledgeChunk withContent(String content, boolean enabled, int tokenEstimate) {
+        return new KnowledgeChunk(
+                id, knowledgeBaseId, documentId, documentName, content, index, enabled, tokenEstimate,
+                datasetId, sourceIndexId, topicId, chunkTitle, chunkType, sourceSystem, sourceType, sourceRefId,
+                materialSourceType, materialType, sourceArchiveFileId, sourcePage, sourcePosition, citationText,
+                metadataJson, securityLevel, logicalChunkId, parentChunkId, groupId, chunkLevel, sectionPath
         );
     }
 }

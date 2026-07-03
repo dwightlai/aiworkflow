@@ -1,0 +1,89 @@
+{
+  "templateType": "archive_project_research",
+  "templateCode": "archive_project_research_docx",
+  "title": "档案数字化建设项目档案编研成果",
+  "projectName": "档案数字化建设项目",
+  "cover": {
+    "organization": "某某集团档案中心",
+    "publishDate": "2026-06",
+    "securityLevel": "内部资料"
+  },
+  "editorNote": "依据项目立项、招采、实施、验收、总结等阶段档案整理形成。",
+  "project": {
+    "name": "档案数字化建设项目",
+    "period": "2021—2023",
+    "responsibleOrg": "档案中心",
+    "overview": "项目围绕存量档案数字化、系统建设和利用服务提升开展。"
+  },
+  "sections": [
+    {
+      "id": "background",
+      "title": "二、建设背景",
+      "type": "text",
+      "content": "说明项目启动背景和业务需求。"
+    },
+    {
+      "id": "approval",
+      "title": "三、立项与决策过程",
+      "type": "text",
+      "content": "梳理立项审批、会议决策和预算安排。"
+    },
+    {
+      "id": "implementation",
+      "title": "四、项目实施过程",
+      "type": "stage_list",
+      "stages": [
+        {
+          "stageName": "启动阶段",
+          "period": "2021-03—2021-06",
+          "items": [
+            {
+              "date": "2021-03-12",
+              "title": "项目立项",
+              "description": "完成立项审批。",
+              "sourceTitle": "项目立项审批表"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "五、重要节点时间轴",
+      "type": "timeline",
+      "events": [
+        {
+          "date": "2021-03-12",
+          "title": "项目立项",
+          "description": "完成立项审批。",
+          "citations": [
+            {
+              "refNo": 1,
+              "sourceTitle": "项目立项审批表"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "acceptance",
+      "title": "六、成果与验收",
+      "type": "text",
+      "content": "说明项目成果、验收结论和应用效果。"
+    },
+    {
+      "id": "summary",
+      "title": "七、经验总结",
+      "type": "text",
+      "content": "总结项目组织、数据治理、质量控制和系统应用经验。"
+    }
+  ],
+  "references": [
+    {
+      "refNo": 1,
+      "title": "项目立项审批表",
+      "sourceType": "项目文件",
+      "archiveCode": "2021-XM-001"
+    }
+  ]
+}

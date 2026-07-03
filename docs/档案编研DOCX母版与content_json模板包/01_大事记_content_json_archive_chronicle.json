@@ -1,0 +1,71 @@
+{
+  "templateType": "archive_chronicle",
+  "templateCode": "archive_chronicle_docx",
+  "title": "某某集团2025年度大事记",
+  "subtitle": "2025年1月—2025年12月",
+  "cover": {
+    "organization": "某某集团档案中心",
+    "publishDate": "2026-01",
+    "securityLevel": "内部资料"
+  },
+  "editorNote": "本大事记依据年度文件、会议纪要、项目档案和新闻资料整理形成。",
+  "timeRange": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  },
+  "summary": "本成果反映2025年度公司经营管理、重大项目、组织建设等重要事项。",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "一、概述",
+      "type": "text",
+      "content": "概述年度总体情况、资料来源和事件筛选标准。"
+    },
+    {
+      "id": "chronicle",
+      "title": "二、大事记正文",
+      "type": "chronicle",
+      "years": [
+        {
+          "year": "2025",
+          "months": [
+            {
+              "month": "1月",
+              "events": [
+                {
+                  "date": "2025-01-08",
+                  "title": "召开年度工作会议",
+                  "description": "部署年度重点任务。",
+                  "eventType": "会议活动",
+                  "importance": "重要",
+                  "citations": [
+                    {
+                      "refNo": 1,
+                      "sourceTitle": "2025年度工作会议纪要",
+                      "page": "2"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analysis",
+      "title": "三、阶段特点分析",
+      "type": "text",
+      "content": "对年度事件进行归纳，提炼阶段特点和发展变化。"
+    }
+  ],
+  "references": [
+    {
+      "refNo": 1,
+      "title": "2025年度工作会议纪要",
+      "sourceType": "会议纪要",
+      "archiveCode": "2025-BG-001",
+      "page": "2"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # AI Workflow 技术手册
 
-> 版本：v2.0  
-> 最后更新：2026-06-17  
+> 版本：v2.1  
+> 最后更新：2026-07-03  
 > 适用代码：`D:\openworkspace\aiworkflow` 当前主目录实现  
 > 定位：研发、实施、运维和二次集成人员的技术参考
 
@@ -38,46 +38,92 @@ flowchart LR
 
 ## 2. 技术栈
 
+本节以当前主目录中的 `server/pom.xml`、`web/package.json`、各前端应用 `package.json` 和运行配置为准。表中版本是项目当前锁定或声明的版本，不是早期设计阶段的建议版本。
+
 ### 2.1 后端
 
-| 层级 | 技术 | 当前实现 |
+| 分类 | 技术与版本 | 项目用途 |
 |---|---|---|
-| 运行时 | Java 17 | `maven-compiler` 使用 Spring Boot 父工程配置，代码面向 JDK 17 |
-| Web 框架 | Spring Boot 3.3.5 | REST API、文件上传、SSE 流式输出 |
-| ORM | MyBatis-Plus 3.5.9 | 管理业务表、工作流、知识库、Bot、编研模板等 |
-| 数据迁移 | Flyway | PostgreSQL 迁移脚本位于 `server/src/main/resources/db/migration/postgresql` |
-| 数据库 | PostgreSQL 为主 | 已保留达梦适配设计和迁移测试基础 |
-| API 文档 | SpringDoc OpenAPI 2.6.0 | `/v3/api-docs`、`/swagger-ui.html` |
-| 安全 | Spring Security | 当前全局放行，保留 Token、第三方应用、租户上下文能力 |
-| 微服务能力 | OpenFeign、Nacos Discovery | 支持接入组织机构、认证等第三方微服务；Nacos 可选启用 |
-| 文档解析 | Apache Tika、Apache POI | 支持 PDF、DOCX、PPTX、XLSX、HTML、MD、TXT 等文本提取 |
+| 语言与运行时 | Java 17 | 后端源码和构建目标统一为 JDK 17；生产包为可执行 Spring Boot JAR |
+| 核心框架 | Spring Boot 3.3.5 | 提供 Web 容器、配置管理、依赖注入、事务、文件上传和应用启动能力 |
+| Web 与参数校验 | Spring MVC、Jakarta Validation | REST API、Multipart 文件上传、SSE 流式响应、请求参数校验 |
+| 持久层 | MyBatis-Plus 3.5.9 | Entity、Mapper、条件查询和业务数据持久化；业务代码不以 `JdbcTemplate` 作为主持久层 |
+| 关系数据库 | PostgreSQL 14+、达梦数据库 | PostgreSQL 是默认部署数据库；达梦通过独立 Profile、驱动配置和迁移目录适配 |
+| 数据库迁移 | Flyway | PostgreSQL 与达梦分别维护版本化 SQL，应用启动时校验并迁移数据库结构 |
+| 安全与身份 | Spring Security、自研 Token/JWT 上下文 | 本地登录、会话令牌、租户上下文、第三方应用、资产授权和审计；可切换远程认证适配 |
+| 微服务集成 | Spring Cloud 2023.0.4、OpenFeign、LoadBalancer | 以 Feign Client 调用组织机构、认证等第三方微服务 |
+| 服务注册 | Spring Cloud Alibaba Nacos Discovery 2023.0.3.3 | 可选注册整个 AGI 应用；单体部署时默认关闭，不强制拆分业务服务 |
+| API 契约 | SpringDoc OpenAPI 2.6.0 | 输出 `/v3/api-docs` 和 `/swagger-ui.html`，供第三方系统及 Java Client 集成 |
+| 文档解析 | Apache Tika 2.9.2、Apache POI 5.2.5 | 抽取 TXT、MD、HTML、DOC/DOCX、PDF、PPT/PPTX、XLS/XLSX 等文件内容 |
+| 向量数据库 | Memory、Elasticsearch、Milvus 2.6 SDK、Pgvector 0.1.6 | 通过统一 Provider 路由写入、检索和删除向量；Milvus、Pgvector 支持独立部署实例 |
+| AI 模型接入 | Provider 适配层、HTTP Client | 统一管理 Chat 与 Embedding 模型，兼容 OpenAI 协议及 DeepSeek、Qwen、Ollama 等配置 |
+| 工作流执行 | 自研轻量 DAG 引擎 | 执行开始、知识库、大模型、问题分类、HTTP、模板、循环、结束等 AI 工作流节点 |
+| 测试 | JUnit 5、Spring Boot Test、H2（测试范围） | 单元测试、服务测试、数据库迁移契约测试和知识库样例回归；H2 不作为生产数据库 |
+
+后端采用领域分包的模块化单体结构。部署时只有一个主进程，保留 Nacos 注册和 Feign 调用能力，既降低独立部署与安检成本，也为后续按领域拆分服务保留边界。
+
+```mermaid
+flowchart LR
+    API["Spring MVC / OpenAPI"] --> Domain["工作流、知识库、模型、Bot、编研等领域服务"]
+    Domain --> MP["MyBatis-Plus"]
+    MP --> PG["PostgreSQL"]
+    MP --> DM["达梦"]
+    Domain --> Model["模型 Provider"]
+    Domain --> Vector["Memory / Elasticsearch / Milvus / Pgvector"]
+    Domain --> Feign["OpenFeign"]
+    Feign --> Third["认证、组织机构等第三方服务"]
+    App["Spring Boot 应用"] -.可选注册.-> Nacos["Nacos"]
+```
 
 ### 2.2 前端
 
-| 层级 | 技术 | 当前实现 |
+| 分类 | 技术与版本 | 项目用途 |
 |---|---|---|
-| 管理端 | React 18、TypeScript、Vite | `web/apps/admin` |
-| Chat 端 | React 18、Ant Design X、Vite | `web/apps/chat`，端口默认 5174 |
-| UI 组件 | Ant Design 5 | 管理端页面、Drawer、表格、表单、步骤向导 |
-| 数据请求 | TanStack React Query | API 请求缓存、加载状态、错误态 |
-| 工作流组件 | 自研轻量设计器 | `workflow-designer-core/react/vue/wc` 多包封装 |
-| 包管理 | pnpm workspace | `web/package.json` 管理多应用与组件包 |
+| 语言 | TypeScript 5.6 | 管理端、Chat 端、工作流 Schema、SDK 和设计器组件的静态类型 |
+| UI 运行时 | React 18.3 | 管理端与 Chat 端的组件渲染和状态驱动界面 |
+| 构建工具 | Vite 5.4 | 开发服务器、HMR、TypeScript 前端构建和生产资源打包 |
+| 管理端 UI | Ant Design 5.21、Ant Design Pro Components 2.8 | 表格、表单、抽屉、步骤向导、权限管理和运营后台页面 |
+| Chat UI | Ant Design X 2.8 | 智能体列表、多轮会话、消息流和生成状态交互 |
+| 服务端状态 | TanStack React Query 5.59 | API 缓存、失效刷新、加载态、错误态和 Mutation 管理 |
+| 本地状态 | Zustand 5 | 设计器及复杂交互中的轻量客户端状态管理 |
+| 工作流画布 | LogicFlow Core 2.x | 节点拖拽、锚点连线、选中、缩放、适配视图和图数据交互 |
+| Markdown | React Markdown 10、Remark GFM 4 | Chat 回复、知识内容和富文本结果展示 |
+| 图表 | ECharts 5.5 | 运行监控、统计分析和可视化结果 |
+| 文档预览 | docx-preview 0.3 | DOCX 原始文档及编研结果的浏览器预览 |
+| 日期处理 | Day.js 1.11 | 时间格式化和日期字段处理 |
+| 测试 | Vitest 2.1、Testing Library、JSDOM | API、组件和用户交互测试 |
+| 包管理 | pnpm workspace | 管理多应用、多框架设计器、Schema 与 SDK 的 Monorepo |
+
+前端不是单一管理页面，而是“应用 + 可集成组件”两层结构：
+
+- `@aiworkflow/admin`：平台管理端，默认端口 `5173`。
+- `@aiworkflow/chat`：面向终端用户的智能体对话端，默认端口 `5174`。
+- `@aiworkflow/embed-widget`：供第三方系统嵌入的轻量对话组件。
+- `@aiworkflow/workflow-schema`：框架无关的流程定义与类型契约。
+- `@aiworkflow/workflow-designer-core`：基于 LogicFlow 的框架无关设计器核心。
+- `@aiworkflow/workflow-designer-react`：React 18 适配层。
+- `@aiworkflow/workflow-designer-vue`：Vue 3 适配层。
+- `@aiworkflow/workflow-designer-wc`：Web Components 适配层，适合未知前端框架的第三方系统。
+- `@aiworkflow/workflow-sdk`：工作流 API 调用与数据交互 SDK。
 
 ### 2.3 工程结构
 
 ```text
 aiworkflow/
-  server/                         Spring Boot 后端
+  server/                         Java 17 / Spring Boot 后端
   web/
-    apps/admin/                   管理端
-    apps/chat/                    独立 Chat 前端
-    packages/workflow-schema/     工作流类型和前端校验
-    packages/workflow-designer-core/
-    packages/workflow-designer-react/
-    packages/workflow-designer-vue/
-    packages/workflow-designer-wc/
-  client/aiworkflow-open-api-client/ Java OpenAPI Feign 客户端
+    apps/admin/                   React 管理端
+    apps/chat/                    React 智能体 Chat 端
+    packages/embed-widget/        第三方嵌入式对话组件
+    packages/workflow-schema/     框架无关流程 Schema
+    packages/workflow-designer-core/ LogicFlow 设计器核心
+    packages/workflow-designer-react/ React 适配层
+    packages/workflow-designer-vue/  Vue 3 适配层
+    packages/workflow-designer-wc/   Web Components 适配层
+    packages/workflow-sdk/        前端调用 SDK
+  client/aiworkflow-open-api-client/ Java OpenAPI / Feign 客户端
   docs/                           设计、手册、白皮书、集成文档
+  scripts/                        初始化、独立部署和文档导出脚本
 ```
 
 ```mermaid
@@ -89,10 +135,43 @@ flowchart TB
     Root --> Docs["docs: 设计与交付文档"]
     Web --> Admin["apps/admin"]
     Web --> ChatApp["apps/chat"]
+    Web --> Widget["packages/embed-widget"]
+    Web --> Core["packages/workflow-designer-core + LogicFlow"]
+    Core --> Schema["packages/workflow-schema"]
     Web --> ReactDesigner["packages/workflow-designer-react"]
     Web --> VueDesigner["packages/workflow-designer-vue"]
     Web --> WCDesigner["packages/workflow-designer-wc"]
+    Web --> SDK["packages/workflow-sdk"]
 ```
+
+### 2.4 构建、运行与交付
+
+| 对象 | 开发命令 | 生产构建/交付 |
+|---|---|---|
+| 后端 | `mvn spring-boot:run` | `mvn clean package`，生成可执行 JAR |
+| 管理端 | `pnpm --filter @aiworkflow/admin dev` | `pnpm --filter @aiworkflow/admin build` |
+| Chat 端 | `pnpm --filter @aiworkflow/chat dev` | `pnpm --filter @aiworkflow/chat build` |
+| 全部前端包 | `pnpm -r test` | `pnpm -r build` |
+| 独立部署 | PostgreSQL + 后端 JAR + 两个前端静态站点 | 可使用 `scripts/package-standalone.ps1` 组织交付物 |
+
+本地默认端口如下：
+
+| 服务 | 默认地址 |
+|---|---|
+| 管理端 | `http://127.0.0.1:5173` |
+| Chat 端 | `http://127.0.0.1:5174` |
+| 后端 API | `http://127.0.0.1:8080` |
+| OpenAPI | `http://127.0.0.1:8080/v3/api-docs` |
+| Swagger UI | `http://127.0.0.1:8080/swagger-ui.html` |
+
+### 2.5 技术选型边界
+
+- 工作流引擎定位为 AI 场景所需的轻量 DAG，不承担强 BPMN、强审批和复杂人工任务流。
+- LogicFlow 只负责设计器图形交互，流程校验、发布、版本和执行语义由本项目 Schema 与后端引擎控制。
+- PostgreSQL 和达梦保存业务数据；H2 仅用于自动化测试。
+- 向量数据库采用 Provider 接口隔离，知识库业务不直接绑定某一种向量数据库。
+- 管理端采用 React，但工作流设计器核心不依赖 React，通过 Vue 和 Web Components 适配层支持第三方集成。
+- 当前以模块化单体 JAR 交付为主，Nacos 与 Feign 提供微服务环境兼容性，不要求部署方同时引入完整微服务基础设施。
 
 ---
 

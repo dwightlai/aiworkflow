@@ -144,6 +144,26 @@ export async function requestJson<T>(
   return envelope.data;
 }
 
+export async function requestBlob(url: string, init?: RequestInit): Promise<Blob> {
+  const requestInit = withRequestHeaders(init, { jsonHeaders: false });
+  const response = requestInit ? await fetch(url, requestInit) : await fetch(url);
+  if (response.status === 401) {
+    notifyUnauthorized();
+    throw new Error('登录已失效，请重新登录');
+  }
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const error = await response.json() as ApiEnvelope<unknown>;
+      message = error.error?.message ?? message;
+    } catch {
+      // Binary endpoints may return an empty error body.
+    }
+    throw new Error(message);
+  }
+  return response.blob();
+}
+
 function withRequestHeaders(
   init?: RequestInit,
   options: { jsonHeaders?: boolean; skipAuth?: boolean } = {}

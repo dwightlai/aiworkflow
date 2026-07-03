@@ -1,6 +1,9 @@
 package com.mw.ai.agi.knowledge.service;
 
 import com.mw.ai.agi.knowledge.domain.VectorStoreConfig;
+import com.mw.ai.agi.knowledge.vector.ElasticsearchVectorStoreProvider;
+import com.mw.ai.agi.knowledge.vector.VectorStoreConnectionResult;
+import com.mw.ai.agi.knowledge.vector.VectorStoreProviderRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -14,16 +17,30 @@ public class VectorStoreConfigService {
     private static final int DEFAULT_READ_TIMEOUT_MS = 30000;
     private static final int DEFAULT_VECTOR_DIMENSION = 1536;
     private final VectorStoreConfigStore store;
-    private final ElasticsearchVectorStoreClient elasticsearchVectorStoreClient;
+    private final VectorStoreProviderRegistry providers;
 
     public VectorStoreConfigService() {
-        this(new InMemoryVectorStoreConfigStore(), new ElasticsearchVectorStoreClient(new com.fasterxml.jackson.databind.ObjectMapper()));
+        this(
+                new InMemoryVectorStoreConfigStore(),
+                new VectorStoreProviderRegistry(List.of(new ElasticsearchVectorStoreProvider(
+                        new ElasticsearchVectorStoreClient(new com.fasterxml.jackson.databind.ObjectMapper())
+                )))
+        );
     }
 
     @Autowired
-    public VectorStoreConfigService(VectorStoreConfigStore store, ElasticsearchVectorStoreClient elasticsearchVectorStoreClient) {
+    public VectorStoreConfigService(VectorStoreConfigStore store, VectorStoreProviderRegistry providers) {
         this.store = store;
-        this.elasticsearchVectorStoreClient = elasticsearchVectorStoreClient;
+        this.providers = providers;
+    }
+
+    public VectorStoreConfigService(
+            VectorStoreConfigStore store,
+            ElasticsearchVectorStoreClient elasticsearchVectorStoreClient
+    ) {
+        this(store, new VectorStoreProviderRegistry(List.of(
+                new ElasticsearchVectorStoreProvider(elasticsearchVectorStoreClient)
+        )));
     }
 
     public VectorStoreConfigService(VectorStoreConfigStore store) {
@@ -46,13 +63,47 @@ public class VectorStoreConfigService {
             Integer readTimeoutMs,
             boolean enabled
     ) {
+        return create(
+                name, storeType, endpoint, indexName,
+                null, null, null, indexName, DEFAULT_VECTOR_DIMENSION, false, "{}",
+                username, password, apiKey, connectTimeoutMs, readTimeoutMs, enabled
+        );
+    }
+
+    public VectorStoreConfig create(
+            String name,
+            String storeType,
+            String endpoint,
+            String indexName,
+            String host,
+            Integer port,
+            String databaseName,
+            String namespaceName,
+            Integer vectorDimension,
+            boolean sslEnabled,
+            String optionsJson,
+            String username,
+            String password,
+            String apiKey,
+            Integer connectTimeoutMs,
+            Integer readTimeoutMs,
+            boolean enabled
+    ) {
         Instant now = Instant.now();
+        String normalizedType = normalizeStoreType(storeType, "MEMORY");
         VectorStoreConfig config = new VectorStoreConfig(
                 "vector_" + UUID.randomUUID(),
                 name,
-                normalizeStoreType(storeType, "MEMORY"),
+                normalizedType,
                 blankToNull(endpoint),
                 defaultString(indexName, "aiworkflow_kb"),
+                blankToNull(host),
+                defaultPort(normalizedType, port),
+                blankToNull(databaseName),
+                defaultString(namespaceName, defaultString(indexName, "aiworkflow_kb")),
+                positiveOrDefault(vectorDimension, DEFAULT_VECTOR_DIMENSION),
+                sslEnabled,
+                defaultString(optionsJson, "{}"),
                 blankToNull(username),
                 blankToNull(password),
                 blankToNull(apiKey),
@@ -83,14 +134,49 @@ public class VectorStoreConfigService {
             Integer readTimeoutMs,
             boolean enabled
     ) {
+        return update(
+                id, name, storeType, endpoint, indexName,
+                null, null, null, null, null, false, null,
+                username, password, apiKey, connectTimeoutMs, readTimeoutMs, enabled
+        );
+    }
+
+    public VectorStoreConfig update(
+            String id,
+            String name,
+            String storeType,
+            String endpoint,
+            String indexName,
+            String host,
+            Integer port,
+            String databaseName,
+            String namespaceName,
+            Integer vectorDimension,
+            boolean sslEnabled,
+            String optionsJson,
+            String username,
+            String password,
+            String apiKey,
+            Integer connectTimeoutMs,
+            Integer readTimeoutMs,
+            boolean enabled
+    ) {
         VectorStoreConfig current = store.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Vector store config not found: " + id));
+        String normalizedType = normalizeStoreType(storeType, current.storeType());
         VectorStoreConfig updated = new VectorStoreConfig(
                 current.id(),
                 defaultString(name, current.name()),
-                normalizeStoreType(storeType, current.storeType()),
+                normalizedType,
                 blankToNull(endpoint),
                 defaultString(indexName, current.indexName()),
+                host == null ? current.host() : blankToNull(host),
+                port == null ? current.port() : defaultPort(normalizedType, port),
+                databaseName == null ? current.databaseName() : blankToNull(databaseName),
+                defaultString(namespaceName, current.namespaceName()),
+                positiveOrDefault(vectorDimension, current.vectorDimension()),
+                sslEnabled,
+                defaultString(optionsJson, current.optionsJson()),
                 blankToNull(username),
                 preserveSecret(password, current.password()),
                 preserveSecret(apiKey, current.apiKey()),
@@ -105,7 +191,24 @@ public class VectorStoreConfigService {
     }
 
     public void delete(String id) {
+        store.findById(id).ifPresent(config -> {
+            if (!"MEMORY".equalsIgnoreCase(config.storeType())) {
+                providers.require(config.storeType()).close(config);
+            }
+        });
         store.delete(id);
+    }
+
+    public VectorStoreConnectionResult testConnection(VectorStoreConfig config) {
+        if ("MEMORY".equalsIgnoreCase(config.storeType())) {
+            return new VectorStoreConnectionResult(true, "MEMORY", null, 0, "Local memory store");
+        }
+        return providers.require(config.storeType()).testConnection(config);
+    }
+
+    public VectorStoreConnectionResult testConnection(String id) {
+        return testConnection(store.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Vector store config not found: " + id)));
     }
 
     private String normalizeStoreType(String value, String fallback) {
@@ -130,11 +233,20 @@ public class VectorStoreConfigService {
 
     private void ensureExternalIndexIfNeeded(VectorStoreConfig config) {
         if (!config.enabled()
-                || !"ELASTICSEARCH".equalsIgnoreCase(config.storeType())
-                || config.endpoint() == null
-                || config.endpoint().isBlank()) {
+                || "MEMORY".equalsIgnoreCase(config.storeType())) {
             return;
         }
-        elasticsearchVectorStoreClient.ensureIndex(config, DEFAULT_VECTOR_DIMENSION);
+        providers.require(config.storeType()).ensureStore(config, config.vectorDimension());
+    }
+
+    private Integer defaultPort(String storeType, Integer port) {
+        if (port != null && port > 0) {
+            return port;
+        }
+        return switch (storeType) {
+            case "MILVUS" -> 19530;
+            case "PGVECTOR" -> 5432;
+            default -> null;
+        };
     }
 }

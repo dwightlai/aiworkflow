@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.mw.ai.agi.knowledge.vector.VectorStoreConnectionResult;
 
 import java.util.List;
 
@@ -40,6 +41,13 @@ public class VectorStoreConfigController {
                 request.storeType(),
                 request.endpoint(),
                 request.indexName(),
+                request.host(),
+                request.port(),
+                request.databaseName(),
+                request.namespaceName(),
+                request.vectorDimension(),
+                request.sslEnabled(),
+                request.optionsJson(),
                 request.username(),
                 request.password(),
                 request.apiKey(),
@@ -60,6 +68,13 @@ public class VectorStoreConfigController {
                 request.storeType(),
                 request.endpoint(),
                 request.indexName(),
+                request.host(),
+                request.port(),
+                request.databaseName(),
+                request.namespaceName(),
+                request.vectorDimension(),
+                request.sslEnabled(),
+                request.optionsJson(),
                 request.username(),
                 request.password(),
                 request.apiKey(),
@@ -75,11 +90,53 @@ public class VectorStoreConfigController {
         return ApiResponse.success(null);
     }
 
+    @PostMapping("/test-connection")
+    public ApiResponse<VectorStoreConnectionResult> testConnection(
+            @Valid @RequestBody SaveVectorStoreConfigRequest request
+    ) {
+        java.time.Instant now = java.time.Instant.now();
+        VectorStoreConfig config = new VectorStoreConfig(
+                "connection_test",
+                request.name(),
+                request.storeType().trim().toUpperCase(),
+                request.endpoint(),
+                request.indexName(),
+                request.host(),
+                request.port(),
+                request.databaseName(),
+                request.namespaceName() == null ? request.indexName() : request.namespaceName(),
+                request.vectorDimension() == null ? 1536 : request.vectorDimension(),
+                request.sslEnabled(),
+                request.optionsJson() == null ? "{}" : request.optionsJson(),
+                request.username(),
+                request.password(),
+                request.apiKey(),
+                request.connectTimeoutMs() == null ? 5000 : request.connectTimeoutMs(),
+                request.readTimeoutMs() == null ? 30000 : request.readTimeoutMs(),
+                request.enabled(),
+                now,
+                now
+        );
+        return ApiResponse.success(vectorStoreConfigService.testConnection(config));
+    }
+
+    @PostMapping("/{id}/test-connection")
+    public ApiResponse<VectorStoreConnectionResult> testSavedConnection(@PathVariable String id) {
+        return ApiResponse.success(vectorStoreConfigService.testConnection(id));
+    }
+
     public record SaveVectorStoreConfigRequest(
             @NotBlank String name,
             @NotBlank String storeType,
             String endpoint,
             @NotBlank String indexName,
+            String host,
+            Integer port,
+            String databaseName,
+            String namespaceName,
+            Integer vectorDimension,
+            boolean sslEnabled,
+            String optionsJson,
             String username,
             String password,
             String apiKey,
@@ -95,6 +152,13 @@ public class VectorStoreConfigController {
             String storeType,
             String endpoint,
             String indexName,
+            String host,
+            Integer port,
+            String databaseName,
+            String namespaceName,
+            int vectorDimension,
+            boolean sslEnabled,
+            String optionsJson,
             String username,
             boolean passwordConfigured,
             boolean apiKeyConfigured,
@@ -111,6 +175,13 @@ public class VectorStoreConfigController {
                     config.storeType(),
                     config.endpoint(),
                     config.indexName(),
+                    config.host(),
+                    config.port(),
+                    config.databaseName(),
+                    config.namespaceName(),
+                    config.vectorDimension(),
+                    config.sslEnabled(),
+                    config.optionsJson(),
                     config.username(),
                     config.password() != null && !config.password().isBlank(),
                     config.apiKey() != null && !config.apiKey().isBlank(),

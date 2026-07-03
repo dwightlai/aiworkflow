@@ -53,6 +53,8 @@ import {
   previewKnowledgeChunks,
   reparseKnowledgeDocument,
   searchKnowledgeBase,
+  testSavedVectorStoreConnection,
+  testVectorStoreConnection,
   updateKnowledgeBase,
   updateKnowledgeChunk,
   updateVectorStoreConfig,
@@ -84,6 +86,7 @@ const initialBaseValues: SaveKnowledgeBaseRequest = {
   splitterType: 'SIMPLE_TEXT',
   chunkSize: 500,
   chunkOverlap: 50,
+  semanticSimilarityThreshold: 0.78,
   retrievalMode: 'HYBRID',
   topK: 3
 };
@@ -93,7 +96,8 @@ const initialDocumentValues: AddKnowledgeDocumentRequest = {
   content: '',
   splitterType: 'SIMPLE_TEXT',
   chunkSize: 500,
-  chunkOverlap: 50
+  chunkOverlap: 50,
+  semanticSimilarityThreshold: 0.78
 };
 
 const initialVectorValues: SaveVectorStoreConfigRequest = {
@@ -101,6 +105,13 @@ const initialVectorValues: SaveVectorStoreConfigRequest = {
   storeType: 'MEMORY',
   endpoint: '',
   indexName: 'aiworkflow_kb',
+  host: '',
+  port: null,
+  databaseName: '',
+  namespaceName: 'aiworkflow_kb',
+  vectorDimension: 1536,
+  sslEnabled: false,
+  optionsJson: '{}',
   username: null,
   password: null,
   apiKey: null,
@@ -126,6 +137,7 @@ export function KnowledgeBasesPage() {
   const [searchForm] = Form.useForm<{ query: string; topK: number }>();
   const [vectorForm] = Form.useForm<SaveVectorStoreConfigRequest>();
   const vectorStoreType = Form.useWatch('storeType', vectorForm);
+  const documentSplitterType = Form.useWatch('splitterType', documentForm);
   const textSplitterType = Form.useWatch('splitterType', textDocumentForm);
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -281,12 +293,41 @@ export function KnowledgeBasesPage() {
     }
   });
 
+  const testVectorMutation = useMutation({
+    mutationFn: (values: SaveVectorStoreConfigRequest) => testVectorStoreConnection({
+      ...initialVectorValues,
+      ...values,
+      endpoint: values.endpoint || '',
+      host: values.host || null,
+      username: values.username || null,
+      password: values.password || null,
+      apiKey: values.apiKey || null
+    }),
+    onSuccess: (result) => {
+      message.success(`连接成功，耗时 ${result.latencyMs} ms`);
+    },
+    onError: (error: Error) => {
+      message.error(`连接失败：${error.message}`);
+    }
+  });
+
+  const testSavedVectorMutation = useMutation({
+    mutationFn: (store: VectorStoreConfig) => testSavedVectorStoreConnection(store.id),
+    onSuccess: (result) => {
+      message.success(`连接成功，耗时 ${result.latencyMs} ms`);
+    },
+    onError: (error: Error) => {
+      message.error(`连接失败：${error.message}`);
+    }
+  });
+
   const previewMutation = useMutation({
     mutationFn: (values: AddKnowledgeDocumentRequest) => previewKnowledgeChunks({
       content: values.content,
       splitterType: values.splitterType || 'SIMPLE_TEXT',
       chunkSize: values.chunkSize || 500,
-      chunkOverlap: values.chunkOverlap || 0
+      chunkOverlap: values.chunkOverlap || 0,
+      semanticSimilarityThreshold: values.semanticSimilarityThreshold
     }),
     onSuccess: setChunkPreviews
   });
@@ -300,7 +341,9 @@ export function KnowledgeBasesPage() {
       return previewUploadedKnowledgeDocumentFile(uploadFile, {
         splitterType: values.splitterType || 'SIMPLE_TEXT',
         chunkSize: values.chunkSize || 500,
-        chunkOverlap: values.chunkOverlap ?? 0
+        chunkOverlap: values.chunkOverlap ?? 0,
+        semanticSimilarityThreshold: values.semanticSimilarityThreshold,
+        knowledgeBaseId: selectedBase?.id
       });
     },
     onSuccess: (preview) => {
@@ -319,7 +362,8 @@ export function KnowledgeBasesPage() {
       return uploadKnowledgeDocumentFile(selectedBase.id, uploadFile, {
         splitterType: values.splitterType || 'SIMPLE_TEXT',
         chunkSize: values.chunkSize || 500,
-        chunkOverlap: values.chunkOverlap ?? 0
+        chunkOverlap: values.chunkOverlap ?? 0,
+        semanticSimilarityThreshold: values.semanticSimilarityThreshold
       });
     },
     onSuccess: async () => {
@@ -361,7 +405,10 @@ export function KnowledgeBasesPage() {
       if (!textUploadFile) {
         throw new Error('请先选择文本文档');
       }
-      return previewUploadedTextKnowledgeDocumentFile(textUploadFile, textDocumentForm.getFieldsValue());
+      return previewUploadedTextKnowledgeDocumentFile(textUploadFile, {
+        ...textDocumentForm.getFieldsValue(),
+        knowledgeBaseId: selectedBase?.id
+      });
     },
     onSuccess: (preview) => {
       setTextUploadPreview(preview);
@@ -466,6 +513,7 @@ export function KnowledgeBasesPage() {
       splitterType: base.splitterType || 'SIMPLE_TEXT',
       chunkSize: base.chunkSize || 500,
       chunkOverlap: base.chunkOverlap ?? 50,
+      semanticSimilarityThreshold: base.semanticSimilarityThreshold ?? 0.78,
       retrievalMode: base.retrievalMode || 'HYBRID',
       topK: base.topK || 3
     });
@@ -490,13 +538,19 @@ export function KnowledgeBasesPage() {
     manualDatasetForm.setFieldsValue({
       entries: [{ title: '', content: '', tags: '', category: '', source: '' }]
     });
-    textDocumentForm.setFieldsValue({ splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' });
+    textDocumentForm.setFieldsValue({
+      splitterType: 'FIXED_LENGTH',
+      chunkSize: 200,
+      semanticSimilarityThreshold: base.semanticSimilarityThreshold ?? 0.78,
+      separator: ''
+    });
     tableDocumentForm.setFieldsValue({ splitterType: 'STRUCTURED', chunkSize: 200 });
     documentForm.setFieldsValue({
       ...initialDocumentValues,
       splitterType: base.splitterType || 'SIMPLE_TEXT',
       chunkSize: base.chunkSize || 500,
-      chunkOverlap: base.chunkOverlap ?? 50
+      chunkOverlap: base.chunkOverlap ?? 50,
+      semanticSimilarityThreshold: base.semanticSimilarityThreshold ?? 0.78
     });
     searchForm.setFieldsValue({ query: '', topK: 3 });
     setDocumentOpen(true);
@@ -513,7 +567,12 @@ export function KnowledgeBasesPage() {
     if (type === 'text') {
       setTextUploadFile(null);
       setTextUploadPreview(null);
-      textDocumentForm.setFieldsValue({ splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' });
+      textDocumentForm.setFieldsValue({
+        splitterType: 'FIXED_LENGTH',
+        chunkSize: 200,
+        semanticSimilarityThreshold: selectedBase?.semanticSimilarityThreshold ?? 0.78,
+        separator: ''
+      });
     }
     if (type === 'table') {
       setTableUploadFile(null);
@@ -545,6 +604,13 @@ export function KnowledgeBasesPage() {
       storeType: store.storeType,
       endpoint: store.endpoint || '',
       indexName: store.indexName,
+      host: store.host || '',
+      port: store.port || null,
+      databaseName: store.databaseName || '',
+      namespaceName: store.namespaceName || store.indexName,
+      vectorDimension: store.vectorDimension || 1536,
+      sslEnabled: store.sslEnabled || false,
+      optionsJson: store.optionsJson || '{}',
       username: store.username || null,
       password: null,
       apiKey: null,
@@ -555,6 +621,9 @@ export function KnowledgeBasesPage() {
   }
 
   const isElasticsearchVectorStore = vectorStoreType === 'ELASTICSEARCH';
+  const isMilvusVectorStore = vectorStoreType === 'MILVUS';
+  const isPgvectorVectorStore = vectorStoreType === 'PGVECTOR';
+  const isExternalVectorStore = isElasticsearchVectorStore || isMilvusVectorStore || isPgvectorVectorStore;
 
   const vectorStoreOptions = vectorStores.map((store) => ({
     value: store.id,
@@ -714,6 +783,15 @@ export function KnowledgeBasesPage() {
             renderItem={(store) => (
               <List.Item
                 actions={[
+                  <Button
+                    key="test"
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                    loading={testSavedVectorMutation.isPending}
+                    onClick={() => testSavedVectorMutation.mutate(store)}
+                  >
+                    测试
+                  </Button>,
                   <Button key="edit" size="small" icon={<EditOutlined />} aria-label="编辑向量库" onClick={() => startEditVectorStore(store)}>编辑</Button>,
                   <Button
                     key="delete"
@@ -730,7 +808,9 @@ export function KnowledgeBasesPage() {
               >
                 <List.Item.Meta
                   title={<Space><Typography.Text strong>{store.name}</Typography.Text><Tag>{store.storeType}</Tag><Tag color={store.enabled ? 'green' : 'default'}>{store.enabled ? '启用' : '停用'}</Tag></Space>}
-                  description={`${store.indexName} ${store.endpoint || '本地内存'}`}
+                  description={`${store.namespaceName || store.indexName} ${
+                    store.endpoint || (store.host ? `${store.host}:${store.port || ''}` : '本地内存')
+                  }`}
                 />
               </List.Item>
             )}
@@ -744,17 +824,34 @@ export function KnowledgeBasesPage() {
             </Form.Item>
             <Form.Item name="storeType" label="向量库类型">
               <Select
+                onChange={(type) => {
+                  if (type === 'MILVUS') {
+                    vectorForm.setFieldsValue({
+                      port: 19530,
+                      databaseName: 'default',
+                      namespaceName: 'agi_knowledge_vectors'
+                    });
+                  } else if (type === 'PGVECTOR') {
+                    vectorForm.setFieldsValue({
+                      port: 5432,
+                      databaseName: 'pgvector',
+                      namespaceName: 'agi_knowledge_vectors'
+                    });
+                  }
+                }}
                 options={[
                   { value: 'MEMORY', label: 'Memory' },
-                  { value: 'ELASTICSEARCH', label: 'Elasticsearch' }
+                  { value: 'ELASTICSEARCH', label: 'Elasticsearch' },
+                  { value: 'MILVUS', label: 'Milvus' },
+                  { value: 'PGVECTOR', label: 'Pgvector' }
                 ]}
               />
             </Form.Item>
-            <Form.Item name="endpoint" label="连接地址">
-              <Input placeholder="http://localhost:9200" />
-            </Form.Item>
             {isElasticsearchVectorStore ? (
               <>
+                <Form.Item name="endpoint" label="连接地址" rules={[{ required: true, message: '请输入 Elasticsearch 地址' }]}>
+                  <Input placeholder="http://localhost:9200" />
+                </Form.Item>
                 <Form.Item name="username" label="用户名">
                   <Input placeholder="elastic" autoComplete="username" />
                 </Form.Item>
@@ -780,15 +877,99 @@ export function KnowledgeBasesPage() {
                 </Space>
               </>
             ) : null}
-            <Form.Item name="indexName" label="索引名称" rules={[{ required: true, message: '请输入索引名称' }]}>
-              <Input placeholder="aiworkflow_kb" />
-            </Form.Item>
+            {isMilvusVectorStore || isPgvectorVectorStore ? (
+              <>
+                <Space align="start" style={{ width: '100%' }}>
+                  <Form.Item name="host" label="连接地址" rules={[{ required: true, message: '请输入主机地址' }]}>
+                    <Input style={{ width: 300 }} placeholder="127.0.0.1" />
+                  </Form.Item>
+                  <Form.Item name="port" label="连接端口" rules={[{ required: true, message: '请输入端口' }]}>
+                    <InputNumber
+                      min={1}
+                      max={65535}
+                      style={{ width: 160 }}
+                      placeholder={isMilvusVectorStore ? '19530' : '5432'}
+                    />
+                  </Form.Item>
+                </Space>
+                <Space align="start" style={{ width: '100%' }}>
+                  <Form.Item name="databaseName" label="数据库名" rules={[{ required: true, message: '请输入数据库名' }]}>
+                    <Input style={{ width: 300 }} placeholder={isMilvusVectorStore ? 'default' : 'pgvector'} />
+                  </Form.Item>
+                  <Form.Item
+                    name="namespaceName"
+                    label={isMilvusVectorStore ? '集合名' : '向量表名'}
+                    rules={[
+                      { required: true, message: isMilvusVectorStore ? '请输入集合名' : '请输入向量表名' },
+                      { pattern: /^[A-Za-z_][A-Za-z0-9_]{0,62}$/, message: '仅支持字母、数字和下划线，且不能以数字开头' }
+                    ]}
+                  >
+                    <Input style={{ width: 300 }} placeholder="agi_knowledge_vectors" />
+                  </Form.Item>
+                </Space>
+                <Form.Item name="username" label="用户名" rules={isPgvectorVectorStore ? [{ required: true, message: '请输入用户名' }] : []}>
+                  <Input autoComplete="username" placeholder={isMilvusVectorStore ? 'root（可选）' : 'vector_user'} />
+                </Form.Item>
+                <Form.Item
+                  name="password"
+                  label={isMilvusVectorStore ? '密码 / Token' : '密码'}
+                  rules={isPgvectorVectorStore && !editingVectorStore ? [{ required: true, message: '请输入密码' }] : []}
+                >
+                  <Input.Password
+                    autoComplete="new-password"
+                    placeholder={editingVectorStore?.passwordConfigured ? '已配置，留空保持不变' : '请输入认证信息'}
+                  />
+                </Form.Item>
+                <Space align="start" style={{ width: '100%' }}>
+                  <Form.Item name="vectorDimension" label="向量维度" rules={[{ required: true, message: '请输入向量维度' }]}>
+                    <InputNumber min={1} max={32768} style={{ width: 180 }} />
+                  </Form.Item>
+                  <Form.Item name="sslEnabled" label={isMilvusVectorStore ? 'TLS' : 'SSL'}>
+                    <Select
+                      style={{ width: 180 }}
+                      options={[{ value: false, label: '关闭' }, { value: true, label: '开启' }]}
+                    />
+                  </Form.Item>
+                </Space>
+              </>
+            ) : null}
+            {isExternalVectorStore && !isElasticsearchVectorStore ? (
+              <Space align="start" style={{ width: '100%' }}>
+                <Form.Item name="connectTimeoutMs" label="连接超时(ms)" rules={[{ required: true }]}>
+                  <InputNumber min={100} max={120000} style={{ width: 180 }} />
+                </Form.Item>
+                <Form.Item name="readTimeoutMs" label="读取超时(ms)" rules={[{ required: true }]}>
+                  <InputNumber min={100} max={300000} style={{ width: 180 }} />
+                </Form.Item>
+              </Space>
+            ) : null}
+            {isElasticsearchVectorStore ? (
+              <Form.Item name="indexName" label="索引名称" rules={[{ required: true, message: '请输入索引名称' }]}>
+                <Input placeholder="aiworkflow_kb" />
+              </Form.Item>
+            ) : (
+              <Form.Item name="indexName" hidden><Input /></Form.Item>
+            )}
             <Form.Item name="enabled" label="状态">
               <Select options={[{ value: true, label: '启用' }, { value: false, label: '停用' }]} />
             </Form.Item>
-            <Button type="primary" icon={<CheckCircleOutlined />} loading={vectorMutation.isPending} onClick={() => vectorForm.submit()}>
-              保存配置
-            </Button>
+            <Space>
+              {isExternalVectorStore ? (
+                <Button
+                  icon={<DatabaseOutlined />}
+                  loading={testVectorMutation.isPending}
+                  onClick={async () => {
+                    const values = await vectorForm.validateFields();
+                    testVectorMutation.mutate(values);
+                  }}
+                >
+                  测试连接
+                </Button>
+              ) : null}
+              <Button type="primary" icon={<CheckCircleOutlined />} loading={vectorMutation.isPending} onClick={() => vectorForm.submit()}>
+                保存配置
+              </Button>
+            </Space>
           </Form>
         </Card>
       </Drawer>
@@ -957,16 +1138,22 @@ export function KnowledgeBasesPage() {
                       options={[
                         { value: 'SIMPLE_TEXT', label: '固定长度分段' },
                         { value: 'MARKDOWN_HEADING', label: 'Markdown 标题' },
-                        { value: 'REGEX', label: '段落分段' }
+                        { value: 'REGEX', label: '段落分段' },
+                        { value: 'SEMANTIC', label: '语义分段' }
                       ]}
                     />
                   </Form.Item>
                   <Form.Item name="chunkSize" label="分段长度" style={{ marginBottom: 8 }}>
                     <InputNumber min={80} max={2000} />
                   </Form.Item>
-                  <Form.Item name="chunkOverlap" label="重叠字符" style={{ marginBottom: 8 }}>
+                  <Form.Item name="chunkOverlap" label="重叠 Token" style={{ marginBottom: 8 }}>
                     <InputNumber min={0} max={500} />
                   </Form.Item>
+                  {documentSplitterType === 'SEMANTIC' ? (
+                    <Form.Item name="semanticSimilarityThreshold" label="相似度阈值" style={{ marginBottom: 8 }}>
+                      <InputNumber min={0} max={1} step={0.01} precision={2} />
+                    </Form.Item>
+                  ) : null}
                 </Space>
               </Form>
               <Space style={{ marginTop: 16 }}>
@@ -1027,16 +1214,22 @@ export function KnowledgeBasesPage() {
                   options={[
                     { value: 'SIMPLE_TEXT', label: '普通文本' },
                     { value: 'MARKDOWN_HEADING', label: 'Markdown 标题' },
-                    { value: 'REGEX', label: '正则分隔' }
+                    { value: 'REGEX', label: '正则分隔' },
+                    { value: 'SEMANTIC', label: '语义分段' }
                   ]}
                 />
               </Form.Item>
               <Form.Item name="chunkSize" label="切片大小">
                 <InputNumber min={80} max={2000} />
               </Form.Item>
-              <Form.Item name="chunkOverlap" label="重叠字符">
+              <Form.Item name="chunkOverlap" label="重叠 Token">
                 <InputNumber min={0} max={500} />
               </Form.Item>
+              {documentSplitterType === 'SEMANTIC' ? (
+                <Form.Item name="semanticSimilarityThreshold" label="相似度阈值">
+                  <InputNumber min={0} max={1} step={0.01} precision={2} />
+                </Form.Item>
+              ) : null}
             </Space>
             <Space>
               <Button icon={<FileSearchOutlined />} loading={previewMutation.isPending} onClick={() => previewMutation.mutate(documentForm.getFieldsValue())}>
@@ -1114,8 +1307,22 @@ export function KnowledgeBasesPage() {
                   ]}
                 >
                   <List.Item.Meta
-                    title={<Space><Tag color={chunk.enabled ? 'green' : 'default'}>{chunk.enabled ? '启用' : '停用'}</Tag><Typography.Text type="secondary">{chunk.tokenEstimate} tokens</Typography.Text></Space>}
-                    description={<Typography.Paragraph style={{ marginBottom: 0 }}>{chunk.content}</Typography.Paragraph>}
+                    title={(
+                      <Space wrap>
+                        <Tag color={chunk.enabled ? 'green' : 'default'}>{chunk.enabled ? '启用' : '停用'}</Tag>
+                        <Tag color={chunk.chunkLevel === 'PARENT' ? 'purple' : 'blue'}>
+                          {chunk.chunkLevel === 'PARENT' ? '父块' : '检索子块'}
+                        </Tag>
+                        {chunk.chunkType ? <Tag>{chunk.chunkType}</Tag> : null}
+                        <Typography.Text type="secondary">{chunk.tokenEstimate} tokens</Typography.Text>
+                      </Space>
+                    )}
+                    description={(
+                      <>
+                        {chunk.sectionPath ? <Typography.Text type="secondary">{chunk.sectionPath}</Typography.Text> : null}
+                        <Typography.Paragraph style={{ marginBottom: 0 }}>{chunk.content}</Typography.Paragraph>
+                      </>
+                    )}
                   />
                 </List.Item>
               )}
@@ -1257,7 +1464,16 @@ export function KnowledgeBasesPage() {
           {textUploadFile ? <Tag color="blue">{textUploadFile.name} / {(textUploadFile.size / 1024 / 1024).toFixed(2)} MB</Tag> : null}
 
           <Card size="small" title="分段策略">
-            <Form form={textDocumentForm} layout="vertical" initialValues={{ splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' }}>
+            <Form
+              form={textDocumentForm}
+              layout="vertical"
+              initialValues={{
+                splitterType: 'FIXED_LENGTH',
+                chunkSize: 200,
+                semanticSimilarityThreshold: 0.78,
+                separator: ''
+              }}
+            >
               <Form.Item name="splitterType">
                 <Radio.Group>
                   <Space direction="vertical">
@@ -1271,6 +1487,15 @@ export function KnowledgeBasesPage() {
               <Form.Item name="chunkSize" label="分段长度" rules={[{ required: true, message: '请输入分段长度' }]}>
                 <InputNumber min={1} controls style={{ width: 180 }} />
               </Form.Item>
+              {textSplitterType === 'SEMANTIC' ? (
+                <Form.Item
+                  name="semanticSimilarityThreshold"
+                  label="语义相似度阈值"
+                  tooltip="相邻内容相似度低于该值时创建新的分段"
+                >
+                  <InputNumber min={0} max={1} step={0.01} precision={2} style={{ width: 180 }} />
+                </Form.Item>
+              ) : null}
               {textSplitterType === 'SYMBOL' ? (
                 <Form.Item name="separator" label="分段符">
                   <Input placeholder="请输入分段符号" />
@@ -1486,4 +1711,3 @@ const uploadDropStyle: React.CSSProperties = {
   minHeight: 150,
   textAlign: 'center'
 };
-

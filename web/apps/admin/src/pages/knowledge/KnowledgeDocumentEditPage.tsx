@@ -1,17 +1,21 @@
-import { ArrowLeftOutlined, CheckCircleOutlined, EditOutlined, FileTextOutlined, SearchOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CheckCircleOutlined, EditOutlined, FileTextOutlined, MergeCellsOutlined, ScissorOutlined, SearchOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Drawer, Input, InputNumber, List, Space, Switch, Tag, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Drawer, Input, InputNumber, List, Space, Switch, Tag, Typography, message } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import {
   listKnowledgeBases,
   listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
+  mergeKnowledgeChunks,
   searchKnowledgeDocument,
+  splitKnowledgeChunk,
+  adjustKnowledgeChunkStructure,
   updateKnowledgeChunk,
   type KnowledgeChunk
 } from '../../api/knowledge';
 import { navigateTo, readDatasetIdFromSearch, withDatasetQuery } from '../../navigation';
+import { ChunkProfilePanel } from './ChunkProfilePanel';
 
 interface KnowledgeDocumentEditPageProps {
   knowledgeBaseId: string;
@@ -22,6 +26,10 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
   const queryClient = useQueryClient();
   const [editingChunk, setEditingChunk] = useState<KnowledgeChunk | null>(null);
   const [editingChunkContent, setEditingChunkContent] = useState('');
+  const [editingSectionPath, setEditingSectionPath] = useState('');
+  const [editingParentChunkId, setEditingParentChunkId] = useState('');
+  const [splitOffset, setSplitOffset] = useState(1);
+  const [selectedChunkIds, setSelectedChunkIds] = useState<string[]>([]);
   const [chunkQuery, setChunkQuery] = useState('');
   const [searchTopN, setSearchTopN] = useState(5);
 
@@ -84,9 +92,51 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
     }
   });
 
+  const refreshChunks = async () => {
+    setSelectedChunkIds([]);
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-chunks', knowledgeBaseId, documentId] });
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-documents', knowledgeBaseId] });
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-document-search', knowledgeBaseId, documentId] });
+  };
+
+  const splitChunkMutation = useMutation({
+    mutationFn: (payload: { chunk: KnowledgeChunk; offset: number }) =>
+      splitKnowledgeChunk(knowledgeBaseId, payload.chunk.id, payload.offset),
+    onSuccess: async () => {
+      message.success('分段已拆分');
+      setEditingChunk(null);
+      await refreshChunks();
+    }
+  });
+
+  const mergeChunksMutation = useMutation({
+    mutationFn: () => mergeKnowledgeChunks(knowledgeBaseId, selectedChunkIds),
+    onSuccess: async () => {
+      message.success('分段已合并');
+      await refreshChunks();
+    }
+  });
+
+  const adjustStructureMutation = useMutation({
+    mutationFn: (chunk: KnowledgeChunk) => adjustKnowledgeChunkStructure(
+      knowledgeBaseId,
+      chunk.id,
+      editingSectionPath.trim() || null,
+      editingParentChunkId.trim() || null
+    ),
+    onSuccess: async () => {
+      message.success('分段结构已更新');
+      setEditingChunk(null);
+      await refreshChunks();
+    }
+  });
+
   function openChunkEditor(chunk: KnowledgeChunk) {
     setEditingChunk(chunk);
     setEditingChunkContent(chunk.content);
+    setEditingSectionPath(chunk.sectionPath || '');
+    setEditingParentChunkId(chunk.parentChunkId || '');
+    setSplitOffset(Math.max(1, Math.floor(chunk.content.length / 2)));
   }
 
   function navigateBackToDocuments() {
@@ -118,6 +168,8 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
         </Space>
       </div>
 
+      <ChunkProfilePanel knowledgeBaseId={knowledgeBaseId} documentId={documentId} />
+
       <Card
         variant="borderless"
         title={<Space><FileTextOutlined />分段列表</Space>}
@@ -144,6 +196,15 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
             style={{ width: 140 }}
           />
         </Space.Compact>
+        <Button
+          icon={<MergeCellsOutlined />}
+          disabled={selectedChunkIds.length < 2}
+          loading={mergeChunksMutation.isPending}
+          onClick={() => mergeChunksMutation.mutate()}
+          style={{ marginBottom: 12 }}
+        >
+          合并所选分段
+        </Button>
         <List
           loading={chunksQuery.isLoading || documentsQuery.isLoading || documentSearchQuery.isFetching}
           dataSource={displayedChunks}
@@ -164,11 +225,22 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
                 </Button>
               ]}
             >
+              <Checkbox
+                checked={selectedChunkIds.includes(chunk.id)}
+                disabled={chunk.chunkLevel === 'PARENT'}
+                onChange={(event) => setSelectedChunkIds((current) => event.target.checked
+                  ? [...current, chunk.id]
+                  : current.filter((id) => id !== chunk.id))}
+                style={{ marginRight: 12 }}
+              />
               <List.Item.Meta
                 title={(
                   <Space>
                     <Tag color={chunk.enabled ? 'green' : 'default'}>{chunk.enabled ? '启用' : '停用'}</Tag>
                     <Tag color="blue">#{chunk.index + 1}</Tag>
+                    <Tag color={chunk.chunkLevel === 'PARENT' ? 'purple' : 'cyan'}>
+                      {chunk.chunkLevel === 'PARENT' ? '父块' : '子块'}
+                    </Tag>
                     <Typography.Text type="secondary">{chunk.tokenEstimate} tokens</Typography.Text>
                   </Space>
                 )}
@@ -195,6 +267,43 @@ export function KnowledgeDocumentEditPage({ knowledgeBaseId, documentId }: Knowl
             value={editingChunkContent}
             onChange={(event) => setEditingChunkContent(event.target.value)}
           />
+          <Input
+            aria-label="章节路径"
+            placeholder="章节路径，例如：第二章 > 付款节点"
+            value={editingSectionPath}
+            onChange={(event) => setEditingSectionPath(event.target.value)}
+          />
+          <Input
+            aria-label="父块ID"
+            placeholder="父块 ID，留空表示不绑定父块"
+            value={editingParentChunkId}
+            onChange={(event) => setEditingParentChunkId(event.target.value)}
+          />
+          <Space>
+            <InputNumber
+              aria-label="拆分位置"
+              min={1}
+              max={Math.max(1, editingChunkContent.length - 1)}
+              value={splitOffset}
+              onChange={(value) => setSplitOffset(value ?? 1)}
+            />
+            <Button
+              icon={<ScissorOutlined />}
+              disabled={!editingChunk || editingChunk.chunkLevel === 'PARENT'}
+              loading={splitChunkMutation.isPending}
+              onClick={() => editingChunk && splitChunkMutation.mutate({ chunk: editingChunk, offset: splitOffset })}
+            >
+              按位置拆分
+            </Button>
+            <Button
+              icon={<CheckCircleOutlined />}
+              disabled={!editingChunk || editingChunk.chunkLevel === 'PARENT'}
+              loading={adjustStructureMutation.isPending}
+              onClick={() => editingChunk && adjustStructureMutation.mutate(editingChunk)}
+            >
+              保存结构
+            </Button>
+          </Space>
           <Space>
             <Button
               type="primary"

@@ -13,6 +13,13 @@ public class VectorStoreConfigEntity {
     private String storeType;
     private String endpoint;
     private String indexName;
+    private String host;
+    private Integer port;
+    private String databaseName;
+    private String namespaceName;
+    private Integer vectorDimension;
+    private Boolean sslEnabled;
+    private String optionsJson;
     private String username;
     private String password;
     private String apiKey;
@@ -32,6 +39,20 @@ public class VectorStoreConfigEntity {
     public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
     public String getIndexName() { return indexName; }
     public void setIndexName(String indexName) { this.indexName = indexName; }
+    public String getHost() { return host; }
+    public void setHost(String host) { this.host = host; }
+    public Integer getPort() { return port; }
+    public void setPort(Integer port) { this.port = port; }
+    public String getDatabaseName() { return databaseName; }
+    public void setDatabaseName(String databaseName) { this.databaseName = databaseName; }
+    public String getNamespaceName() { return namespaceName; }
+    public void setNamespaceName(String namespaceName) { this.namespaceName = namespaceName; }
+    public Integer getVectorDimension() { return vectorDimension; }
+    public void setVectorDimension(Integer vectorDimension) { this.vectorDimension = vectorDimension; }
+    public Boolean getSslEnabled() { return sslEnabled; }
+    public void setSslEnabled(Boolean sslEnabled) { this.sslEnabled = sslEnabled; }
+    public String getOptionsJson() { return optionsJson; }
+    public void setOptionsJson(String optionsJson) { this.optionsJson = optionsJson; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
     public String getPassword() { return password; }

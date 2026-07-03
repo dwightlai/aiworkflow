@@ -28,8 +28,54 @@ public record KnowledgeBase(
         String datasetMode,
         String defaultDatasetId,
         int datasetCount,
-        String metadataJson
+        String metadataJson,
+        double semanticSimilarityThreshold
 ) {
+    public KnowledgeBase {
+        semanticSimilarityThreshold = Math.max(
+                0,
+                Math.min(1, semanticSimilarityThreshold)
+        );
+    }
+
+    public KnowledgeBase(
+            String id,
+            String tenantId,
+            String name,
+            String description,
+            String ownerUnitId,
+            String embeddingModelId,
+            String vectorStoreConfigId,
+            int vectorDimension,
+            String splitterType,
+            int chunkSize,
+            int chunkOverlap,
+            String retrievalMode,
+            int topK,
+            String status,
+            int documentCount,
+            int chunkCount,
+            String createdBy,
+            String updatedBy,
+            Instant createdAt,
+            Instant updatedAt,
+            String kbType,
+            String bizScope,
+            String datasetMode,
+            String defaultDatasetId,
+            int datasetCount,
+            String metadataJson
+    ) {
+        this(
+                id, tenantId, name, description, ownerUnitId, embeddingModelId,
+                vectorStoreConfigId, vectorDimension, splitterType, chunkSize,
+                chunkOverlap, retrievalMode, topK, status, documentCount,
+                chunkCount, createdBy, updatedBy, createdAt, updatedAt, kbType,
+                bizScope, datasetMode, defaultDatasetId, datasetCount,
+                metadataJson, 0.78
+        );
+    }
+
     public KnowledgeBase(
             String id,
             String tenantId,
@@ -56,7 +102,7 @@ public record KnowledgeBase(
                 id, tenantId, name, description, ownerUnitId, embeddingModelId, vectorStoreConfigId,
                 vectorDimension, splitterType, chunkSize, chunkOverlap, retrievalMode, topK, status,
                 documentCount, chunkCount, createdBy, updatedBy, createdAt, updatedAt,
-                "NORMAL", null, "MULTI", null, 0, null
+                "NORMAL", null, "MULTI", null, 0, null, 0.78
         );
     }
 

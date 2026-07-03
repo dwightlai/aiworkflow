@@ -163,6 +163,12 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
     }
 
     @Override
+    public void deleteChunk(String chunkId) {
+        chunkVectorMapper.deleteById(chunkId);
+        chunkMapper.deleteById(chunkId);
+    }
+
+    @Override
     public KnowledgeChunkVector saveChunkVector(KnowledgeChunkVector vector) {
         KnowledgeChunkVectorEntity entity = toEntity(vector);
         if (chunkVectorMapper.selectById(vector.chunkId()) == null) {
@@ -223,6 +229,7 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setDefaultDatasetId(knowledgeBase.defaultDatasetId());
         entity.setDatasetCount(knowledgeBase.datasetCount());
         entity.setMetadataJson(knowledgeBase.metadataJson());
+        entity.setSemanticSimilarityThreshold(knowledgeBase.semanticSimilarityThreshold());
         return entity;
     }
 
@@ -253,7 +260,10 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 defaultString(entity.getDatasetMode(), "SINGLE"),
                 entity.getDefaultDatasetId(),
                 entity.getDatasetCount() == null ? 0 : entity.getDatasetCount(),
-                entity.getMetadataJson()
+                entity.getMetadataJson(),
+                entity.getSemanticSimilarityThreshold() == null
+                        ? 0.78
+                        : entity.getSemanticSimilarityThreshold()
         );
     }
 
@@ -361,6 +371,11 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
         entity.setCitationText(chunk.citationText());
         entity.setMetadataJson(chunk.metadataJson());
         entity.setSecurityLevel(chunk.securityLevel());
+        entity.setLogicalChunkId(chunk.logicalChunkId());
+        entity.setParentChunkId(chunk.parentChunkId());
+        entity.setGroupId(chunk.groupId());
+        entity.setChunkLevel(chunk.chunkLevel());
+        entity.setSectionPath(chunk.sectionPath());
         return entity;
     }
 
@@ -389,7 +404,12 @@ public class MybatisKnowledgeStore implements KnowledgeStore {
                 entity.getSourcePosition(),
                 entity.getCitationText(),
                 entity.getMetadataJson(),
-                entity.getSecurityLevel()
+                entity.getSecurityLevel(),
+                entity.getLogicalChunkId(),
+                entity.getParentChunkId(),
+                entity.getGroupId(),
+                entity.getChunkLevel(),
+                entity.getSectionPath()
         );
     }
 

@@ -1,4 +1,4 @@
-import { requestJson as authRequestJson } from './auth';
+import { requestBlob as authRequestBlob, requestJson as authRequestJson } from './auth';
 
 export interface ApiEnvelope<T> {
   success: boolean;
@@ -22,6 +22,7 @@ export interface KnowledgeBase {
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
+  semanticSimilarityThreshold?: number;
   retrievalMode?: string;
   topK?: number;
   status?: string;
@@ -95,6 +96,7 @@ export interface KnowledgeDocument {
   splitterConfig?: string | null;
   errorMessage?: string | null;
   createdAt?: string;
+  originalFileAvailable?: boolean;
 }
 
 export interface KnowledgeSearchResult {
@@ -113,18 +115,64 @@ export interface KnowledgeChunk {
   index: number;
   enabled: boolean;
   tokenEstimate: number;
+  logicalChunkId?: string | null;
+  parentChunkId?: string | null;
+  groupId?: string | null;
+  chunkLevel?: 'PARENT' | 'CHILD' | string;
+  sectionPath?: string | null;
+  chunkTitle?: string | null;
+  chunkType?: string | null;
 }
 
 export interface KnowledgeChunkPreview {
   index: number;
   content: string;
   tokenEstimate: number;
+  chunkType?: string;
+  chunkTitle?: string | null;
+  sectionPath?: string[];
+  parentChunkId?: string | null;
+  groupId?: string | null;
+  chunkLevel?: 'PARENT' | 'CHILD' | string;
+  atomic?: boolean;
+  splitReason?: string;
+}
+
+export interface ChunkProfileVersion {
+  id: string;
+  knowledgeBaseId: string;
+  version: number;
+  name: string;
+  strategy: string;
+  chunkSize: number;
+  chunkOverlap: number;
+  configJson: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface ChunkingQualityReport {
+  chunkCount: number;
+  totalTokens: number;
+  minTokens: number;
+  maxTokens: number;
+  averageTokens: number;
+  atomicChunkCount: number;
+  atomicChunkRatio: number;
+  parentLinkedChunkCount: number;
+  parentCoverageRatio: number;
+}
+
+export interface ChunkProfileComparison {
+  left: { profile: ChunkProfileVersion; quality: ChunkingQualityReport; chunks: KnowledgeChunkPreview[] };
+  right: { profile: ChunkProfileVersion; quality: ChunkingQualityReport; chunks: KnowledgeChunkPreview[] };
 }
 
 export interface UploadedDocumentPreview {
   fileName: string;
   characterCount: number;
   chunks: KnowledgeChunkPreview[];
+  warnings: string[];
 }
 
 export interface VectorStoreConfig {
@@ -133,6 +181,13 @@ export interface VectorStoreConfig {
   storeType: string;
   endpoint: string | null;
   indexName: string;
+  host?: string | null;
+  port?: number | null;
+  databaseName?: string | null;
+  namespaceName?: string | null;
+  vectorDimension?: number;
+  sslEnabled?: boolean;
+  optionsJson?: string;
   username?: string | null;
   passwordConfigured?: boolean;
   apiKeyConfigured?: boolean;
@@ -148,6 +203,13 @@ export interface SaveVectorStoreConfigRequest {
   storeType: string;
   endpoint: string | null;
   indexName: string;
+  host?: string | null;
+  port?: number | null;
+  databaseName?: string | null;
+  namespaceName?: string | null;
+  vectorDimension?: number;
+  sslEnabled?: boolean;
+  optionsJson?: string;
   username?: string | null;
   password?: string | null;
   apiKey?: string | null;
@@ -166,6 +228,7 @@ export interface SaveKnowledgeBaseRequest {
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
+  semanticSimilarityThreshold?: number;
   retrievalMode?: string;
   topK?: number;
   kbType?: string;
@@ -178,19 +241,25 @@ export interface AddKnowledgeDocumentRequest {
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
+  semanticSimilarityThreshold?: number;
 }
 
 export interface UploadKnowledgeDocumentOptions {
   splitterType?: string;
   chunkSize?: number;
   chunkOverlap?: number;
+  semanticSimilarityThreshold?: number;
+  knowledgeBaseId?: string;
 }
 
 export interface KnowledgeSplitOptions {
   splitterType?: string;
   chunkSize?: number;
+  chunkOverlap?: number;
+  semanticSimilarityThreshold?: number;
   separator?: string | null;
   datasetId?: string;
+  knowledgeBaseId?: string;
 }
 
 export interface ManualDatasetEntryRequest {
@@ -258,6 +327,7 @@ export interface PreviewKnowledgeChunksRequest {
   splitterType: string;
   chunkSize: number;
   chunkOverlap: number;
+  semanticSimilarityThreshold?: number;
 }
 
 export interface UpdateKnowledgeChunkRequest {
@@ -293,6 +363,29 @@ export async function updateVectorStoreConfig(
 export async function deleteVectorStoreConfig(id: string): Promise<void> {
   await requestJson<void>(`/api/vector-store-configs/${id}`, {
     method: 'DELETE'
+  });
+}
+
+export interface VectorStoreConnectionResult {
+  success: boolean;
+  storeType: string;
+  serverVersion?: string | null;
+  latencyMs: number;
+  message: string;
+}
+
+export async function testVectorStoreConnection(
+  request: SaveVectorStoreConfigRequest
+): Promise<VectorStoreConnectionResult> {
+  return requestJson<VectorStoreConnectionResult>('/api/vector-store-configs/test-connection', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function testSavedVectorStoreConnection(id: string): Promise<VectorStoreConnectionResult> {
+  return requestJson<VectorStoreConnectionResult>(`/api/vector-store-configs/${id}/test-connection`, {
+    method: 'POST'
   });
 }
 
@@ -342,6 +435,8 @@ export async function uploadKnowledgeDocumentFile(
   if (options.chunkOverlap !== undefined) {
     formData.append('chunkOverlap', String(options.chunkOverlap));
   }
+  appendSemanticSimilarityThreshold(formData, options.semanticSimilarityThreshold);
+  appendKnowledgeBaseId(formData, options.knowledgeBaseId);
   return requestJson<KnowledgeDocument>(`/api/knowledge-bases/${knowledgeBaseId}/documents/upload`, {
     method: 'POST',
     body: formData
@@ -446,6 +541,8 @@ export async function previewUploadedKnowledgeDocumentFile(
   if (options.chunkOverlap !== undefined) {
     formData.append('chunkOverlap', String(options.chunkOverlap));
   }
+  appendSemanticSimilarityThreshold(formData, options.semanticSimilarityThreshold);
+  appendKnowledgeBaseId(formData, options.knowledgeBaseId);
   return requestJson<UploadedDocumentPreview>('/api/knowledge-bases/documents/upload/preview', {
     method: 'POST',
     body: formData
@@ -464,6 +561,15 @@ export async function deleteKnowledgeDocument(knowledgeBaseId: string, documentI
   await requestJson<void>(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, {
     method: 'DELETE'
   });
+}
+
+export async function downloadKnowledgeDocumentOriginal(
+  knowledgeBaseId: string,
+  documentId: string
+): Promise<Blob> {
+  return authRequestBlob(
+    `/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/original`
+  );
 }
 
 export async function previewKnowledgeChunks(request: PreviewKnowledgeChunksRequest): Promise<KnowledgeChunkPreview[]> {
@@ -489,6 +595,84 @@ export async function updateKnowledgeChunk(
     method: 'PUT',
     body: JSON.stringify(request)
   });
+}
+
+export async function splitKnowledgeChunk(
+  knowledgeBaseId: string,
+  chunkId: string,
+  offset: number
+): Promise<KnowledgeChunk[]> {
+  return requestJson<KnowledgeChunk[]>(
+    `/api/knowledge-bases/${knowledgeBaseId}/chunk-operations/${chunkId}/split`,
+    { method: 'POST', body: JSON.stringify({ offset }) }
+  );
+}
+
+export async function mergeKnowledgeChunks(
+  knowledgeBaseId: string,
+  chunkIds: string[]
+): Promise<KnowledgeChunk> {
+  return requestJson<KnowledgeChunk>(
+    `/api/knowledge-bases/${knowledgeBaseId}/chunk-operations/merge`,
+    { method: 'POST', body: JSON.stringify({ chunkIds }) }
+  );
+}
+
+export async function adjustKnowledgeChunkStructure(
+  knowledgeBaseId: string,
+  chunkId: string,
+  sectionPath: string | null,
+  parentChunkId: string | null
+): Promise<KnowledgeChunk> {
+  return requestJson<KnowledgeChunk>(
+    `/api/knowledge-bases/${knowledgeBaseId}/chunk-operations/${chunkId}/structure`,
+    { method: 'PUT', body: JSON.stringify({ sectionPath, parentChunkId }) }
+  );
+}
+
+export async function listChunkProfiles(knowledgeBaseId: string): Promise<ChunkProfileVersion[]> {
+  return requestJson<ChunkProfileVersion[]>(`/api/knowledge-bases/${knowledgeBaseId}/chunk-profiles`);
+}
+
+export async function createChunkProfile(
+  knowledgeBaseId: string,
+  request: {
+    name: string;
+    strategy: string;
+    chunkSize: number;
+    chunkOverlap: number;
+    configJson?: string;
+  }
+): Promise<ChunkProfileVersion> {
+  return requestJson<ChunkProfileVersion>(`/api/knowledge-bases/${knowledgeBaseId}/chunk-profiles`, {
+    method: 'POST',
+    body: JSON.stringify({ ...request, configJson: request.configJson || '{}' })
+  });
+}
+
+export async function activateChunkProfile(
+  knowledgeBaseId: string,
+  profileId: string
+): Promise<ChunkProfileVersion> {
+  return requestJson<ChunkProfileVersion>(
+    `/api/knowledge-bases/${knowledgeBaseId}/chunk-profiles/${profileId}/activate`,
+    { method: 'POST' }
+  );
+}
+
+export async function compareChunkProfiles(
+  knowledgeBaseId: string,
+  documentId: string,
+  leftProfileId: string,
+  rightProfileId: string
+): Promise<ChunkProfileComparison> {
+  return requestJson<ChunkProfileComparison>(
+    `/api/knowledge-bases/${knowledgeBaseId}/chunk-profiles/compare`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ documentId, leftProfileId, rightProfileId })
+    }
+  );
 }
 
 export async function searchKnowledgeBase(
@@ -552,15 +736,31 @@ function uploadDatasetFile<T>(
   if (options.chunkSize) {
     formData.append('chunkSize', String(options.chunkSize));
   }
+  if (options.chunkOverlap !== undefined) {
+    formData.append('chunkOverlap', String(options.chunkOverlap));
+  }
+  appendSemanticSimilarityThreshold(formData, options.semanticSimilarityThreshold);
   if (options.separator) {
     formData.append('separator', options.separator);
   }
   if (options.datasetId) {
     formData.append('datasetId', options.datasetId);
   }
+  appendKnowledgeBaseId(formData, options.knowledgeBaseId);
   return requestJson<T>(url, {
     method: 'POST',
     body: formData
   }, false);
 }
 
+function appendSemanticSimilarityThreshold(formData: FormData, threshold?: number): void {
+  if (threshold !== undefined) {
+    formData.append('semanticSimilarityThreshold', String(threshold));
+  }
+}
+
+function appendKnowledgeBaseId(formData: FormData, knowledgeBaseId?: string): void {
+  if (knowledgeBaseId) {
+    formData.append('knowledgeBaseId', knowledgeBaseId);
+  }
+}

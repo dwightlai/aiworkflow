@@ -19,7 +19,7 @@ public record KnowledgeDocument(
         String splitterConfig,
         String rawContent,
         String errorMessage,
-        String storagePath,
+        @com.fasterxml.jackson.annotation.JsonIgnore String storagePath,
         String datasetId,
         String sourceIndexId,
         String topicId,
@@ -71,6 +71,21 @@ public record KnowledgeDocument(
         return new KnowledgeDocument(
                 id, knowledgeBaseId, name, count, createdAt, datasetType, processingStatus, tags, category,
                 source, rowCount, parserType, splitterType, splitterConfig, rawContent, errorMessage, storagePath,
+                datasetId, sourceIndexId, topicId, docType, sourceSystem, sourceType, sourceRefId, materialSourceType,
+                materialType, sourceArchiveFileId, sourceVersion, titleSnapshot, metadataJson, summaryText,
+                securityLevel, ownerUnitId, lastIndexTime
+        );
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("originalFileAvailable")
+    public boolean isOriginalFileAvailable() {
+        return storagePath != null && !storagePath.isBlank();
+    }
+
+    public KnowledgeDocument withStoragePath(String path) {
+        return new KnowledgeDocument(
+                id, knowledgeBaseId, name, chunkCount, createdAt, datasetType, processingStatus, tags, category,
+                source, rowCount, parserType, splitterType, splitterConfig, rawContent, errorMessage, path,
                 datasetId, sourceIndexId, topicId, docType, sourceSystem, sourceType, sourceRefId, materialSourceType,
                 materialType, sourceArchiveFileId, sourceVersion, titleSnapshot, metadataJson, summaryText,
                 securityLevel, ownerUnitId, lastIndexTime

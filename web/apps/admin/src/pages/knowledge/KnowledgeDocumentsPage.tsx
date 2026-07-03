@@ -2,6 +2,7 @@ import {
   ArrowLeftOutlined,
   DatabaseOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   FileAddOutlined,
   FileSearchOutlined,
@@ -39,6 +40,7 @@ import {
   createKnowledgeDataset,
   deleteKnowledgeDataset,
   deleteKnowledgeDocument,
+  downloadKnowledgeDocumentOriginal,
   listKnowledgeBases,
   listKnowledgeDatasets,
   listKnowledgeDocuments,
@@ -126,6 +128,22 @@ export function KnowledgeDocumentsPage({ knowledgeBaseId }: KnowledgeDocumentsPa
       `/knowledge/${knowledgeBaseId}/documents/${document.id}/edit`,
       datasetId
     ));
+  }
+
+  async function downloadOriginalDocument(document: KnowledgeDocument) {
+    try {
+      const blob = await downloadKnowledgeDocumentOriginal(document.knowledgeBaseId, document.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = document.name;
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '原始附件下载失败');
+    }
   }
 
   const editDatasetMutation = useMutation({
@@ -240,7 +258,20 @@ export function KnowledgeDocumentsPage({ knowledgeBaseId }: KnowledgeDocumentsPa
       dataIndex: 'name',
       render: (_, document) => (
         <Space direction="vertical" size={2}>
-          <Typography.Text strong>{document.name}</Typography.Text>
+          <Space size={4}>
+            <Typography.Text strong>{document.name}</Typography.Text>
+            {document.originalFileAvailable ? (
+              <Tooltip title="下载原始附件">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  aria-label={`下载原始附件 ${document.name}`}
+                  onClick={() => void downloadOriginalDocument(document)}
+                />
+              </Tooltip>
+            ) : null}
+          </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {document.createdAt ? `创建于 ${document.createdAt}` : '已入库文档'}
           </Typography.Text>

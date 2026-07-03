@@ -34,6 +34,7 @@ public class KnowledgeBaseEntity {
     private String defaultDatasetId;
     private Integer datasetCount;
     private String metadataJson;
+    private Double semanticSimilarityThreshold;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -87,4 +88,8 @@ public class KnowledgeBaseEntity {
     public void setDatasetCount(Integer datasetCount) { this.datasetCount = datasetCount; }
     public String getMetadataJson() { return metadataJson; }
     public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
+    public Double getSemanticSimilarityThreshold() { return semanticSimilarityThreshold; }
+    public void setSemanticSimilarityThreshold(Double semanticSimilarityThreshold) {
+        this.semanticSimilarityThreshold = semanticSimilarityThreshold;
+    }
 }

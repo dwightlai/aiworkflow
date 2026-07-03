@@ -15,9 +15,11 @@ import com.mw.ai.agi.bot.persistence.AiBotEntity;
 import com.mw.ai.agi.bot.persistence.BotMessageEntity;
 import com.mw.ai.agi.bot.persistence.BotSessionEntity;
 import com.mw.ai.agi.knowledge.persistence.KnowledgeBaseEntity;
+import com.mw.ai.agi.knowledge.persistence.ChunkProfileVersionEntity;
 import com.mw.ai.agi.knowledge.persistence.KnowledgeChunkEntity;
 import com.mw.ai.agi.knowledge.persistence.KnowledgeChunkVectorEntity;
 import com.mw.ai.agi.knowledge.persistence.KnowledgeDocumentEntity;
+import com.mw.ai.agi.knowledge.persistence.KnowledgeFailureSampleEntity;
 import com.mw.ai.agi.knowledge.persistence.VectorStoreConfigEntity;
 import com.mw.ai.agi.model.persistence.ModelProviderEntity;
 import com.mw.ai.agi.prompt.persistence.PromptTemplateEntity;
@@ -42,9 +44,11 @@ class DamengSchemaMigrationContractTest {
             BotMessageEntity.class,
             BotSessionEntity.class,
             KnowledgeBaseEntity.class,
+            ChunkProfileVersionEntity.class,
             KnowledgeChunkEntity.class,
             KnowledgeChunkVectorEntity.class,
             KnowledgeDocumentEntity.class,
+            KnowledgeFailureSampleEntity.class,
             VectorStoreConfigEntity.class,
             ModelProviderEntity.class,
             PromptTemplateEntity.class,
@@ -100,6 +104,13 @@ class DamengSchemaMigrationContractTest {
                 "external_org_id varchar(200)",
                 "org_type varchar(64) not null",
                 "sort_order int default 0 not null"
+        );
+        assertThat(sql).contains(
+                "logical_chunk_id varchar(64)",
+                "parent_chunk_id varchar(64)",
+                "group_id varchar(64)",
+                "chunk_level varchar(16)",
+                "section_path varchar(1000)"
         );
     }
 

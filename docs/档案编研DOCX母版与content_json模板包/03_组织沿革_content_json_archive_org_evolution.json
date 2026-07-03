@@ -1,0 +1,79 @@
+{
+  "templateType": "archive_org_evolution",
+  "templateCode": "archive_org_evolution_docx",
+  "title": "某某集团档案管理机构沿革",
+  "subtitle": "1998—2025",
+  "cover": {
+    "organization": "某某集团档案中心",
+    "publishDate": "2026-04",
+    "securityLevel": "内部资料"
+  },
+  "editorNote": "依据机构设立文件、职责调整通知、干部任免文件和年度工作资料整理形成。",
+  "timeRange": {
+    "start": "1998",
+    "end": "2025"
+  },
+  "summary": "梳理档案管理机构设立、调整、更名、职责变化和领导成员变动情况。",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "一、机构概况",
+      "type": "text",
+      "content": "介绍机构当前名称、职责定位、隶属关系和基本情况。"
+    },
+    {
+      "id": "evolution",
+      "title": "二、沿革脉络",
+      "type": "timeline",
+      "stages": [
+        {
+          "title": "第一阶段：设立初期",
+          "period": "1998—2005",
+          "summary": "完成机构设立和基本职能配置。",
+          "events": [
+            {
+              "date": "1998-06",
+              "title": "设立档案管理部门",
+              "description": "根据机构设置文件设立档案管理部门。",
+              "eventType": "机构设立",
+              "citations": [
+                {
+                  "refNo": 1,
+                  "sourceTitle": "关于设立档案管理部门的通知"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "adjustments",
+      "title": "三、历次机构调整",
+      "type": "table",
+      "columns": [
+        "时间",
+        "调整事项",
+        "调整前",
+        "调整后",
+        "依据文件"
+      ],
+      "rows": [
+        [
+          "2012-05",
+          "部门更名",
+          "档案室",
+          "档案中心",
+          "关于调整部门名称的通知"
+        ]
+      ]
+    }
+  ],
+  "references": [
+    {
+      "refNo": 1,
+      "title": "关于设立档案管理部门的通知",
+      "sourceType": "机构文件"
+    }
+  ]
+}

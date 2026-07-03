@@ -87,14 +87,16 @@ describe('knowledge api', () => {
     const file = new File(['Refund policy'], 'policy.pdf', { type: 'application/pdf' });
 
     const preview = await previewUploadedKnowledgeDocumentFile(file, {
-      splitterType: 'SIMPLE_TEXT',
+      splitterType: 'SEMANTIC',
       chunkSize: 500,
-      chunkOverlap: 50
+      chunkOverlap: 50,
+      semanticSimilarityThreshold: 0.64
     });
     const document = await uploadKnowledgeDocumentFile('kb_1', file, {
-      splitterType: 'SIMPLE_TEXT',
+      splitterType: 'SEMANTIC',
       chunkSize: 500,
-      chunkOverlap: 50
+      chunkOverlap: 50,
+      semanticSimilarityThreshold: 0.64
     });
 
     expect(preview.chunks[0].content).toBe('Refund policy');
@@ -108,7 +110,9 @@ describe('knowledge api', () => {
       body: expect.any(FormData)
     }));
     expect((fetchMock.mock.calls[0][1].body as FormData).get('file')).toBe(file);
+    expect((fetchMock.mock.calls[0][1].body as FormData).get('semanticSimilarityThreshold')).toBe('0.64');
     expect((fetchMock.mock.calls[1][1].body as FormData).get('chunkSize')).toBe('500');
+    expect((fetchMock.mock.calls[1][1].body as FormData).get('semanticSimilarityThreshold')).toBe('0.64');
   });
 
   it('manages vector stores and previews document chunks', async () => {
@@ -222,12 +226,14 @@ describe('knowledge api', () => {
       chunkSize: 180,
       chunkOverlap: 30,
       retrievalMode: 'HYBRID',
-      topK: 6
+      topK: 6,
+      semanticSimilarityThreshold: 0.71
     });
     await deleteKnowledgeBase('kb_1');
 
     expect(updated.name).toBe('ops-kb-prod');
     expect(updated.vectorStoreConfigId).toBe('vector-prod');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).semanticSimilarityThreshold).toBe(0.71);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/knowledge-bases/kb_1', expect.objectContaining({ method: 'PUT' }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/knowledge-bases/kb_1', expect.objectContaining({ method: 'DELETE' }));
   });

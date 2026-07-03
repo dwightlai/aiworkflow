@@ -32,6 +32,11 @@ public class KnowledgeChunkEntity {
     private String citationText;
     private String metadataJson;
     private String securityLevel;
+    private String logicalChunkId;
+    private String parentChunkId;
+    private String groupId;
+    private String chunkLevel;
+    private String sectionPath;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -81,4 +86,14 @@ public class KnowledgeChunkEntity {
     public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
     public String getSecurityLevel() { return securityLevel; }
     public void setSecurityLevel(String securityLevel) { this.securityLevel = securityLevel; }
+    public String getLogicalChunkId() { return logicalChunkId; }
+    public void setLogicalChunkId(String logicalChunkId) { this.logicalChunkId = logicalChunkId; }
+    public String getParentChunkId() { return parentChunkId; }
+    public void setParentChunkId(String parentChunkId) { this.parentChunkId = parentChunkId; }
+    public String getGroupId() { return groupId; }
+    public void setGroupId(String groupId) { this.groupId = groupId; }
+    public String getChunkLevel() { return chunkLevel; }
+    public void setChunkLevel(String chunkLevel) { this.chunkLevel = chunkLevel; }
+    public String getSectionPath() { return sectionPath; }
+    public void setSectionPath(String sectionPath) { this.sectionPath = sectionPath; }
 }

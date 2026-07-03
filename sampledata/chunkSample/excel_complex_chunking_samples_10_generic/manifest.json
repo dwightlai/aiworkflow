@@ -1,0 +1,28 @@
+{
+  "name": "excel_complex_chunking_samples_10_generic",
+  "count": 10,
+  "primary_format": "xlsx",
+  "person_name_policy": "generic_sample_names_only",
+  "sample_names": [
+    "张三",
+    "李四",
+    "王五",
+    "赵六",
+    "钱七",
+    "孙八",
+    "周九"
+  ],
+  "purpose": "复杂 Excel 分块策略验证",
+  "files": [
+    "01_标准明细表_采购申请明细.xlsx",
+    "02_多行合并表头_月度指标统计.xlsx",
+    "03_合并单元格分组_部门任务表.xlsx",
+    "04_长文本业务记录_月度考核表.xlsx",
+    "05_多工作表跨表关联_项目任务人员.xlsx",
+    "06_汇总统计报表_公式图表.xlsx",
+    "07_树形台账_案卷文件附件层级.xlsx",
+    "08_表单式Excel_采购申请单.xlsx",
+    "09_公式辅助列批注说明_OCR质量日报.xlsx",
+    "10_单工作表多个独立表格_项目月报.xlsx"
+  ]
+}

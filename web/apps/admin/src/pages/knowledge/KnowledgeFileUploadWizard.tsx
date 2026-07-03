@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -43,6 +44,7 @@ interface KnowledgeFileUploadWizardProps {
   knowledgeBaseId: string;
   datasetId?: string;
   mode: UploadMode;
+  defaultSemanticSimilarityThreshold?: number;
 }
 
 type ProgressState = 'waiting' | 'processing' | 'done' | 'failed';
@@ -61,7 +63,12 @@ const textAccept = '.txt,.md,.markdown,.doc,.docx,.pdf,.html,.htm,.ppt,.pptx';
 const tableAccept = '.xls,.xlsx';
 const maxFileSizeBytes = 100 * 1024 * 1024;
 
-export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: KnowledgeFileUploadWizardProps) {
+export function KnowledgeFileUploadWizard({
+  knowledgeBaseId,
+  datasetId,
+  mode,
+  defaultSemanticSimilarityThreshold = 0.78
+}: KnowledgeFileUploadWizardProps) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
   const [files, setFiles] = useState<UploadFileItem[]>([]);
@@ -72,7 +79,9 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
   const [splitForm] = Form.useForm<KnowledgeSplitOptions>();
   const splitterType = Form.useWatch('splitterType', splitForm);
   const chunkSize = Form.useWatch('chunkSize', splitForm);
+  const chunkOverlap = Form.useWatch('chunkOverlap', splitForm);
   const separator = Form.useWatch('separator', splitForm);
+  const semanticSimilarityThreshold = Form.useWatch('semanticSimilarityThreshold', splitForm);
 
   const accept = mode === 'text' ? textAccept : tableAccept;
   const acceptHint = mode === 'text'
@@ -88,15 +97,18 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
   const splitOptions = useCallback((): KnowledgeSplitOptions => {
     const values = splitForm.getFieldsValue();
     if (mode === 'table') {
-      return { splitterType: 'STRUCTURED_TABLE', chunkSize: values.chunkSize || 200, datasetId };
+      return { splitterType: 'STRUCTURED_TABLE', chunkSize: values.chunkSize || 500, chunkOverlap: 0, datasetId };
     }
     return {
-      splitterType: values.splitterType || 'FIXED_LENGTH',
-      chunkSize: values.chunkSize || 200,
+      splitterType: values.splitterType || 'STRUCTURE_AWARE',
+      chunkSize: values.chunkSize || 500,
+      chunkOverlap: values.chunkOverlap ?? 50,
+      semanticSimilarityThreshold: values.semanticSimilarityThreshold ?? defaultSemanticSimilarityThreshold,
       separator: values.separator || null,
-      datasetId
+      datasetId,
+      knowledgeBaseId
     };
-  }, [datasetId, mode, splitForm]);
+  }, [chunkOverlap, datasetId, defaultSemanticSimilarityThreshold, knowledgeBaseId, mode, splitForm]);
 
   const previewMutation = useMutation({
     mutationFn: async (item: UploadFileItem) => {
@@ -129,7 +141,16 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [step, selectedFileId, splitterType, chunkSize, separator, mode]);
+  }, [
+    step,
+    selectedFileId,
+    splitterType,
+    chunkSize,
+    chunkOverlap,
+    separator,
+    semanticSimilarityThreshold,
+    mode
+  ]);
 
   function addFiles(fileList: FileList | File[]) {
     const incoming = Array.from(fileList);
@@ -258,6 +279,7 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
 
   const allDone = files.length > 0 && files.every((item) => item.status === 'done' || item.status === 'failed');
   const hasFailed = files.some((item) => item.status === 'failed');
+  const hasStructureWarnings = files.some((item) => (item.preview?.warnings?.length ?? 0) > 0);
 
   return (
     <Card variant="borderless" title={<Space><FileTextOutlined />{modeLabel}批量上传</Space>}>
@@ -356,15 +378,23 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
               form={splitForm}
               layout="vertical"
               initialValues={mode === 'text'
-                ? { splitterType: 'FIXED_LENGTH', chunkSize: 200, separator: '' }
-                : { splitterType: 'STRUCTURED_TABLE', chunkSize: 200 }}
+                ? {
+                    splitterType: 'STRUCTURE_AWARE',
+                    chunkSize: 500,
+                    chunkOverlap: 50,
+                    semanticSimilarityThreshold: defaultSemanticSimilarityThreshold,
+                    separator: ''
+                  }
+                : { splitterType: 'STRUCTURED_TABLE', chunkSize: 500, chunkOverlap: 0 }}
             >
               {mode === 'text' ? (
                 <Form.Item name="splitterType">
                   <Radio.Group>
                     <Space direction="vertical">
+                      <Radio value="STRUCTURE_AWARE">结构感知分段（推荐）</Radio>
                       <Radio value="FIXED_LENGTH">固定长度分段</Radio>
                       <Radio value="PARAGRAPH">段落分段</Radio>
+                      <Radio value="SENTENCE_BOUNDARY">句子边界分段</Radio>
                       <Radio value="SEMANTIC">语义分段</Radio>
                       <Radio value="SYMBOL">符号分段</Radio>
                     </Space>
@@ -380,6 +410,20 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
               <Form.Item name="chunkSize" label="分段长度" rules={[{ required: true, message: '请输入分段长度' }]}>
                 <InputNumber min={1} max={5000} style={{ width: '100%' }} />
               </Form.Item>
+              {mode === 'text' ? (
+                <Form.Item name="chunkOverlap" label="重叠 Token">
+                  <InputNumber min={0} max={1000} style={{ width: '100%' }} />
+                </Form.Item>
+              ) : null}
+              {mode === 'text' && splitterType === 'SEMANTIC' ? (
+                <Form.Item
+                  name="semanticSimilarityThreshold"
+                  label="语义相似度阈值"
+                  tooltip="相邻内容相似度低于该值时创建新的分段"
+                >
+                  <InputNumber min={0} max={1} step={0.01} precision={2} style={{ width: '100%' }} />
+                </Form.Item>
+              ) : null}
               {mode === 'text' && splitterType === 'SYMBOL' ? (
                 <Form.Item name="separator" label="分段符">
                   <Input placeholder="请输入分段符号" />
@@ -421,19 +465,45 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
             extra={previewMutation.isPending ? <LoadingOutlined /> : null}
           >
             {selectedFile?.preview ? (
-              <List
+              <>
+                {selectedFile.preview.warnings?.map((warning) => (
+                  <Alert
+                    key={warning}
+                    type="error"
+                    showIcon
+                    message="文档结构质量异常"
+                    description={warning}
+                    style={{ marginBottom: 12 }}
+                  />
+                ))}
+                <List
                 size="small"
                 dataSource={selectedFile.preview.chunks.slice(0, 8)}
                 locale={{ emptyText: '暂无分段预览' }}
                 renderItem={(chunk) => (
                   <List.Item>
                     <List.Item.Meta
-                      title={<Tag color="blue">#{chunk.index + 1} · {chunk.content.length} 字</Tag>}
-                      description={<Typography.Paragraph ellipsis={{ rows: 4 }}>{chunk.content}</Typography.Paragraph>}
+                      title={(
+                        <Space wrap>
+                          <Tag color="blue">#{chunk.index + 1}</Tag>
+                          <Tag>{chunk.chunkType || 'PARAGRAPH'}</Tag>
+                          {chunk.atomic ? <Tag color="gold">原子块</Tag> : null}
+                          <Typography.Text type="secondary">{chunk.tokenEstimate} tokens</Typography.Text>
+                        </Space>
+                      )}
+                      description={(
+                        <>
+                          {chunk.sectionPath?.length ? (
+                            <Typography.Text type="secondary">{chunk.sectionPath.join(' / ')}</Typography.Text>
+                          ) : null}
+                          <Typography.Paragraph ellipsis={{ rows: 4 }}>{chunk.content}</Typography.Paragraph>
+                        </>
+                      )}
                     />
                   </List.Item>
                 )}
-              />
+                />
+              </>
             ) : (
               <Typography.Text type="secondary">选择文件后自动预览分段效果</Typography.Text>
             )}
@@ -441,7 +511,7 @@ export function KnowledgeFileUploadWizard({ knowledgeBaseId, datasetId, mode }: 
 
           <Space style={{ gridColumn: '1 / -1' }}>
             <Button onClick={() => setStep(0)}>上一步</Button>
-            <Button type="primary" disabled={files.length === 0} onClick={() => setStep(2)}>
+            <Button type="primary" disabled={files.length === 0 || hasStructureWarnings} onClick={() => setStep(2)}>
               下一步
             </Button>
           </Space>

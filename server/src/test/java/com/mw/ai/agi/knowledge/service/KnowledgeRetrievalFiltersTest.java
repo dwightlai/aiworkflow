@@ -15,7 +15,7 @@ class KnowledgeRetrievalFiltersTest {
     @Test
     void filtersChunksByMaterialType() {
         InMemoryKnowledgeStore store = new InMemoryKnowledgeStore();
-        KnowledgeBaseService service = new KnowledgeBaseService(new KnowledgeSplitter(), store);
+        KnowledgeBaseService service = new KnowledgeBaseService(new com.mw.ai.agi.knowledge.chunking.HeuristicTokenCounter(), store);
         KnowledgeBase knowledgeBase = service.create("kb", "desc", null, null, null, "SIMPLE_TEXT", 500, 0, "HYBRID", 3);
         service.addDocument(knowledgeBase.id(), "a.txt", "档案资料正文");
         KnowledgeChunk original = store.listChunks(knowledgeBase.id()).get(0);
@@ -48,7 +48,7 @@ class KnowledgeRetrievalFiltersTest {
     void requestRetrievalModeOverridesKnowledgeBaseConfiguration() {
         InMemoryKnowledgeStore store = new InMemoryKnowledgeStore();
         KnowledgeBaseService service = new KnowledgeBaseService(
-                new KnowledgeSplitter(),
+                new com.mw.ai.agi.knowledge.chunking.HeuristicTokenCounter(),
                 store,
                 new LocalEmbeddingClient()
         );
@@ -79,7 +79,7 @@ class KnowledgeRetrievalFiltersTest {
     @Test
     void rejectsUnsupportedRetrievalMode() {
         InMemoryKnowledgeStore store = new InMemoryKnowledgeStore();
-        KnowledgeBaseService service = new KnowledgeBaseService(new KnowledgeSplitter(), store);
+        KnowledgeBaseService service = new KnowledgeBaseService(new com.mw.ai.agi.knowledge.chunking.HeuristicTokenCounter(), store);
         KnowledgeBase knowledgeBase = service.create("kb", "desc", null, null, null, "SIMPLE_TEXT", 500, 0, "HYBRID", 3);
         service.addDocument(knowledgeBase.id(), "a.txt", "hello world");
 

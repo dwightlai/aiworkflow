@@ -95,6 +95,19 @@ class FlywaySchemaMigrationTest {
                   AND table_name = 'agi_user'
                 """, String.class);
         assertThat(userColumns).contains("sort_order");
+        List<String> chunkColumns = jdbcTemplate.queryForList("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'agi_knowledge_chunk'
+                """, String.class);
+        assertThat(chunkColumns).contains(
+                "logical_chunk_id",
+                "parent_chunk_id",
+                "group_id",
+                "chunk_level",
+                "section_path"
+        );
 
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM agi_user WHERE username = 'admin'",

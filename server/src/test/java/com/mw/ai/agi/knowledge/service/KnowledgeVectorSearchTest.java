@@ -13,7 +13,7 @@ class KnowledgeVectorSearchTest {
     void storesEmbeddingsAndUsesVectorSearchWhenKnowledgeBaseIsConfiguredForVectorRetrieval() {
         InMemoryKnowledgeStore store = new InMemoryKnowledgeStore();
         KnowledgeBaseService service = new KnowledgeBaseService(
-                new KnowledgeSplitter(),
+                new com.mw.ai.agi.knowledge.chunking.HeuristicTokenCounter(),
                 store,
                 new LocalEmbeddingClient()
         );
@@ -22,7 +22,7 @@ class KnowledgeVectorSearchTest {
                 null,
                 null,
                 "embedding-model-1",
-                "vector-store-1",
+                null,
                 "SIMPLE_TEXT",
                 500,
                 0,
@@ -36,6 +36,27 @@ class KnowledgeVectorSearchTest {
                 "Refund requests require the original package."
         );
 
+        assertThat(store.listChunks(knowledgeBase.id(), document.id()))
+                .hasSize(2)
+                .satisfiesExactly(
+                        child -> {
+                            assertThat(child.chunkLevel()).isEqualTo("CHILD");
+                            assertThat(child.parentChunkId()).isNotBlank();
+                            assertThat(child.logicalChunkId()).isNotBlank();
+                            assertThat(child.metadataJson()).contains(
+                                    "embeddingContentSnapshot",
+                                    "contentHash",
+                                    "embeddingContentHash",
+                                    "embeddingModelId",
+                                    "parserVersion",
+                                    "profileVersion"
+                            );
+                        },
+                        parent -> {
+                            assertThat(parent.chunkLevel()).isEqualTo("PARENT");
+                            assertThat(parent.parentChunkId()).isNull();
+                        }
+                );
         assertThat(store.listChunkVectors(knowledgeBase.id()))
                 .hasSize(1)
                 .first()
@@ -54,7 +75,7 @@ class KnowledgeVectorSearchTest {
     void deletesChunkEmbeddingsWithDocuments() {
         InMemoryKnowledgeStore store = new InMemoryKnowledgeStore();
         KnowledgeBaseService service = new KnowledgeBaseService(
-                new KnowledgeSplitter(),
+                new com.mw.ai.agi.knowledge.chunking.HeuristicTokenCounter(),
                 store,
                 new LocalEmbeddingClient()
         );

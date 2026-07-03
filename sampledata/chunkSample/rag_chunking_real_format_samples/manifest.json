@@ -1,0 +1,16 @@
+{
+  "name": "rag_chunking_real_format_samples",
+  "created": "2026-07-01",
+  "primary_file_types": [
+    "docx",
+    "xlsx",
+    "pdf"
+  ],
+  "removed_from_main_samples": [
+    ".jsonl",
+    ".yaml",
+    ".sql",
+    ".properties"
+  ],
+  "test_questions": "metadata/real_format_test_questions.csv"
+}

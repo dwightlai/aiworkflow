@@ -1,0 +1,94 @@
+{
+  "templateType": "archive_yearbook",
+  "templateCode": "archive_yearbook_docx",
+  "title": "某某集团2025年年鉴",
+  "year": "2025",
+  "cover": {
+    "organization": "某某集团档案中心",
+    "publishDate": "2026-03",
+    "securityLevel": "内部资料"
+  },
+  "editorNote": "本年鉴依据2025年度形成的文件、会议纪要、统计报表、项目材料和档案资料编纂而成。",
+  "sections": [
+    {
+      "id": "annual_summary",
+      "title": "一、年度综述",
+      "type": "text",
+      "content": "概述年度总体发展情况、主要成绩、重点工作和重要变化。"
+    },
+    {
+      "id": "organization",
+      "title": "二、组织机构",
+      "type": "org_structure",
+      "items": [
+        {
+          "orgName": "集团办公室",
+          "responsibility": "综合协调、公文处理、会议组织。",
+          "changeDescription": "本年度无重大调整。"
+        }
+      ]
+    },
+    {
+      "id": "leaders",
+      "title": "三、领导成员",
+      "type": "leader_list",
+      "items": [
+        {
+          "name": "张三",
+          "position": "董事长",
+          "term": "2025年1月—2025年12月",
+          "remark": ""
+        }
+      ]
+    },
+    {
+      "id": "key_work",
+      "title": "四、年度重点工作",
+      "type": "work_summary",
+      "items": [
+        {
+          "title": "推进档案数字化建设",
+          "description": "完成存量档案数字化加工和系统上线工作。",
+          "result": "形成数字化成果数据若干批次。",
+          "citations": [
+            {
+              "refNo": 1,
+              "sourceTitle": "档案数字化建设工作总结"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "statistics",
+      "title": "九、统计资料",
+      "type": "statistics",
+      "tables": [
+        {
+          "title": "2025年度档案利用情况统计表",
+          "columns": [
+            "类别",
+            "数量",
+            "同比变化",
+            "备注"
+          ],
+          "rows": [
+            [
+              "查档人次",
+              "1200",
+              "+15%",
+              ""
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "refNo": 1,
+      "title": "档案数字化建设工作总结",
+      "sourceType": "工作总结"
+    }
+  ]
+}

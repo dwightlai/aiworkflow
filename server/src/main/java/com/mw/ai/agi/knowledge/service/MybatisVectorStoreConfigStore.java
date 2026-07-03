@@ -52,6 +52,13 @@ public class MybatisVectorStoreConfigStore implements VectorStoreConfigStore {
         entity.setStoreType(config.storeType());
         entity.setEndpoint(config.endpoint());
         entity.setIndexName(config.indexName());
+        entity.setHost(config.host());
+        entity.setPort(config.port());
+        entity.setDatabaseName(config.databaseName());
+        entity.setNamespaceName(config.namespaceName());
+        entity.setVectorDimension(config.vectorDimension());
+        entity.setSslEnabled(config.sslEnabled());
+        entity.setOptionsJson(config.optionsJson());
         entity.setUsername(config.username());
         entity.setPassword(config.password());
         entity.setApiKey(config.apiKey());
@@ -70,6 +77,13 @@ public class MybatisVectorStoreConfigStore implements VectorStoreConfigStore {
                 entity.getStoreType(),
                 entity.getEndpoint(),
                 entity.getIndexName(),
+                entity.getHost(),
+                entity.getPort(),
+                entity.getDatabaseName(),
+                entity.getNamespaceName() == null ? entity.getIndexName() : entity.getNamespaceName(),
+                entity.getVectorDimension() == null ? 1536 : entity.getVectorDimension(),
+                Boolean.TRUE.equals(entity.getSslEnabled()),
+                entity.getOptionsJson() == null ? "{}" : entity.getOptionsJson(),
                 entity.getUsername(),
                 entity.getPassword(),
                 entity.getApiKey(),

@@ -108,6 +108,12 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     }
 
     @Override
+    public void deleteChunk(String chunkId) {
+        chunks.removeIf(chunk -> chunk.id().equals(chunkId));
+        chunkVectors.removeIf(vector -> vector.chunkId().equals(chunkId));
+    }
+
+    @Override
     public KnowledgeChunkVector saveChunkVector(KnowledgeChunkVector vector) {
         chunkVectors.removeIf(current -> current.chunkId().equals(vector.chunkId()));
         chunkVectors.add(vector);

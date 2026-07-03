@@ -28,6 +28,7 @@ public class ModelProviderEmbeddingClient implements EmbeddingClient {
     @Autowired
     public ModelProviderEmbeddingClient(ModelProviderService modelProviderService, ObjectMapper objectMapper) {
         this(modelProviderService, objectMapper, HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
                 .build());
     }
@@ -53,6 +54,9 @@ public class ModelProviderEmbeddingClient implements EmbeddingClient {
         if ("OLLAMA".equalsIgnoreCase(provider.modelType())) {
             return embedWithOllama(provider, actualModel, text == null ? "" : text);
         }
+        if (isOpenAiCompatible(provider.modelType())) {
+            return embedWithOpenAiCompatible(provider, actualModel, text == null ? "" : text);
+        }
         throw new IllegalStateException("Unsupported embedding model type: " + provider.modelType());
     }
 
@@ -65,6 +69,9 @@ public class ModelProviderEmbeddingClient implements EmbeddingClient {
             throw new IllegalStateException("Embedding model is required for provider: " + providerId);
         }
         if (!"OLLAMA".equalsIgnoreCase(provider.modelType())) {
+            if (isOpenAiCompatible(provider.modelType())) {
+                return embedAllWithOpenAiCompatible(provider, actualModel, texts);
+            }
             return EmbeddingClient.super.embedAll(providerId, model, texts);
         }
         Map<String, Object> request = new LinkedHashMap<>();
@@ -73,6 +80,27 @@ public class ModelProviderEmbeddingClient implements EmbeddingClient {
         HttpResponse<String> response = postJson(normalizeEndpoint(provider.baseUrl()) + "/api/embed", request);
         assertSuccessful(response, "/api/embed");
         return parseOllamaBatchEmbeddings(response.body());
+    }
+
+    private List<Double> embedWithOpenAiCompatible(ModelProvider provider, String model, String text) {
+        return embedAllWithOpenAiCompatible(provider, model, List.of(text)).get(0);
+    }
+
+    private List<List<Double>> embedAllWithOpenAiCompatible(
+            ModelProvider provider,
+            String model,
+            List<String> texts
+    ) {
+        List<String> normalizedTexts = texts.stream()
+                .map(text -> text == null ? "" : text)
+                .toList();
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("model", model);
+        request.put("input", normalizedTexts.size() == 1 ? normalizedTexts.get(0) : normalizedTexts);
+        String endpoint = openAiEmbeddingEndpoint(provider.baseUrl());
+        HttpResponse<String> response = postJson(endpoint, provider.apiKeyRef(), request);
+        assertSuccessful(response, endpoint);
+        return parseOpenAiEmbeddings(response.body());
     }
 
     private List<Double> embedWithOllama(ModelProvider provider, String model, String text) {
@@ -94,18 +122,40 @@ public class ModelProviderEmbeddingClient implements EmbeddingClient {
     }
 
     private HttpResponse<String> postJson(String uri, Map<String, Object> body) {
+        return postJson(uri, null, body);
+    }
+
+    private HttpResponse<String> postJson(String uri, String apiKey, Map<String, Object> body) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(uri))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri))
                     .timeout(Duration.ofMinutes(2))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(objectMapper.writeValueAsBytes(body)))
-                    .build();
-            return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(objectMapper.writeValueAsBytes(body)));
+            if (apiKey != null && !apiKey.isBlank()) {
+                builder.header("Authorization", "Bearer " + apiKey.strip());
+            }
+            return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to call embedding provider", exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Embedding provider call was interrupted", exception);
+        }
+    }
+
+    private List<List<Double>> parseOpenAiEmbeddings(String body) {
+        try {
+            JsonNode data = objectMapper.readTree(body).path("data");
+            if (!data.isArray() || data.isEmpty()) {
+                throw new IllegalStateException("OpenAI-compatible embedding response does not contain data");
+            }
+            List<List<Double>> results = new ArrayList<>(data.size());
+            for (JsonNode item : data) {
+                results.add(toDoubleList(item.path("embedding")));
+            }
+            return results;
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to parse OpenAI-compatible embedding response", exception);
         }
     }
 
@@ -170,6 +220,21 @@ public class ModelProviderEmbeddingClient implements EmbeddingClient {
     private String normalizeEndpoint(String endpoint) {
         String normalized = endpoint.strip();
         return normalized.endsWith("/") ? normalized.substring(0, normalized.length() - 1) : normalized;
+    }
+
+    private String openAiEmbeddingEndpoint(String baseUrl) {
+        String endpoint = normalizeEndpoint(baseUrl);
+        if (endpoint.endsWith("/embeddings")) {
+            return endpoint;
+        }
+        if (endpoint.endsWith("/v1")) {
+            return endpoint + "/embeddings";
+        }
+        return endpoint + "/v1/embeddings";
+    }
+
+    private boolean isOpenAiCompatible(String modelType) {
+        return "CUSTOM".equalsIgnoreCase(modelType) || "OPENAI".equalsIgnoreCase(modelType);
     }
 
     private String firstNonBlank(String first, String second) {

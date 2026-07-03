@@ -1,0 +1,12 @@
+{
+  "name": "business_chunking_dataset_500",
+  "created": "2026-07-01",
+  "total_documents": 500,
+  "docx": 300,
+  "xlsx": 120,
+  "pdf": 80,
+  "metadata": [
+    "dataset_manifest.csv",
+    "chunking_test_questions.csv"
+  ]
+}
