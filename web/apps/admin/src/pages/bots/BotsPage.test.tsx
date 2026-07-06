@@ -252,6 +252,43 @@ describe('BotsPage', () => {
     });
   });
 
+  it('hides workflow input JSON under advanced debug parameters and still submits it', async () => {
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /运行智能体/ }));
+
+    expect(screen.queryByLabelText('工作流输入 JSON')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('高级调试参数'));
+    const input = await screen.findByLabelText('工作流输入 JSON');
+    fireEvent.change(input, {
+      target: { value: '{"documentId":"doc-1001","department":"档案部"}' }
+    });
+
+    expect(screen.getByText('已配置')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('测试消息'), {
+      target: { value: '查询这份文档' }
+    });
+    await userEvent.click(screen.getByRole('button', { name: /发送消息/ }));
+
+    await waitFor(() => {
+      expect(botsApiMock.chatBot).toHaveBeenCalledWith('bot_1', {
+        sessionId: undefined,
+        message: '查询这份文档',
+        input: {
+          documentId: 'doc-1001',
+          department: '档案部'
+        }
+      });
+    });
+
+    expect(input).toHaveValue('{"documentId":"doc-1001","department":"档案部"}');
+
+    await userEvent.click(screen.getByRole('button', { name: /新会话/ }));
+    expect(input).toHaveValue('{}');
+  });
+
   it('creates a direct bot with model provider and without workflow binding', async () => {
     renderPage();
 
