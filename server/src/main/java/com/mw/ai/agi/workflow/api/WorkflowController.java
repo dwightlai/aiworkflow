@@ -4,9 +4,12 @@ import com.mw.ai.agi.common.audit.OperatorContext;
 import com.mw.ai.agi.auth.service.TenantContext;
 import com.mw.ai.agi.common.api.ApiResponse;
 import com.mw.ai.agi.workflow.domain.Workflow;
+import com.mw.ai.agi.workflow.domain.WorkflowDefinition;
 import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 import com.mw.ai.agi.workflow.service.WorkflowApplicationService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -76,8 +79,19 @@ public class WorkflowController {
     }
 
     @PostMapping("/{workflowId}/publish")
-    public ApiResponse<WorkflowResponse> publish(@PathVariable String workflowId) {
-        WorkflowVersion publishedVersion = workflowService.publishDraftVersion(workflowId, OperatorContext.currentUserId());
+    public ApiResponse<WorkflowResponse> publish(
+            @PathVariable String workflowId,
+            @Valid @RequestBody(required = false) PublishWorkflowRequest request
+    ) {
+        WorkflowVersion publishedVersion = request == null
+                ? workflowService.publishDraftVersion(workflowId, OperatorContext.currentUserId())
+                : workflowService.saveAndPublish(
+                        workflowId,
+                        request.name(),
+                        request.description(),
+                        request.definition(),
+                        OperatorContext.currentUserId()
+                );
         Workflow workflow = workflowService.getWorkflow(workflowId);
         return ApiResponse.success(WorkflowResponse.from(workflow, publishedVersion));
     }
@@ -108,5 +122,12 @@ public class WorkflowController {
     }
 
     public record PageResponse<T>(List<T> items, long total) {
+    }
+
+    public record PublishWorkflowRequest(
+            @NotBlank String name,
+            String description,
+            @NotNull WorkflowDefinition definition
+    ) {
     }
 }

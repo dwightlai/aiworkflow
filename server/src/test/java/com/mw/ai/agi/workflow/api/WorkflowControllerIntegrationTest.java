@@ -135,6 +135,120 @@ class WorkflowControllerIntegrationTest {
     }
 
     @Test
+    void atomicallySavesMetadataAndDefinitionBeforePublishing() throws Exception {
+        String workflowId = createWorkflow();
+
+        mockMvc.perform(post("/api/workflows/{workflowId}/publish", workflowId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Knowledge federation",
+                                  "description": "Searches two knowledge bases",
+                                  "definition": {
+                                    "nodes": [
+                                      { "id": "start", "type": "START", "name": "Start", "config": {} },
+                                      {
+                                        "id": "knowledge",
+                                        "type": "KNOWLEDGE_RETRIEVAL",
+                                        "name": "Knowledge",
+                                        "config": {
+                                          "knowledgeBaseIds": ["kb-standards", "kb-policies"],
+                                          "queryText": "{{message}}",
+                                          "topK": 5
+                                        }
+                                      },
+                                      { "id": "end", "type": "END", "name": "End", "config": {} }
+                                    ],
+                                    "edges": [
+                                      { "id": "edge-1", "sourceNodeId": "start", "targetNodeId": "knowledge", "condition": null },
+                                      { "id": "edge-2", "sourceNodeId": "knowledge", "targetNodeId": "end", "condition": null }
+                                    ],
+                                    "variables": []
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Knowledge federation"))
+                .andExpect(jsonPath("$.data.description").value("Searches two knowledge bases"))
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data.latestVersion.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data.latestVersion.definition.nodes[1].config.knowledgeBaseIds[0]")
+                        .value("kb-standards"))
+                .andExpect(jsonPath("$.data.latestVersion.definition.nodes[1].config.knowledgeBaseIds[1]")
+                        .value("kb-policies"));
+    }
+
+    @Test
+    void rejectsInvalidAtomicPublishBeforeChangingWorkflow() throws Exception {
+        String workflowId = createWorkflow();
+
+        mockMvc.perform(post("/api/workflows/{workflowId}/publish", workflowId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Must not be saved",
+                                  "description": "Invalid snapshot",
+                                  "definition": {
+                                    "nodes": [
+                                      { "id": "start", "type": "START", "name": "Start", "config": {} },
+                                      { "id": "end", "type": "END", "name": "End", "config": {} }
+                                    ],
+                                    "edges": [
+                                      { "id": "broken", "sourceNodeId": "start", "targetNodeId": "missing", "condition": null }
+                                    ],
+                                    "variables": []
+                                  }
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_WORKFLOW_DAG"));
+
+        mockMvc.perform(get("/api/workflows/{workflowId}", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Support triage"))
+                .andExpect(jsonPath("$.data.description").isEmpty())
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.currentVersionId").isEmpty())
+                .andExpect(jsonPath("$.data.latestVersion.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.latestVersion.definition.edges[0].targetNodeId").value("end"));
+    }
+
+    @Test
+    void rejectsAtomicPublishingForArchivedWorkflow() throws Exception {
+        String workflowId = createWorkflow();
+        mockMvc.perform(post("/api/workflows/{workflowId}/archive", workflowId))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/workflows/{workflowId}/publish", workflowId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Archived",
+                                  "description": "Must not be saved",
+                                  "definition": {
+                                    "nodes": [
+                                      { "id": "start", "type": "START", "name": "Start", "config": {} },
+                                      { "id": "end", "type": "END", "name": "End", "config": {} }
+                                    ],
+                                    "edges": [
+                                      { "id": "new-edge", "sourceNodeId": "start", "targetNodeId": "end", "condition": null }
+                                    ],
+                                    "variables": []
+                                  }
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/workflows/{workflowId}", workflowId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Support triage"))
+                .andExpect(jsonPath("$.data.description").isEmpty())
+                .andExpect(jsonPath("$.data.status").value("ARCHIVED"))
+                .andExpect(jsonPath("$.data.latestVersion.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.latestVersion.definition.edges[0].id").value("edge-1"));
+    }
+
+    @Test
     void restoresArchivedPublishedWorkflow() throws Exception {
         String workflowId = createWorkflow();
         mockMvc.perform(post("/api/workflows/{workflowId}/publish", workflowId))

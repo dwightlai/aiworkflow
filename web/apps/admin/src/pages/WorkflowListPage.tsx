@@ -88,7 +88,7 @@ export function WorkflowListPage() {
   });
 
   const publishMutation = useMutation({
-    mutationFn: publishWorkflow,
+    mutationFn: (workflowId: string) => publishWorkflow(workflowId),
     onSuccess: async (workflow) => {
       message.success('工作流已发布');
       setSelectedWorkflow(workflow);

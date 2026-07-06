@@ -32,6 +32,7 @@ import {
   runWorkflow,
   updateWorkflowDraft,
   updateWorkflowMetadata,
+  type PublishWorkflowRequest,
   type Workflow,
   type WorkflowExecution
 } from '../../api/workflows';
@@ -143,10 +144,16 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   });
 
   const publishMutation = useMutation({
-    mutationFn: () => publishWorkflow(workflowId),
+    mutationFn: (request: PublishWorkflowRequest) => publishWorkflow(workflowId, request),
     onSuccess: async () => {
       message.success('工作流已发布');
-      await queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] }),
+        queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      ]);
+    },
+    onError: (error) => {
+      message.error((error as Error).message || '工作流发布失败');
     }
   });
 
@@ -248,12 +255,16 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   }
 
   function handlePublish() {
-    const { nextIssues } = validateCurrentDefinition();
+    const { nextDefinition, nextIssues } = validateCurrentDefinition();
     if (nextIssues.length > 0) {
       message.warning('流程结构校验未通过');
       return;
     }
-    publishMutation.mutate();
+    publishMutation.mutate({
+      name: workflowTitle.trim() || '新建工作流',
+      description: workflowDescription.trim() || null,
+      definition: nextDefinition
+    });
   }
 
   return (
@@ -309,6 +320,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
             icon={<SaveOutlined />}
             onClick={handleSave}
             loading={saveMutation.isPending}
+            disabled={publishMutation.isPending}
           >
             {isNewWorkflow ? '创建工作流' : '保存草稿'}
           </Button>
@@ -327,7 +339,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
             icon={<PlayCircleOutlined />}
             onClick={() => runMutation.mutate()}
             loading={runMutation.isPending}
-            disabled={isNewWorkflow}
+            disabled={isNewWorkflow || publishMutation.isPending}
           >
             运行
           </Button>

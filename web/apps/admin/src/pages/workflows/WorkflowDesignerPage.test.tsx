@@ -240,6 +240,37 @@ describe('WorkflowDesignerPage', () => {
     );
   });
 
+  it('publishes current metadata and unsaved designer definition in one request', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkflowDesignerPage workflowId="workflow-1" />
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('客服意图识别');
+    await userEvent.click(screen.getByLabelText('选择连线 edge_start_end'));
+    await userEvent.type(screen.getByLabelText('连线条件表达式'), 'intent == refund');
+
+    await userEvent.click(screen.getByRole('button', { name: '发布' }));
+
+    expect(workflowApiMock.updateWorkflowDraft).not.toHaveBeenCalled();
+    expect(workflowApiMock.publishWorkflow).toHaveBeenCalledWith(
+      'workflow-1',
+      expect.objectContaining({
+        name: '客服意图识别',
+        description: null,
+        definition: expect.objectContaining({
+          edges: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'edge_start_end',
+              condition: 'intent == refund'
+            })
+          ])
+        })
+      })
+    );
+  });
+
   it('adds palette nodes by dragging them onto the canvas at the drop point', async () => {
     const dataTransfer = createDataTransfer();
     render(

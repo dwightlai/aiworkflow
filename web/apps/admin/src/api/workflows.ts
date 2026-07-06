@@ -53,6 +53,12 @@ export interface UpdateWorkflowMetadataRequest {
   description: string | null;
 }
 
+export interface PublishWorkflowRequest {
+  name: string;
+  description: string | null;
+  definition: WorkflowDefinition;
+}
+
 export interface NodeExecution {
   id: string;
   workflowExecutionId: string;
@@ -114,9 +120,13 @@ export async function updateWorkflowMetadata(
   });
 }
 
-export async function publishWorkflow(workflowId: string): Promise<Workflow> {
+export async function publishWorkflow(
+  workflowId: string,
+  request?: PublishWorkflowRequest
+): Promise<Workflow> {
   return requestJson<Workflow>(`/api/workflows/${workflowId}/publish`, {
-    method: 'POST'
+    method: 'POST',
+    ...(request ? { body: JSON.stringify(request) } : {})
   });
 }
 

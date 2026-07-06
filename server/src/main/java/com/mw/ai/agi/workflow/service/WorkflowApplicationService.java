@@ -10,6 +10,7 @@ import com.mw.ai.agi.workflow.domain.WorkflowVersion;
 import com.mw.ai.agi.workflow.domain.WorkflowVersionStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -129,6 +130,25 @@ public class WorkflowApplicationService {
                 updatedAt
         ));
         return publishedVersion;
+    }
+
+    @Transactional
+    public synchronized WorkflowVersion saveAndPublish(
+            String workflowId,
+            String name,
+            String description,
+            WorkflowDefinition definition,
+            String publishedBy
+    ) {
+        Workflow workflow = getWorkflow(workflowId);
+        if (workflow.status() == WorkflowStatus.ARCHIVED) {
+            throw new IllegalStateException("Archived workflow cannot be published.");
+        }
+        dagValidator.validate(definition);
+
+        updateWorkflowMetadata(workflowId, name, description);
+        updateDraftDefinition(workflowId, definition);
+        return publishDraftVersion(workflowId, publishedBy);
     }
 
     public List<Workflow> listWorkflows() {

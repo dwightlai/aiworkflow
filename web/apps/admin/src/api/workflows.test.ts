@@ -79,6 +79,55 @@ describe('workflow admin api', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/workflow-runs/run-1');
   });
 
+  it('publishes a complete designer snapshot when supplied', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: { id: 'workflow-1', name: 'Knowledge federation', status: 'PUBLISHED' },
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const definition = {
+      nodes: [{ id: 'start', type: 'START' as const, name: 'Start', config: {} }],
+      edges: [],
+      variables: []
+    };
+
+    await publishWorkflow('workflow-1', {
+      name: 'Knowledge federation',
+      description: 'Two knowledge bases',
+      definition
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/workflows/workflow-1/publish',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Knowledge federation',
+          description: 'Two knowledge bases',
+          definition
+        })
+      })
+    );
+  });
+
+  it('keeps body-less publishing compatible', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      data: { id: 'workflow-1', name: 'Greeting', status: 'PUBLISHED' },
+      error: null
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await publishWorkflow('workflow-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/workflows/workflow-1/publish',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock.mock.calls.at(-1)?.[1]).not.toHaveProperty('body');
+  });
+
   it('archives workflows without deleting them', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       success: true,
