@@ -1,4 +1,5 @@
 .worktrees/
+.workbuddy/
 target/
 node_modules/
 dist/
