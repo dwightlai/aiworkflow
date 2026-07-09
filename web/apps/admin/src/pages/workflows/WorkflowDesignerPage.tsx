@@ -4,7 +4,6 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   DeploymentUnitOutlined,
-  PlayCircleOutlined,
   SaveOutlined,
   SendOutlined,
   SettingOutlined
@@ -190,8 +189,22 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
   );
   const workflowName = workflowTitle || workflowQuery.data?.name || (isNewWorkflow ? '新建工作流' : '工作流设计器');
   const configCompleteness = useMemo(() => calculateConfigCompleteness(definition), [definition]);
-  const nodeRunStates = useMemo(() => {
-    return Object.fromEntries((execution?.nodeExecutions ?? []).map((node) => [node.nodeId, node.status]));
+  const nodeExecutions = useMemo(() => {
+    if (!execution?.nodeExecutions?.length) {
+      return undefined;
+    }
+    return Object.fromEntries(execution.nodeExecutions.map((node) => {
+      const durationMs = node.finishedAt && node.startedAt
+        ? Math.max(new Date(node.finishedAt).getTime() - new Date(node.startedAt).getTime(), 0)
+        : null;
+      return [node.nodeId, {
+        status: node.status,
+        input: node.input,
+        output: node.output,
+        errorMessage: node.errorMessage,
+        durationMs
+      }];
+    }));
   }, [execution]);
 
   function handleAddNode(node: WorkflowNode) {
@@ -333,16 +346,6 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
           >
             发布
           </Button>
-          <Button
-            aria-label="运行"
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            onClick={() => runMutation.mutate()}
-            loading={runMutation.isPending}
-            disabled={isNewWorkflow || publishMutation.isPending}
-          >
-            运行
-          </Button>
         </Space>
       </div>
 
@@ -370,15 +373,69 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
         <NodePalette onAddNode={handleAddNode} />
         <main style={canvasColumnStyle}>
           <div style={canvasHeaderStyle}>
-            <Space size={8}>
+            <Space size={8} wrap>
               <Typography.Text strong>节点编排</Typography.Text>
               <Tag color="geekblue">拖拽节点</Tag>
               <Tag color="blue">端口连线</Tag>
               <Tag>{definition.variables.length} 变量</Tag>
             </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              画布区域已最大化，点击节点打开属性，调试从右上角进入
-            </Typography.Text>
+            <Space size={6} wrap>
+              <Button size="small" aria-label="放大" onClick={() => designerRef.current?.zoomIn()}>+</Button>
+              <Button size="small" aria-label="缩小" onClick={() => designerRef.current?.zoomOut()}>−</Button>
+              <Button size="small" aria-label="适配视图" onClick={() => designerRef.current?.fitView()}>适配视图</Button>
+              <Button size="small" aria-label="自动布局" onClick={() => designerRef.current?.autoLayout()}>自动布局</Button>
+              <Button
+                size="small"
+                aria-label="复制节点"
+                disabled={!selectedNodeId}
+                onClick={() => {
+                  if (!selectedNodeId) {
+                    return;
+                  }
+                  const node = designerRef.current?.duplicateNode(selectedNodeId);
+                  if (node) {
+                    setSelectedNodeId(node.id);
+                    setSelectedEdgeId(null);
+                    setEdgeConfigOpen(false);
+                    setWorkflowConfigOpen(false);
+                    setConfigOpen(true);
+                  }
+                }}
+              >
+                复制节点
+              </Button>
+              <Button
+                size="small"
+                aria-label="删除节点"
+                disabled={!selectedNodeId}
+                onClick={() => {
+                  if (!selectedNodeId) {
+                    return;
+                  }
+                  designerRef.current?.removeNode(selectedNodeId);
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                  setConfigOpen(false);
+                }}
+              >
+                删除节点
+              </Button>
+              <Button
+                size="small"
+                aria-label="删除连线"
+                disabled={!selectedEdgeId}
+                onClick={() => {
+                  if (!selectedEdgeId) {
+                    return;
+                  }
+                  designerRef.current?.removeEdge(selectedEdgeId);
+                  setSelectedEdgeId(null);
+                  setEdgeConfigOpen(false);
+                }}
+              >
+                删除连线
+              </Button>
+            </Space>
           </div>
           <div
             ref={canvasDropRef}
@@ -397,15 +454,16 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
                 setSelectedEdgeId(null);
                 setConfigOpen(false);
                 setEdgeConfigOpen(false);
-                setWorkflowConfigOpen(true);
+                setWorkflowConfigOpen(false);
               }
             }}
           >
             <WorkflowDesignerReact
               ref={designerRef}
               value={definition}
+              hideToolbar
               selectedNodeId={selectedNodeId}
-              nodeRunStates={nodeRunStates}
+              nodeExecutions={nodeExecutions}
               onChange={setDefinition}
               onNodeSelect={(nodeId) => {
                 setSelectedNodeId(nodeId);
@@ -426,7 +484,7 @@ export function WorkflowDesignerPage({ workflowId }: WorkflowDesignerPageProps) 
                 setSelectedEdgeId(null);
                 setConfigOpen(false);
                 setEdgeConfigOpen(false);
-                setWorkflowConfigOpen(true);
+                setWorkflowConfigOpen(false);
               }}
             />
           </div>
@@ -657,9 +715,9 @@ const pageStyle: React.CSSProperties = {
   background: '#f4f7fb',
   display: 'flex',
   flexDirection: 'column',
-  height: 'calc(100vh - 40px)',
-  margin: '-16px -24px',
-  minHeight: 720,
+  height: '100%',
+  margin: '0 -24px',
+  minHeight: 0,
   overflow: 'hidden'
 };
 
@@ -732,13 +790,18 @@ const canvasHeaderStyle: React.CSSProperties = {
   background: '#fff',
   borderBottom: '1px solid #eef2f7',
   display: 'flex',
-  flex: '0 0 42px',
+  flex: '0 0 auto',
+  flexWrap: 'wrap',
+  gap: 8,
   justifyContent: 'space-between',
   padding: '8px 14px'
 };
 
 const canvasBodyStyle: React.CSSProperties = {
+  display: 'flex',
   flex: 1,
+  flexDirection: 'column',
   minHeight: 0,
+  overflow: 'hidden',
   position: 'relative'
 };

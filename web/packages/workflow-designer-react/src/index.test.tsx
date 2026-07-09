@@ -137,6 +137,13 @@ describe('WorkflowDesignerReact', () => {
     expect(screen.getByLabelText('工作流画布视口').getAttribute('data-zoom')).toBe('0.85');
   });
 
+  it('renders canvas navigator with minimap', () => {
+    render(<WorkflowDesignerReact value={createDefinition()} />);
+
+    expect(screen.getByLabelText('画布导航')).toBeTruthy();
+    expect(screen.getByLabelText('画布缩略图')).toBeTruthy();
+  });
+
   it('pans the whole canvas by dragging blank space', () => {
     render(<WorkflowDesignerReact value={createDefinition({
       nodes: [
@@ -146,16 +153,83 @@ describe('WorkflowDesignerReact', () => {
     })} />);
 
     const viewport = screen.getByLabelText('工作流画布视口');
-    const container = viewport.parentElement as HTMLDivElement;
-    container.scrollLeft = 300;
-    container.scrollTop = 200;
+    const offsetLayer = viewport.querySelector('[data-canvas-offset-x]') as HTMLElement;
 
     fireEvent.mouseDown(viewport, { clientX: 200, clientY: 160 });
     fireEvent.mouseMove(window, { clientX: 150, clientY: 110 });
     fireEvent.mouseUp(window, { clientX: 150, clientY: 110 });
 
-    expect(container.scrollLeft).toBe(350);
-    expect(container.scrollTop).toBe(250);
+    expect(Number(offsetLayer.getAttribute('data-canvas-offset-x'))).toBe(50);
+    expect(Number(offsetLayer.getAttribute('data-canvas-offset-y'))).toBe(50);
+  });
+
+  it('renders inline execution details below nodes', () => {
+    render(<WorkflowDesignerReact
+      value={createDefinition()}
+      nodeExecutions={{
+        start: {
+          status: 'SUCCEEDED',
+          input: { message: 'hello' },
+          output: { result: 'ok' },
+          durationMs: 120
+        }
+      }}
+    />);
+
+    expect(screen.getByText('执行完成')).toBeTruthy();
+    expect(screen.getByText('120ms')).toBeTruthy();
+    expect(screen.getByText('输入数据')).toBeTruthy();
+    expect(screen.getByText('输出结果')).toBeTruthy();
+    expect(screen.getByText(/"message": "hello"/)).toBeTruthy();
+    expect(screen.getByText(/"result": "ok"/)).toBeTruthy();
+  });
+
+  it('collapses execution sections and opens detail modal', () => {
+    render(<WorkflowDesignerReact
+      value={createDefinition()}
+      nodeExecutions={{
+        start: {
+          status: 'FAILED',
+          input: { message: 'hello' },
+          output: { result: 'ok' },
+          errorMessage: 'LLM 节点执行失败：HTTP error! status: 500',
+          durationMs: 370
+        }
+      }}
+    />);
+
+    expect(screen.getByText('错误详情')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '折叠输入数据' }));
+    expect(screen.queryByText(/"message": "hello"/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '放大查看输出结果' }));
+    expect(screen.getByRole('dialog', { name: '执行详情' })).toBeTruthy();
+    expect(screen.getByText('错误追踪')).toBeTruthy();
+    expect(screen.getByText('LLM 节点执行失败：HTTP error! status: 500')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+    expect(screen.queryByRole('dialog', { name: '执行详情' })).toBeNull();
+  });
+
+  it('pans the canvas while holding space over a node', () => {
+    render(<WorkflowDesignerReact value={createDefinition({
+      nodes: [
+        { id: 'start', type: 'START', name: '开始', config: { ui: { position: { x: 32, y: 32 } } } },
+        { id: 'end', type: 'END', name: '结束', config: { ui: { position: { x: 1200, y: 900 } } } }
+      ]
+    })} />);
+
+    const viewport = screen.getByLabelText('工作流画布视口');
+    const offsetLayer = viewport.querySelector('[data-canvas-offset-x]') as HTMLElement;
+
+    fireEvent.keyDown(window, { code: 'Space' });
+    fireEvent.mouseDown(screen.getByRole('button', { name: '节点 开始' }), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 60, clientY: 60 });
+    fireEvent.mouseUp(window, { clientX: 60, clientY: 60 });
+    fireEvent.keyUp(window, { code: 'Space' });
+
+    expect(Number(offsetLayer.getAttribute('data-canvas-offset-x'))).toBe(40);
+    expect(Number(offsetLayer.getAttribute('data-canvas-offset-y'))).toBe(40);
   });
 });
 

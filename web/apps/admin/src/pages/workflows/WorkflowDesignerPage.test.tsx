@@ -200,6 +200,7 @@ describe('WorkflowDesignerPage', () => {
     expect(screen.getAllByLabelText(/连接到 .*/).length).toBeGreaterThan(0);
     expect(screen.getByText('100% 配置')).toBeInTheDocument();
     expect(screen.getByText('待调试')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '运行' })).not.toBeInTheDocument();
   }, 15000);
 
   it('persists node drag positions and newly connected edges into the workflow definition', async () => {
@@ -379,7 +380,7 @@ describe('WorkflowDesignerPage', () => {
     expect(await screen.findByText('连线属性：edge_start_end')).toBeInTheDocument();
   });
 
-  it('links right panel selection with the canvas and overlays run status on nodes', async () => {
+  it('links right panel selection with the canvas and overlays run status from debug panel', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkflowDesignerPage workflowId="workflow-1" />
@@ -390,8 +391,9 @@ describe('WorkflowDesignerPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '节点 结束' }));
     expect(screen.getByDisplayValue('结束')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: '运行' }));
-    expect((await screen.findAllByText('SUCCEEDED')).length).toBeGreaterThanOrEqual(2);
+    await userEvent.click(screen.getByRole('button', { name: 'bug 调试' }));
+    await userEvent.click(screen.getByRole('button', { name: 'play-circle 运行调试' }));
+    expect((await screen.findAllByText('执行完成')).length).toBeGreaterThanOrEqual(2);
   });
 
   it('creates a workflow from the new designer and navigates to its designer route', async () => {
@@ -413,7 +415,7 @@ describe('WorkflowDesignerPage', () => {
     expect(window.location.pathname).toBe('/workflows/workflow-created/designer');
   });
 
-  it('opens workflow properties from blank canvas selection and saves metadata', async () => {
+  it('opens workflow properties from the toolbar action and saves metadata', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkflowDesignerPage workflowId="workflow-1" />
@@ -422,6 +424,7 @@ describe('WorkflowDesignerPage', () => {
 
     expect(await screen.findByText('客服意图识别')).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('工作流画布视口'));
+    await userEvent.click(screen.getByRole('button', { name: 'setting 属性' }));
 
     expect(await screen.findByText('工作流属性')).toBeInTheDocument();
     const nameInput = screen.getByLabelText('工作流名称');
@@ -435,7 +438,7 @@ describe('WorkflowDesignerPage', () => {
     });
   });
 
-  it('switches from node properties to workflow properties when clicking blank canvas', async () => {
+  it('closes node properties when clicking blank canvas without opening workflow properties', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkflowDesignerPage workflowId="workflow-1" />
@@ -448,8 +451,11 @@ describe('WorkflowDesignerPage', () => {
 
     await userEvent.click(screen.getByLabelText('工作流画布投放区'));
 
-    expect(await screen.findByDisplayValue('客服意图识别')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('结束')).not.toBeInTheDocument();
+    expect(screen.queryByText('工作流属性')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'setting 属性' }));
+    expect(await screen.findByDisplayValue('客服意图识别')).toBeInTheDocument();
   });
 
   it('loads saved model providers for LLM node configuration', async () => {

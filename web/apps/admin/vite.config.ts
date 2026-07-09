@@ -13,10 +13,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/openapi': 'http://localhost:8080',
-      '/swagger-ui': 'http://localhost:8080',
-      '/v3': 'http://localhost:8080'
+      '/api': 'http://localhost:18080',
+      '/openapi': 'http://localhost:18080',
+      '/swagger-ui': 'http://localhost:18080',
+      '/v3': 'http://localhost:18080'
     }
   }
 });
