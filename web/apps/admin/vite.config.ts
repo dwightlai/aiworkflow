@@ -12,11 +12,14 @@ export default defineConfig({
     }
   },
   server: {
-    proxy: {
-      '/api': 'http://localhost:18080',
-      '/openapi': 'http://localhost:18080',
-      '/swagger-ui': 'http://localhost:18080',
-      '/v3': 'http://localhost:18080'
-    }
+    proxy: (() => {
+      const target = process.env.VITE_API_PROXY_TARGET || 'http://localhost:18080';
+      return {
+        '/api': target,
+        '/openapi': target,
+        '/swagger-ui': target,
+        '/v3': target
+      };
+    })()
   }
 });

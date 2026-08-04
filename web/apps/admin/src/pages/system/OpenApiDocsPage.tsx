@@ -1,9 +1,8 @@
 import { Typography } from 'antd';
 
 function buildSwaggerUrl() {
-  const apiOrigin = `${window.location.protocol}//${window.location.hostname}:18080`;
-  const configUrl = `${apiOrigin}/v3/api-docs/swagger-config`;
-  return `${apiOrigin}/swagger-ui/index.html?configUrl=${encodeURIComponent(configUrl)}&urls.primaryName=open-api`;
+  const configUrl = '/v3/api-docs/swagger-config';
+  return `/swagger-ui/index.html?configUrl=${encodeURIComponent(configUrl)}&urls.primaryName=open-api`;
 }
 
 export function OpenApiDocsPage() {
